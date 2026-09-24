@@ -122,7 +122,7 @@ HIFHE_ERROR RLWE_RnsPoly_MulDot(RnsPoly *out, const RnsPoly *a, const RnsPoly *b
     if (bc != NULL) {
         for (uint32_t i = 0; i < a->dataSize; ++i) {
             ModulusWide p = (ModulusWide)a->data[i] * (ModulusWide)b->data[i];
-            out->data[i] = Kernel_BarrettReduce128((uint64_t)(p >> 64), (uint64_t)p, bc);
+            out->data[i] = Kernel_BarrettReduce128Inl((uint64_t)(p >> 64), (uint64_t)p, bc);
         }
     } else {
         for (uint32_t i = 0; i < a->dataSize; ++i) {
@@ -140,12 +140,17 @@ HIFHE_ERROR RLWE_RnsPoly_MulDotAcc(RnsPoly *out, const RnsPoly *a, const RnsPoly
     if (out == NULL) return HIFHE_NULL_INPUT;
     Modulus q = a->config.modulus;
     const BarrettConst *bc = LimbBarrett(a);
+    if (bc != NULL) {
+        for (uint32_t i = 0; i < a->dataSize; ++i) {
+            uint64_t s = out->data[i] + Kernel_BarrettMulModInl(a->data[i], b->data[i], bc);
+            if (s >= q) s -= q;
+            out->data[i] = s;
+        }
+        return HIFHE_SUCCESS;
+    }
     for (uint32_t i = 0; i < a->dataSize; ++i) {
         ModulusWide w = (ModulusWide)a->data[i] * (ModulusWide)b->data[i];
-        uint64_t p = (bc != NULL)
-                         ? Kernel_BarrettReduce128((uint64_t)(w >> 64), (uint64_t)w, bc)
-                         : (uint64_t)(w % (ModulusWide)q);
-        uint64_t s = out->data[i] + p;
+        uint64_t s = out->data[i] + (uint64_t)(w % (ModulusWide)q);
         if (s >= q) s -= q;
         out->data[i] = s;
     }
@@ -167,7 +172,7 @@ HIFHE_ERROR RLWE_RnsPoly_MulScalar(RnsPoly *out, const RnsPoly *a, uint64_t x)
         ShoupConst sc;
         if (Kernel_ShoupConst_Init(&sc, xMod, q) == HIFHE_SUCCESS) {
             for (uint32_t i = 0; i < a->dataSize; ++i) {
-                out->data[i] = Kernel_ShoupMulMod(a->data[i], &sc);
+                out->data[i] = Kernel_ShoupMulModInl(a->data[i], &sc);
             }
         } else {
             for (uint32_t i = 0; i < a->dataSize; ++i) {

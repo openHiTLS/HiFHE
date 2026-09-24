@@ -147,12 +147,18 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
         int32_t r = Bgv_BuildContext(ctx);
         if (r != HIFHE_SUCCESS) return r;
         uint32_t N = ctx->bgv.context.rlweContext.parameter->polyDegree;
+        /* There are only N distinct odd Galois elements mod 2N, so a longer
+         * list is malformed. Refuse it before anything is sized from it: the
+         * step list is widened to 64-bit elements, and every entry costs a
+         * full set of key-switching keys. */
         if (pElts != NULL && pElts->value != NULL) {
             uint32_t count = pElts->valueLen / (uint32_t)sizeof(uint64_t);
+            if (count == 0u || count > N) return HIFHE_PARAM_INVALID;
             return Bgv_GenGaloisKeys(ctx, (const uint64_t *)pElts->value, count);
         }
         if (pSteps != NULL && pSteps->value != NULL) {
             uint32_t count = pSteps->valueLen / (uint32_t)sizeof(int32_t);
+            if (count == 0u || count > N) return HIFHE_PARAM_INVALID;
             Uint64Vector eltVec;
             r = Uint64Vector_Create(&eltVec, NULL, count);
             if (r != HIFHE_SUCCESS) return r;

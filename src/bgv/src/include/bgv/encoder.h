@@ -41,6 +41,11 @@ HIFHE_ERROR BGV_Encoder_Encode(Plaintext *out, const uint64_t *msg, uint32_t slo
 HIFHE_ERROR BGV_Encoder_Decode(uint64_t *msg, uint32_t slotCount,
                              const Plaintext *pt, const Encoder *self);
 
+/* out[j] = centred CRT reconstruction of data[.. j] over `base`, mod t.
+ * `data` holds base->size coefficient-form limbs of N words each. */
+HIFHE_ERROR BGV_Encoder_CrtCenteredModT(uint64_t *out, const uint64_t *data,
+                                        const RnsBase *base, uint32_t N, Modulus t);
+
 #ifdef __cplusplus
 }
 #endif

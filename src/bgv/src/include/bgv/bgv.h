@@ -36,6 +36,12 @@ extern "C" {
 #define HIFHE_BGV_DEFAULT_RELIN_DNUM          1u
 #define HIFHE_BGV_DEFAULT_SECURITY_LEVEL      128u
 #define HIFHE_BGV_DEFAULT_CIPHERTEXT_SIZE     2u
+/* Upper bound on ciphertextSize (components, i.e. degree in s plus one).
+ * Products grow as ma + mb - 1 and the size arrives on the wire, so an
+ * unbounded value lets a caller dictate decryption work and allocation. Key
+ * switching only relinearizes size 3; 8 leaves room for unrelinearized
+ * products of relinearized operands and still decrypts in bounded time. */
+#define HIFHE_BGV_MAX_CIPHERTEXT_SIZE         8u
 
 /* ---- Capability block ----
  * Bits on PlaintextConfig / CiphertextConfig, in memory only. The wire

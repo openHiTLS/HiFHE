@@ -89,23 +89,12 @@ uint64_t Kernel_ModInv(uint64_t a, Modulus q)
 /* Barrett reduce a 64-bit input mod q. */
 uint64_t Kernel_BarrettReduce64(uint64_t x, const BarrettConst *bc)
 {
-    ModulusWide acc = (ModulusWide)x * (ModulusWide)bc->ratioHi;
-    acc += ((ModulusWide)x * (ModulusWide)bc->ratioLo) >> 64;
-    uint64_t qhat = (uint64_t)(acc >> 64);
-    uint64_t r = x - qhat * bc->q;
-    while (r >= bc->q) r -= bc->q;
-    return r;
+    return Kernel_BarrettReduce64Inl(x, bc);
 }
 
 uint64_t Kernel_BarrettReduce128(uint64_t xHi, uint64_t xLo, const BarrettConst *bc)
 {
-    ModulusWide acc = (ModulusWide)xHi * (ModulusWide)bc->ratioHi;
-    acc += ((ModulusWide)xHi * (ModulusWide)bc->ratioLo) >> 64;
-    acc += ((ModulusWide)xLo * (ModulusWide)bc->ratioHi) >> 64;
-    uint64_t qhat = (uint64_t)acc;
-    uint64_t r = xLo - qhat * bc->q;
-    while (r >= bc->q) r -= bc->q;
-    return r;
+    return Kernel_BarrettReduce128Inl(xHi, xLo, bc);
 }
 
 HIFHE_ERROR Kernel_ShoupConst_Init(ShoupConst *out, uint64_t operand, Modulus q)
@@ -123,10 +112,6 @@ HIFHE_ERROR Kernel_ShoupConst_Init(ShoupConst *out, uint64_t operand, Modulus q)
 /* Shoup fast mul-mod. Preconditions: operand < q, x < q, q < 2^63. */
 uint64_t Kernel_ShoupMulMod(uint64_t x, const ShoupConst *sc)
 {
-    /* high 64 bits of x * quotient */
-    uint64_t qHat = (uint64_t)(((ModulusWide)x * (ModulusWide)sc->quotient) >> 64);
-    uint64_t r = x * sc->operand - qHat * sc->q;
-    if (r >= sc->q) r -= sc->q;
-    return r;
+    return Kernel_ShoupMulModInl(x, sc);
 }
 

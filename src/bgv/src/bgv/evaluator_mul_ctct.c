@@ -17,7 +17,8 @@
  * ct * ct, a polynomial product in s: a size-m by a size-n ciphertext gives
  * size m+n-1, out[i+j] += a[i]*b[j]. Two fresh ciphertexts give size 3,
  * which Relinearize collapses to 2; size-2 by size-3 gives size 4, which
- * decryption handles through BGV_SecretKey_GetPow(s, 3).
+ * decryption evaluates as a polynomial in s. Sizes are capped at
+ * HIFHE_BGV_MAX_CIPHERTEXT_SIZE.
  *
  * Both operands must be in NTT form; the output is too.
  */
@@ -42,7 +43,12 @@ HIFHE_ERROR BGV_Evaluator_MulCtCt(Ciphertext *out, const Ciphertext *a, const Ci
     }
     uint32_t L = a->config.crtConfig.rnsbase.size;
     if (L != b->config.crtConfig.rnsbase.size) return HIFHE_PARAM_INVALID;
+    if (ma > HIFHE_BGV_MAX_CIPHERTEXT_SIZE || mb > HIFHE_BGV_MAX_CIPHERTEXT_SIZE) {
+        return HIFHE_CT_DEGREE_MISMATCH;
+    }
     uint32_t mOut = ma + mb - 1u;
+    /* Relinearize first: the product would exceed what decryption accepts. */
+    if (mOut > HIFHE_BGV_MAX_CIPHERTEXT_SIZE) return HIFHE_CT_DEGREE_MISMATCH;
 
     CiphertextConfig cfg;
     int32_t r = BGV_CiphertextConfig_Create(&cfg, mOut,

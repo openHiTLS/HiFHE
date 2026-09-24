@@ -49,69 +49,44 @@ uint64_t BGV_GaloisEltForStep(int32_t step, uint32_t N)
     return (step > 0) ? k : Kernel_ModInv(k, twoN);
 }
 
-/* sigma_k on one CrtPoly component, COEFF form.
- * idx = (j*k) mod 2N; idx >= N flips sign and subtracts N. */
-static HIFHE_ERROR PermuteCoeffPoly(uint64_t *dst, const uint64_t *src,
-                                   uint32_t N, Modulus q, uint64_t k)
+static uint32_t BitRev(uint32_t x, uint32_t bits)
 {
-    /* j -> (j*k mod 2N) mod N is a bijection on Z_N for odd k,
-     * so the loop writes every dst slot and needs no pre-clear.
-     *
-     * 2N is a power of two, so the reduction is a mask.
-     * idx advances by k per step, which removes the multiply. */
-    const uint64_t twoN = 2u * (uint64_t)N;
-    const uint64_t mask = twoN - 1u;
-    uint64_t idx = 0u;
-    for (uint32_t j = 0; j < N; ++j) {
-        uint64_t at = idx;
-        uint64_t v = src[j];
-        if (at >= N) {
-            at -= N;
-            v = (v == 0u) ? 0u : (q - v);
-        }
-        dst[at] = v;
-        idx = (idx + k) & mask;
+    uint32_t r = 0u;
+    for (uint32_t i = 0; i < bits; ++i) {
+        r = (r << 1) | (x & 1u);
+        x >>= 1;
+    }
+    return r;
+}
+
+/*
+ * sigma_k in the NTT domain is a pure permutation. Slot i of the forward
+ * transform holds a(psi^(2*brv(i)+1)); sigma_k(a) evaluated there is
+ * a(psi^(k*(2*brv(i)+1))), which is another slot of the same transform.
+ * So perm[i] = brv(((k*(2*brv(i)+1) mod 2N) - 1) / 2), with no inverse or
+ * forward transform on either component.
+ */
+static HIFHE_ERROR BuildNttPermutation(uint32_t *perm, uint32_t N, uint64_t k)
+{
+    uint32_t logN = 0u;
+    for (uint32_t v = N; v > 1u; v >>= 1) logN++;
+    const uint64_t mask = 2u * (uint64_t)N - 1u;
+    for (uint32_t i = 0; i < N; ++i) {
+        uint64_t e = ((uint64_t)(2u * BitRev(i, logN) + 1u) * (k & mask)) & mask;
+        perm[i] = BitRev((uint32_t)(e >> 1), logN);
     }
     return HIFHE_SUCCESS;
 }
 
-/* sigma_k on one ciphertext component. In and out in NTT form. */
-static HIFHE_ERROR PermuteComponent(uint64_t *comp, uint64_t k, BGVContext *ctx)
+/* sigma_k on one ciphertext component in NTT form, in place. */
+static void PermuteComponentNtt(uint64_t *comp, uint64_t *scratch, const uint32_t *perm,
+                                uint32_t L, uint32_t N)
 {
-    uint32_t L = ctx->rlweContext.cipherRnsBase.size;
-    uint32_t N = ctx->rlweContext.parameter->polyDegree;
-    /* Build a temp CrtPoly view, ToPoly, permute, ToNtt. */
-    CrtPoly view;
-    CrtPolyConfig cfg;
-    memset(&cfg, 0, sizeof(cfg));
-    int32_t r = Uint64Vector_Create(&cfg.rnsbase, ctx->rlweContext.cipherRnsBase.data, L);
-    if (r != HIFHE_SUCCESS) return r;
-    cfg.dtype = HIFHE_NTT;
-    r = RLWE_CrtPoly_CreateFromExist(&view, comp, L * N, &cfg, &ctx->rlweContext);
-    Uint64Vector_Destroy(&cfg.rnsbase);
-    if (r != HIFHE_SUCCESS) return r;
-    r = RLWE_CrtPoly_ToPoly(&view);
-    if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_Destroy(&view);
-        return r;
-    }
-
-    Uint64Vector scratch;
-    r = Uint64Vector_Create(&scratch, NULL, N);
-    if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_Destroy(&view);
-        return r;
-    }
     for (uint32_t i = 0; i < L; ++i) {
-        Modulus q = ctx->rlweContext.cipherRnsBase.data[i];
-        memcpy(scratch.data, comp + i * N, N * sizeof(uint64_t));
-        PermuteCoeffPoly(comp + i * N, scratch.data, N, q, k);
+        uint64_t *limb = comp + (size_t)i * N;
+        memcpy(scratch, limb, N * sizeof(uint64_t));
+        for (uint32_t j = 0; j < N; ++j) limb[j] = scratch[perm[j]];
     }
-    Uint64Vector_Destroy(&scratch);
-
-    r = RLWE_CrtPoly_ToNtt(&view);
-    RLWE_CrtPoly_Destroy(&view);
-    return r;
 }
 
 HIFHE_ERROR BGV_Evaluator_RotateByElt(Ciphertext *out, const Ciphertext *in,
@@ -129,18 +104,29 @@ HIFHE_ERROR BGV_Evaluator_RotateByElt(Ciphertext *out, const Ciphertext *in,
     /* Same level constraint as relinearize. */
     if (L != gk->rnsSize) return HIFHE_PARAM_INVALID;
 
+    if (in->config.crtConfig.dtype != HIFHE_NTT) return HIFHE_PARAM_INVALID;
+    if ((galoisElt & 1u) == 0u) return HIFHE_PARAM_INVALID;
+
+    uint32_t *perm = (uint32_t *)BSL_SAL_Malloc(N * (uint32_t)sizeof(uint32_t));
+    uint64_t *scratch = (uint64_t *)BSL_SAL_Malloc(N * (uint32_t)sizeof(uint64_t));
+    if (perm == NULL || scratch == NULL) {
+        BSL_SAL_Free(perm);
+        BSL_SAL_Free(scratch);
+        return HIFHE_MEMORY_ERROR;
+    }
+    (void)BuildNttPermutation(perm, N, galoisElt);
+
     /* Deep copy in to out, then permute each component in place. */
     int32_t r = BGV_Ciphertext_Destroy(out);
-    if (r != HIFHE_SUCCESS) return r;
-    r = BGV_Ciphertext_Copy(out, in);
-    if (r != HIFHE_SUCCESS) return r;
-    for (uint32_t k = 0; k < 2u; ++k) {
-        r = PermuteComponent(out->data + k * L * N, galoisElt, ctx);
-        if (r != HIFHE_SUCCESS) {
-            BGV_Ciphertext_Destroy(out);
-            return r;
+    if (r == HIFHE_SUCCESS) r = BGV_Ciphertext_Copy(out, in);
+    if (r == HIFHE_SUCCESS) {
+        for (uint32_t k = 0; k < 2u; ++k) {
+            PermuteComponentNtt(out->data + (size_t)k * L * N, scratch, perm, L, N);
         }
     }
+    BSL_SAL_Free(perm);
+    BSL_SAL_Free(scratch);
+    if (r != HIFHE_SUCCESS) return r;
 
     /* Key-switch the (permuted) c1 back under s. */
     CrtPoly c1;

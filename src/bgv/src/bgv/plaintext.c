@@ -13,6 +13,7 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <stdbool.h>
 #include <string.h>
 #include "bsl_sal.h"
 #include "bgv/plaintext.h"
@@ -38,8 +39,9 @@ HIFHE_ERROR BGV_PlaintextConfig_Destroy(PlaintextConfig *self)
     return HIFHE_SUCCESS;
 }
 
-HIFHE_ERROR BGV_Plaintext_Create(Plaintext *out,
-                               const PlaintextConfig *cfg, BGVContext *ctx)
+static HIFHE_ERROR PlaintextCreateImpl(Plaintext *out,
+                                       const PlaintextConfig *cfg, BGVContext *ctx,
+                                       bool zeroed)
 {
     if (out == NULL || cfg == NULL || ctx == NULL) return HIFHE_NULL_INPUT;
     memset(out, 0, sizeof(*out));
@@ -48,13 +50,27 @@ HIFHE_ERROR BGV_Plaintext_Create(Plaintext *out,
     out->config.caps = cfg->caps;
     out->context  = ctx;
     out->dataSize = BGV_Plaintext_CalDataSize(cfg, ctx);
-    out->data     = (uint64_t *)BSL_SAL_Calloc(out->dataSize, (uint32_t)sizeof(uint64_t));
+    out->data     = zeroed
+        ? (uint64_t *)BSL_SAL_Calloc(out->dataSize, (uint32_t)sizeof(uint64_t))
+        : (uint64_t *)BSL_SAL_Malloc(out->dataSize * (uint32_t)sizeof(uint64_t));
     if (out->data == NULL) {
         BGV_PlaintextConfig_Destroy(&out->config);
         return HIFHE_MEMORY_ERROR;
     }
     out->ownsData = 1u;
     return HIFHE_SUCCESS;
+}
+
+HIFHE_ERROR BGV_Plaintext_Create(Plaintext *out,
+                                 const PlaintextConfig *cfg, BGVContext *ctx)
+{
+    return PlaintextCreateImpl(out, cfg, ctx, true);
+}
+
+HIFHE_ERROR BGV_Plaintext_CreateUninit(Plaintext *out,
+                                       const PlaintextConfig *cfg, BGVContext *ctx)
+{
+    return PlaintextCreateImpl(out, cfg, ctx, false);
 }
 
 HIFHE_ERROR BGV_Plaintext_CreateFromCrtPoly(Plaintext *out, CrtPoly *poly,

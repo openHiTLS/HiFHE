@@ -58,10 +58,9 @@ HIFHE_ERROR BGV_SecretKey_GetPow(CrtPoly *out, const SecretKey *sk, uint32_t pow
             memcpy(dst, src, N * sizeof(uint64_t));
             continue;
         }
-        /* Square-and-multiply. Repeated multiplication is marginally cheaper
-         * at the powers a well-formed ciphertext needs, but the component
-         * count arrives on the wire and decryption asks for every power up to
-         * it, which makes a linear cost per power quadratic in the input. */
+        /* Square-and-multiply: the cost grows with log(power), whatever the
+         * caller asks for. Decryption no longer calls this; it evaluates the
+         * phase by Horner's rule. */
         for (uint32_t j = 0; j < N; ++j) {
             dst[j] = Kernel_PowMod(src[j], power, q);
         }

@@ -27,6 +27,7 @@
 #include "crypt_params_key.h"
 
 #include "bgv_local.h"
+#include "bgv/keyswitch.h"
 #include "bgv/bgv.h"
 #include "bgv/plaintext.h"
 #include "bgv/ciphertext.h"
@@ -234,13 +235,14 @@ HIFHE_ERROR Bgv_BuildContext(CRYPT_BGV_Ctx *ctx)
     /* Initialize cache table. */
     uint64_t *cipherLuts[HIFHE_BGV_MAX_CHAIN_LEN];
     uint64_t *const *cipherArg = NULL;
+    const BgvUserPara *lut = NULL;
     if (ctx->lutCache != NULL &&
-        BgvUserPara_EnsureLut(ctx->lutCache, &ctx->bgv.params) == HIFHE_SUCCESS) {
+        BgvUserPara_EnsureLut(ctx->lutCache, &ctx->bgv.params, &lut) == HIFHE_SUCCESS) {
         uint32_t limbs = ctx->bgv.params.rlweParameter.cipherMod.size;
         if (limbs <= HIFHE_BGV_MAX_CHAIN_LEN) {
             cipherArg = cipherLuts;
             for (uint32_t i = 0; i < limbs; ++i) {
-                cipherLuts[i] = BgvUserPara_CipherLut(ctx->lutCache, i);
+                cipherLuts[i] = BgvUserPara_CipherLut(lut, i);
                 if (cipherLuts[i] == NULL) {
                     cipherArg = NULL;
                     break;
@@ -258,7 +260,7 @@ HIFHE_ERROR Bgv_BuildContext(CRYPT_BGV_Ctx *ctx)
     ctx->bgv.haveContext = 1u;
     /* Otherwise, build plaintext table on the first encode. */
     if (cipherArg != NULL) {
-        uint64_t *ptLut = BgvUserPara_PlainLut(ctx->lutCache);
+        uint64_t *ptLut = BgvUserPara_PlainLut(lut);
         if (ptLut != NULL) {
             (void)BGV_BGVContext_EnsurePlainNttWith(&ctx->bgv.context, ptLut);
         }
@@ -314,10 +316,12 @@ HIFHE_ERROR Bgv_GenRelinKey(CRYPT_BGV_Ctx *ctx)
         BGV_RelinKeys_Destroy(&ctx->bgv.relinKeys);
         ctx->bgv.haveRelin = 0u;
     }
-    /* `relinDnum` is digits per RNS limb; 0/1 means "cover the widest limb".
-     * Too few digits would drop the high end of the keyswitch decomposition
-     * and decrypt to the wrong plaintext, so raise it to what the chain needs. */
-    uint32_t need = BGV_BV_DigitsForBase(&ctx->bgv.context.rlweContext.cipherRnsBase);
+    /* `relinDnum` is digits per RNS limb, taken as a floor: fewer digits
+     * than the chain's default would widen the gadget base past what its
+     * noise budget allows, so raise it to BGV_KeySwitch_DefaultDigits. */
+    uint32_t need = BGV_KeySwitch_DefaultDigits(&ctx->bgv.context.rlweContext.cipherRnsBase,
+                                                ctx->bgv.params.rlweParameter.polyDegree,
+                                                ctx->bgv.params.plainMod);
     uint32_t digits = ctx->para.relinDnum;
     if (digits < need) digits = need;
     int32_t r = BGV_KeyGenerator_GenRelinKey(&ctx->bgv.relinKeys, digits, &ctx->bgv.keygen);
