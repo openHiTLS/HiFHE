@@ -125,9 +125,10 @@ HIFHE_ERROR BGV_Encoder_Encode(Plaintext *out, const uint64_t *msg, uint32_t slo
  * formed: only Q mod t is needed, and v comes off a long-double accumulation
  * of y_i/q_i.
  */
-static HIFHE_ERROR CrtCenteredModT(uint64_t *out, const uint64_t *data,
-                                  const RnsBase *base, uint32_t N, Modulus t)
+HIFHE_ERROR BGV_Encoder_CrtCenteredModT(uint64_t *out, const uint64_t *data,
+                                        const RnsBase *base, uint32_t N, Modulus t)
 {
+    if (out == NULL || data == NULL || base == NULL) return HIFHE_NULL_INPUT;
     uint32_t L = base->size;
     if (L == 0u || L > HIFHE_BGV_MAX_CHAIN_LEN) return HIFHE_PARAM_INVALID;
 
@@ -137,6 +138,7 @@ static HIFHE_ERROR CrtCenteredModT(uint64_t *out, const uint64_t *data,
     ShoupConst qhatModTSc[HIFHE_BGV_MAX_CHAIN_LEN];
     BarrettConst tBarrett;
     uint64_t qModT = 1u % t;
+    ShoupConst qModTSc;
 
     int32_t br = Kernel_BarrettConst_Init(&tBarrett, t);
     if (br != HIFHE_SUCCESS) return br;
@@ -179,21 +181,24 @@ static HIFHE_ERROR CrtCenteredModT(uint64_t *out, const uint64_t *data,
      * accumulator would be 80-bit only on x86 and would lose precision or run
      * in soft float elsewhere.
      */
+    if (Kernel_ShoupConst_Init(&qModTSc, qModT, t) != HIFHE_SUCCESS) return HIFHE_INTERNAL;
     for (uint32_t j = 0; j < N; ++j) {
         ModulusWide frac = 0;
         uint64_t acc = 0u;
         for (uint32_t i = 0; i < L; ++i) {
             uint64_t y = (L == 1u) ? data[j]
-                                   : Kernel_ShoupMulMod(data[i * N + j], &qhatInvSc[i]);
+                                   : Kernel_ShoupMulModInl(data[i * N + j], &qhatInvSc[i]);
             frac += (ModulusWide)y * recip[i];
-            acc += Kernel_ShoupMulMod(Kernel_BarrettReduce64(y, &tBarrett), &qhatModTSc[i]);
+            acc += Kernel_ShoupMulModInl(Kernel_BarrettReduce64Inl(y, &tBarrett), &qhatModTSc[i]);
             if (acc >= t) acc -= t;   /* Both addends are below t. */
         }
         uint64_t v = (uint64_t)(frac >> 96);
-        uint64_t z = (acc + t - Kernel_MulMod(v % t, qModT, t)) % t;
+        uint64_t z = acc + t - Kernel_ShoupMulModInl(Kernel_BarrettReduce64Inl(v, &tBarrett), &qModTSc);
+        if (z >= t) z -= t;
         /* Fractional part above one half means the residues stand for z - Q. */
         if ((frac & (((ModulusWide)1u << 96) - 1u)) > ((ModulusWide)1u << 95)) {
-            z = (z + t - qModT) % t;
+            z = z + t - qModT;
+            if (z >= t) z -= t;
         }
         out[j] = z;
     }
@@ -234,7 +239,7 @@ HIFHE_ERROR BGV_Encoder_Decode(uint64_t *msg, uint32_t slotCount,
     }
 
     Modulus t = ctx->bgvParameter->plainMod;
-    r = CrtCenteredModT(msg, tmp.data, &tmp.config.crtConfig.rnsbase, N, t);
+    r = BGV_Encoder_CrtCenteredModT(msg, tmp.data, &tmp.config.crtConfig.rnsbase, N, t);
     BGV_Plaintext_Destroy(&tmp);
     if (r != HIFHE_SUCCESS) return r;
 
@@ -243,7 +248,9 @@ HIFHE_ERROR BGV_Encoder_Decode(uint64_t *msg, uint32_t slotCount,
     if (scale != 1u) {
         uint64_t inv = Kernel_ModInv(scale, t);
         if (inv == 0u) return HIFHE_PARAM_INVALID;
-        for (uint32_t j = 0; j < N; ++j) msg[j] = Kernel_MulMod(msg[j], inv, t);
+        ShoupConst invSc;
+        if (Kernel_ShoupConst_Init(&invSc, inv, t) != HIFHE_SUCCESS) return HIFHE_INTERNAL;
+        for (uint32_t j = 0; j < N; ++j) msg[j] = Kernel_ShoupMulModInl(msg[j], &invSc);
     }
 
     r = Kernel_Ntt_Forward(msg, &ctx->ptNtt);

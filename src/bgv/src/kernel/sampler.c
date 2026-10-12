@@ -19,6 +19,7 @@
  *   seeded     SHAKE128(seed || label), replays for the same pair
  */
 
+#include <stdbool.h>
 #include <string.h>
 #include "bsl_sal.h"
 #include "kernel/sampler.h"
@@ -31,7 +32,7 @@ static HIFHE_ERROR DrawBytes(uint8_t *dst, uint32_t nBytes, const BgvEntropy *sr
                            const uint8_t *suffix, uint32_t suffixLen)
 {
     if (src == NULL || src->seed == NULL || src->seedLen == 0u) {
-        return BgvRand_Drbg(dst, nBytes);
+        return BgvRand_DrbgBulk(dst, nBytes);
     }
     if (src->label == NULL) return HIFHE_PARAM_INVALID;
 
@@ -58,15 +59,28 @@ HIFHE_ERROR Kernel_Sampler_UniformModQ(uint64_t *out, uint32_t count, Modulus q,
 {
     if (out == NULL || q < 2u) return HIFHE_NULL_INPUT;
 
-    uint32_t bytesPerDraw = 8u;
-    uint64_t mask = ~0ull;
-    /* Smallest mask covering q. */
     uint32_t bits = Kernel_Log2Ceil(q);
-    if (bits < 64u) mask = (1ull << bits) - 1u;
+    uint64_t mask = (bits < 64u) ? ((1ull << bits) - 1u) : ~0ull;
 
-    /* Batch entropy so the per-refill SHAKE init amortizes. */
-    const uint32_t POOL_BYTES = 512u;
-    uint8_t pool[512];
+    /* Seeded draws keep their historic layout (8-byte words, 512-byte
+     * refills), because keys derived from a seed must come out identical.
+     * Unseeded draws are free to read only the bytes the mask keeps and to
+     * refill in large blocks. */
+    bool seeded = (src != NULL && src->seed != NULL && src->seedLen != 0u);
+    uint32_t bytesPerDraw = seeded ? 8u : ((bits + 7u) / 8u);
+    if (bytesPerDraw == 0u) bytesPerDraw = 1u;
+    /* The seeded layout fits a small stack buffer; the large unseeded refill
+     * block goes on the heap so callers on small stacks are unaffected. */
+    uint8_t stackPool[512];
+    uint8_t *heapPool = NULL;
+    const uint32_t POOL_BYTES = seeded ? (uint32_t)sizeof(stackPool) : 8192u;
+    uint8_t *pool = stackPool;
+    if (!seeded) {
+        heapPool = (uint8_t *)BSL_SAL_Malloc(POOL_BYTES);
+        if (heapPool == NULL) return HIFHE_MEMORY_ERROR;
+        pool = heapPool;
+    }
+    int32_t r = HIFHE_SUCCESS;
     uint32_t poolFill = 0u;
     uint32_t poolIdx  = 0u;
 
@@ -88,8 +102,8 @@ HIFHE_ERROR Kernel_Sampler_UniformModQ(uint64_t *out, uint32_t count, Modulus q,
                 sfxLen = 8u;
             }
             refillIdx++;
-            int32_t r = DrawBytes(pool, POOL_BYTES, src, sfx, sfxLen);
-            if (r != HIFHE_SUCCESS) return r;
+            r = DrawBytes(pool, POOL_BYTES, src, sfx, sfxLen);
+            if (r != HIFHE_SUCCESS) break;
             poolFill = POOL_BYTES;
             poolIdx  = 0u;
         }
@@ -99,7 +113,7 @@ HIFHE_ERROR Kernel_Sampler_UniformModQ(uint64_t *out, uint32_t count, Modulus q,
             continue;
         }
         uint64_t cand = 0u;
-        for (uint32_t b = 0; b < 8u; ++b) {
+        for (uint32_t b = 0; b < bytesPerDraw; ++b) {
             cand |= ((uint64_t)pool[poolIdx + b]) << (8u * b);
         }
         poolIdx += bytesPerDraw;
@@ -109,7 +123,8 @@ HIFHE_ERROR Kernel_Sampler_UniformModQ(uint64_t *out, uint32_t count, Modulus q,
         }
     }
     BSL_SAL_CleanseData(pool, POOL_BYTES);
-    return HIFHE_SUCCESS;
+    BSL_SAL_Free(heapPool);
+    return r;
 }
 
 HIFHE_ERROR Kernel_Sampler_Ternary(int64_t *out, uint32_t count,

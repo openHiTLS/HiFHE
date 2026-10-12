@@ -13,6 +13,7 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include <stdbool.h>
 #include <string.h>
 #include "bsl_sal.h"
 #include "bgv/ciphertext.h"
@@ -27,6 +28,9 @@ HIFHE_ERROR BGV_CiphertextConfig_Create(CiphertextConfig *out,
 {
     if (out == NULL || rnsBase == NULL) return HIFHE_NULL_INPUT;
     memset(out, 0, sizeof(*out));
+    if (ciphertextSize < 2u || ciphertextSize > HIFHE_BGV_MAX_CIPHERTEXT_SIZE) {
+        return HIFHE_CT_DEGREE_MISMATCH;
+    }
     int32_t r = Uint64Vector_Create(&out->crtConfig.rnsbase, rnsBase->data, rnsBase->size);
     if (r != HIFHE_SUCCESS) return r;
     out->crtConfig.dtype  = HIFHE_NTT;
@@ -59,8 +63,9 @@ HIFHE_ERROR BGV_CiphertextConfig_Copy(CiphertextConfig *dst, const CiphertextCon
     return HIFHE_SUCCESS;
 }
 
-HIFHE_ERROR BGV_Ciphertext_Create(Ciphertext *out,
-                                const CiphertextConfig *cfg, BGVContext *ctx)
+static HIFHE_ERROR CiphertextCreateImpl(Ciphertext *out,
+                                        const CiphertextConfig *cfg, BGVContext *ctx,
+                                        bool zeroed)
 {
     if (out == NULL || cfg == NULL || ctx == NULL) return HIFHE_NULL_INPUT;
     memset(out, 0, sizeof(*out));
@@ -68,13 +73,27 @@ HIFHE_ERROR BGV_Ciphertext_Create(Ciphertext *out,
     if (r != HIFHE_SUCCESS) return r;
     out->context  = ctx;
     out->dataSize = BGV_Ciphertext_CalDataSize(cfg, ctx);
-    out->data     = (uint64_t *)BSL_SAL_Calloc(out->dataSize, (uint32_t)sizeof(uint64_t));
+    out->data     = zeroed
+        ? (uint64_t *)BSL_SAL_Calloc(out->dataSize, (uint32_t)sizeof(uint64_t))
+        : (uint64_t *)BSL_SAL_Malloc(out->dataSize * (uint32_t)sizeof(uint64_t));
     if (out->data == NULL) {
         BGV_CiphertextConfig_Destroy(&out->config);
         return HIFHE_MEMORY_ERROR;
     }
     out->ownsData = 1u;
     return HIFHE_SUCCESS;
+}
+
+HIFHE_ERROR BGV_Ciphertext_Create(Ciphertext *out,
+                                  const CiphertextConfig *cfg, BGVContext *ctx)
+{
+    return CiphertextCreateImpl(out, cfg, ctx, true);
+}
+
+HIFHE_ERROR BGV_Ciphertext_CreateUninit(Ciphertext *out,
+                                        const CiphertextConfig *cfg, BGVContext *ctx)
+{
+    return CiphertextCreateImpl(out, cfg, ctx, false);
 }
 
 /* CiphertextConfig_Create already selects HIFHE_NTT. */

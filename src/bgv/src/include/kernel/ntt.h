@@ -56,6 +56,8 @@ typedef struct {
     const uint64_t *invRootsQuot;  /* size N: floor(invRoots[k] * 2^64 / q) */
     uint64_t  nInvModQ;
     uint64_t  nInvQuot;    /* Shoup quotient for nInvModQ */
+    uint64_t  lastInvScaled;      /* invRoots[1] * N^-1 mod q, for the last inverse layer */
+    uint64_t  lastInvScaledQuot;  /* its Shoup quotient */
     BarrettConst  barrett;
 } NttTables;
 

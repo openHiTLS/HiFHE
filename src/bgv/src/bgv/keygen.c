@@ -20,7 +20,8 @@
  *   pk = (b, a),  a uniform in R_q,  b = -a*s + t*e
  *
  * Relin / galois keys use the gadget in bgv/keyswitch.h: piece (i, j)
- * encrypts T^j * qhat_i * target, laid out [i * digits + j]. target is
+ * encrypts T^j * qhat_i * target, T = 2^BGV_KeySwitch_LogT(base, digits),
+ * laid out [i * digits + j]. target is
  * s^2 for relin, sigma_k(s) for the galois key at k.
  *
  * Randomness comes from basic/rand.c: a seeded BgvContext gives
@@ -323,12 +324,14 @@ HIFHE_ERROR BGV_KeyGenerator_GenRelinKey(RelinKeys *out, uint32_t digits,
 
     const RnsBase *base = &self->context->rlweContext.cipherRnsBase;
     uint32_t L = base->size;
-    uint32_t required = BGV_BV_DigitsForBase(base);
-    if (digits == 0u) digits = required;
-    /* Below `required` the decomposition silently loses its high digits;
-     * above BGV_KSW_MAX_DIGITS the piece count L * digits wraps uint32 and
-     * the generation loop writes past the allocation. */
-    if (digits < required || digits > BGV_KSW_MAX_DIGITS) {
+    if (digits == 0u) {
+        digits = BGV_KeySwitch_DefaultDigits(base, self->context->rlweContext.parameter->polyDegree,
+                                             self->context->bgvParameter->plainMod);
+    }
+    /* Any count covers the limb, since the base widens to match. Above
+     * BGV_KSW_MAX_DIGITS the piece count L * digits can wrap uint32 and the
+     * generation loop writes past the allocation. */
+    if (digits > BGV_KSW_MAX_DIGITS) {
         CleanseAndDestroy(&sk_sq);
         RLWE_CrtPoly_Destroy(&sk_view);
         return HIFHE_PARAM_INVALID;
@@ -342,14 +345,18 @@ HIFHE_ERROR BGV_KeyGenerator_GenRelinKey(RelinKeys *out, uint32_t digits,
 
     const uint8_t *seed = BgvContext_GetSeed(&self->context->rlweContext.seedCtx);
     uint64_t gadget[HIFHE_BGV_MAX_CHAIN_LEN];
+    uint32_t logT = BGV_KeySwitch_LogT(base, digits);
     for (uint32_t i = 0; i < L; ++i) {
         for (uint32_t j = 0; j < digits; ++j) {
-            r = BGV_KeySwitch_GadgetFactor(gadget, base, i, j);
+            r = BGV_KeySwitch_GadgetFactor(gadget, base, i, j, logT);
             if (r == HIFHE_SUCCESS) {
-                const uint64_t idx[2] = { (uint64_t)i, (uint64_t)j };
+                /* The gadget width is part of the label: a piece encrypts
+                 * T^j * qhat_i * s^2, so two pieces sharing (a, e) under
+                 * different T differ by a known multiple of s^2. */
+                const uint64_t idx[3] = { (uint64_t)i, (uint64_t)j, (uint64_t)logT };
                 r = MakeKeyPiece(&out->pieces[i * digits + j], &sk_view, &sk_sq, gadget,
                                  self->context, seed, seed ? HIFHE_CTX_SEED_LEN : 0u,
-                                 "relin", idx, 2u);
+                                 "relin", idx, 3u);
             }
             if (r != HIFHE_SUCCESS) {
                 CleanseAndDestroy(&sk_sq); RLWE_CrtPoly_Destroy(&sk_view);
@@ -402,6 +409,8 @@ HIFHE_ERROR BGV_KeyGenerator_GenGaloisKeys(GaloisKeys *out,
 {
     if (out == NULL || self == NULL || self->sk == NULL || elts == NULL) return HIFHE_NULL_INPUT;
     uint32_t N = self->context->rlweContext.parameter->polyDegree;
+    /* At most N distinct odd elements exist mod 2N; more is malformed. */
+    if (count == 0u || count > N) return HIFHE_PARAM_INVALID;
     /* sigma_k permutes coefficients only for odd k below 2N. An even element
      * sends two sources to one destination and leaves the rest of the
      * polynomial zeroed, so the key would rotate to garbage without error. */
@@ -449,7 +458,8 @@ HIFHE_ERROR BGV_KeyGenerator_GenGaloisKeys(GaloisKeys *out,
 
     const RnsBase *base = &self->context->rlweContext.cipherRnsBase;
     uint32_t L = base->size;
-    uint32_t digits = BGV_BV_DigitsForBase(base);
+    uint32_t digits = BGV_KeySwitch_DefaultDigits(base, N, self->context->bgvParameter->plainMod);
+    uint32_t logT = BGV_KeySwitch_LogT(base, digits);
     const uint8_t *seed = BgvContext_GetSeed(&self->context->rlweContext.seedCtx);
     uint64_t gadget[HIFHE_BGV_MAX_CHAIN_LEN];
 
@@ -472,13 +482,15 @@ HIFHE_ERROR BGV_KeyGenerator_GenGaloisKeys(GaloisKeys *out,
         }
         for (uint32_t li = 0; li < L; ++li) {
             for (uint32_t j = 0; j < digits; ++j) {
-                r = BGV_KeySwitch_GadgetFactor(gadget, base, li, j);
+                r = BGV_KeySwitch_GadgetFactor(gadget, base, li, j, logT);
                 if (r == HIFHE_SUCCESS) {
-                    const uint64_t idx[3] = { k, (uint64_t)li, (uint64_t)j };
+                    /* Width in the label for the same reason as relin keys:
+                     * reused (a, e) under two widths exposes sigma_k(s). */
+                    const uint64_t idx[4] = { k, (uint64_t)li, (uint64_t)j, (uint64_t)logT };
                     r = MakeKeyPiece(&out->entries[i].pieces[li * digits + j],
                                      &sk_ntt_view, &target, gadget,
                                      self->context, seed, seed ? HIFHE_CTX_SEED_LEN : 0u,
-                                     "galois", idx, 3u);
+                                     "galois", idx, 4u);
                 }
                 if (r != HIFHE_SUCCESS) {
                     RLWE_CrtPoly_Destroy(&target);

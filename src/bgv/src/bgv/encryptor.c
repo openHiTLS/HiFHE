@@ -23,11 +23,14 @@
 #include <string.h>
 #include "bsl_sal.h"
 #include "bgv/encryptor.h"
+#include "bgv/encoder.h"
+#include "bgv/params_check.h"
 #include "bgv/plaintext.h"
 #include "bgv/ciphertext.h"
 #include "bgv/keys.h"
 #include "kernel/sampler.h"
 #include "kernel/modulus.h"
+#include "kernel/ntt.h"
 #include "rlwe/rlwe.h"
 #include "rlwe/rlwe_context.h"
 #include "rlwe/rns_ops.h"
@@ -311,75 +314,116 @@ HIFHE_ERROR BGV_Encryptor_EncryptAsymmetric(Ciphertext *out, const Plaintext *pt
 
 /* ---------------- decryption ---------------- */
 
-/* ptSlice += ck * sp mod q over one limb. Both factors are already reduced,
- * so the sum needs one conditional subtraction. */
-static void AccumSkTerm(uint64_t *ptSlice, const uint64_t *ck, const uint64_t *sp,
-                        Modulus q, uint32_t N)
+/* acc = acc * sp + ck mod q over one limb: one Horner step. All inputs are
+ * reduced, so the sum needs one conditional subtraction. */
+static void HornerStep(uint64_t *acc, const uint64_t *ck, const uint64_t *sp,
+                       const BarrettConst *bc, uint32_t N)
 {
+    Modulus q = bc->q;
     for (uint32_t j = 0; j < N; ++j) {
-        uint64_t acc = ptSlice[j] + Kernel_MulMod(ck[j], sp[j], q);
-        if (acc >= q) acc -= q;
-        ptSlice[j] = acc;
+        uint64_t v = Kernel_BarrettMulModInl(acc[j], sp[j], bc) + ck[j];
+        if (v >= q) v -= q;
+        acc[j] = v;
     }
 }
 
+/*
+ * The phase c0 + c1*s + ... + c[K-1]*s^(K-1) never leaves this function. It
+ * is linear in s, so a caller holding a ciphertext could solve it for the
+ * key. The output is the plaintext polynomial z = [phase]_Q mod t instead,
+ * over the ciphertext's whole chain: every limb holds NTT_{q_i}(z), which is
+ * the representation encoding produces, so the result decodes and encrypts
+ * again exactly as an encoded plaintext does.
+ *
+ * The phase is evaluated by Horner's rule, one multiply-add per component, so
+ * the work is linear in ciphertextSize and no power of s is materialised.
+ * It lives in a scratch buffer that is wiped before return.
+ */
 HIFHE_ERROR BGV_Encryptor_Decrypt(Plaintext *out, const Ciphertext *ct, const Encryptor *self)
 {
     if (out == NULL || ct == NULL || self == NULL || self->sk == NULL) return HIFHE_NULL_INPUT;
     uint32_t N = self->context->rlweContext.parameter->polyDegree;
     uint32_t L = ct->config.crtConfig.rnsbase.size;
     uint32_t sz = ct->config.ciphertextSize;
-    if (sz < 2u) return HIFHE_CT_DEGREE_MISMATCH;
+    if (sz < 2u || sz > HIFHE_BGV_MAX_CIPHERTEXT_SIZE) return HIFHE_CT_DEGREE_MISMATCH;
     /* Both operands are multiplied as NTT values below. A coefficient-form
      * input would decrypt to nonsense and still report success. */
     if (ct->config.crtConfig.dtype != HIFHE_NTT ||
         self->sk->config.crtConfig.dtype != HIFHE_NTT) {
         return HIFHE_PARAM_INVALID;
     }
+    if (L == 0u || L > HIFHE_BGV_MAX_CHAIN_LEN) return HIFHE_PARAM_INVALID;
+
+    const BarrettConst *bc[HIFHE_BGV_MAX_CHAIN_LEN];
+    const NttTables *tbl[HIFHE_BGV_MAX_CHAIN_LEN];
+    for (uint32_t i = 0; i < L; ++i) {
+        Modulus q = ct->config.crtConfig.rnsbase.data[i];
+        bc[i] = RLWE_RlweContext_GetBarrettByModulus(&self->context->rlweContext, q);
+        tbl[i] = RLWE_RlweContext_GetNttTablesByModulus(&self->context->rlweContext, q);
+        if (bc[i] == NULL || tbl[i] == NULL) return HIFHE_INTERNAL;
+    }
 
     /* The plaintext inherits the ciphertext's RNS base, scale factor and
      * capability bits. */
     PlaintextConfig cfg;
     memset(&cfg, 0, sizeof(cfg));
-    int32_t rc = RLWE_CrtPolyConfig_Copy(&cfg.crtConfig, &ct->config.crtConfig);
+    int32_t rc = Uint64Vector_Create(&cfg.crtConfig.rnsbase, ct->config.crtConfig.rnsbase.data, L);
     if (rc != HIFHE_SUCCESS) return rc;
     cfg.crtConfig.dtype = HIFHE_NTT;
     cfg.scaleFactor     = ct->config.correctionFactor;
     cfg.caps            = ct->config.caps;
     BGV_Plaintext_Destroy(out);
-    rc = BGV_Plaintext_Create(out, &cfg, self->context);
+    /* Written in full below before it is read. */
+    rc = BGV_Plaintext_CreateUninit(out, &cfg, self->context);
     BGV_PlaintextConfig_Destroy(&cfg);
     if (rc != HIFHE_SUCCESS) return rc;
 
-    /* inner = c[0] + c[1]*s + ... + c[K-1]*s^(K-1), elementwise per q_i in
-     * NTT form. Powers come from BGV_SecretKey_GetPow, so size 4 decrypts
-     * through s^3 with no special case. */
-    const uint64_t *sk = self->sk->data;
-    for (uint32_t i = 0; i < L; ++i) {
-        Modulus q = ct->config.crtConfig.rnsbase.data[i];
-        const uint64_t *c0 = ct->data + (0u * L + i) * N;
-        const uint64_t *c1 = ct->data + (1u * L + i) * N;
-        uint64_t *ptSlice = out->data + i * N;
-        /* s^1 is the key itself, so this limb skips the GetPow copy. */
-        memcpy(ptSlice, c0, N * sizeof(uint64_t));
-        AccumSkTerm(ptSlice, c1, sk + i * N, q, N);
+    size_t phaseWords = (size_t)L * N;
+    uint64_t *phase = (uint64_t *)BSL_SAL_Malloc((uint32_t)(phaseWords * sizeof(uint64_t)));
+    if (phase == NULL) {
+        BGV_Plaintext_Destroy(out);
+        return HIFHE_MEMORY_ERROR;
     }
-    for (uint32_t k = 2u; k < sz; ++k) {
-        CrtPoly skPow;
-        rc = BGV_SecretKey_GetPow(&skPow, self->sk, k);
-        if (rc != HIFHE_SUCCESS) {
-            BGV_Plaintext_Destroy(out);
-            return rc;
+
+    /* Phase per limb, then back to coefficient form for the reduction. */
+    const uint64_t *sk = self->sk->data;
+    for (uint32_t i = 0; i < L && rc == HIFHE_SUCCESS; ++i) {
+        uint64_t *acc = phase + (size_t)i * N;
+        memcpy(acc, ct->data + ((size_t)(sz - 1u) * L + i) * N, N * sizeof(uint64_t));
+        for (uint32_t k = sz - 1u; k-- > 0u;) {
+            HornerStep(acc, ct->data + ((size_t)k * L + i) * N, sk + (size_t)i * N, bc[i], N);
         }
-        for (uint32_t i = 0; i < L; ++i) {
-            Modulus q = ct->config.crtConfig.rnsbase.data[i];
-            const uint64_t *ck = ct->data + (k * L + i) * N;
-            const uint64_t *sp = skPow.data + i * N;
-            uint64_t *ptSlice = out->data + i * N;
-            AccumSkTerm(ptSlice, ck, sp, q, N);
+        rc = Kernel_Ntt_Inverse(acc, tbl[i]);
+    }
+    if (rc == HIFHE_SUCCESS) {
+        rc = BGV_Encoder_CrtCenteredModT(out->data, phase, &ct->config.crtConfig.rnsbase, N,
+                                         self->context->bgvParameter->plainMod);
+    }
+    if (rc == HIFHE_SUCCESS && L == 1u) {
+        /* Decoding reads a single limb as centred mod q_0, so a value above
+         * q_0 / 2 (possible only when t > q_0 / 2) would come back as
+         * value - q_0. Store value + q_0 - t instead: congruent mod t, and
+         * centred to value - t. Branch-free, since value is secret. */
+        Modulus q = ct->config.crtConfig.rnsbase.data[0];
+        Modulus t = self->context->bgvParameter->plainMod;
+        for (uint32_t j = 0; j < N; ++j) {
+            uint64_t over = 0u - (uint64_t)(out->data[j] > (q >> 1));
+            out->data[j] += (q - t) & over;
         }
-        BSL_SAL_CleanseData(skPow.data, skPow.dataSize * sizeof(uint64_t));
-        RLWE_CrtPoly_Destroy(&skPow);
+    }
+    for (uint32_t i = 1u; i < L && rc == HIFHE_SUCCESS; ++i) {
+        memcpy(out->data + (size_t)i * N, out->data, N * sizeof(uint64_t));
+    }
+    /* z < t < q_i, so the same coefficients are valid under every limb. */
+    for (uint32_t i = 0; i < L && rc == HIFHE_SUCCESS; ++i) {
+        rc = Kernel_Ntt_Forward(out->data + (size_t)i * N, tbl[i]);
+    }
+    BSL_SAL_CleanseData(phase, (uint32_t)(phaseWords * sizeof(uint64_t)));
+    BSL_SAL_Free(phase);
+    if (rc != HIFHE_SUCCESS) {
+        BSL_SAL_CleanseData(out->data, out->dataSize * (uint32_t)sizeof(uint64_t));
+        BGV_Plaintext_Destroy(out);
+        return rc;
     }
     out->config.crtConfig.dtype = HIFHE_NTT;
     return HIFHE_SUCCESS;

@@ -70,6 +70,9 @@ struct BgvUserPara {
      * plaintext block, HIFHE_NTT_TABLE_WORDS(lutPolyDegree) uint64 each. The
      * block is contiguous so it can be read or written in one operation. */
     uint64_t    *lutBlob;
+    /* Further parameter sets built against the same cache handle, one node
+     * each, owned by the head. Only ever set on a cache handle. */
+    struct BgvUserPara *lutNext;
 };
 
 /* Bag of lazily-built BGV objects. */
@@ -106,9 +109,14 @@ void       BgvUserPara_Clear     (BgvUserPara *p);
 HIFHE_ERROR BgvUserPara_Copy      (BgvUserPara *dst, const BgvUserPara *src);
 HIFHE_ERROR BgvUserPara_ParseFromBSL(BgvUserPara *p, const BSL_Param *param);
 HIFHE_ERROR BgvUserPara_LoadPreset(BgvUserPara *p, int32_t presetId);
-/* Fill p's NTT tables for the moduli param resolved to. Idempotent. A call
- * whose parameters match the tables already held computes nothing. */
-HIFHE_ERROR BgvUserPara_EnsureLut(BgvUserPara *p, const BGVParameter *param);
+/* Find or build NTT tables for the moduli param resolved to, in the cache
+ * headed by p, and report the node holding them in *holder. Idempotent: a
+ * parameter set already cached computes nothing. Up to
+ * HIFHE_BGV_LUT_CACHE_ENTRIES sets are kept; past that it reports
+ * HIFHE_PARAM_INVALID and the context builds private tables. */
+#define HIFHE_BGV_LUT_CACHE_ENTRIES 8u
+HIFHE_ERROR BgvUserPara_EnsureLut(BgvUserPara *p, const BGVParameter *param,
+                                 const BgvUserPara **holder);
 /* Block for the i-th ciphertext modulus, or for the plaintext modulus.
  * Returns NULL when the cache is empty or holds different parameters. */
 uint64_t *BgvUserPara_CipherLut(const BgvUserPara *p, uint32_t index);

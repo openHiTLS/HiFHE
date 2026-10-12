@@ -41,6 +41,14 @@ void BgvUserPara_Clear(BgvUserPara *p)
     if (p->lutBlob != NULL) {
         BSL_SAL_Free(p->lutBlob);
     }
+    BgvUserPara *next = p->lutNext;
+    while (next != NULL) {
+        BgvUserPara *after = next->lutNext;
+        next->lutNext = NULL;
+        BgvUserPara_Clear(next);
+        BSL_SAL_Free(next);
+        next = after;
+    }
     memset(p, 0, sizeof(*p));
 }
 
@@ -60,22 +68,14 @@ static bool LutMatches(const BgvUserPara *p, const BGVParameter *param)
     return true;
 }
 
-HIFHE_ERROR BgvUserPara_EnsureLut(BgvUserPara *p, const BGVParameter *param)
+static HIFHE_ERROR BuildLutInto(BgvUserPara *p, const BGVParameter *param)
 {
-    if (p == NULL || param == NULL) return HIFHE_NULL_INPUT;
-    if (LutMatches(p, param)) return HIFHE_SUCCESS;
-
     const ModulusVector *cipherMod = &param->rlweParameter.cipherMod;
     uint32_t L = cipherMod->size;
     uint32_t N = param->rlweParameter.polyDegree;
     if (L == 0u || L > HIFHE_BGV_MAX_CHAIN_LEN || N == 0u || param->plainMod == 0u) {
         return HIFHE_PARAM_INVALID;
     }
-
-    /* Every context built on this cache borrows pointers into the blob, so
-     * freeing it here would leave them dangling. Report the mismatch instead;
-     * Bgv_BuildContext then gives this context its own tables. */
-    if (p->lutBlob != NULL) return HIFHE_PARAM_INVALID;
 
     size_t stride = HIFHE_NTT_TABLE_WORDS(N);
     uint64_t *blob = (uint64_t *)BSL_SAL_Malloc(
@@ -106,6 +106,44 @@ HIFHE_ERROR BgvUserPara_EnsureLut(BgvUserPara *p, const BGVParameter *param)
     return HIFHE_SUCCESS;
 }
 
+HIFHE_ERROR BgvUserPara_EnsureLut(BgvUserPara *p, const BGVParameter *param,
+                                 const BgvUserPara **holder)
+{
+    if (p == NULL || param == NULL || holder == NULL) return HIFHE_NULL_INPUT;
+    *holder = NULL;
+    uint32_t entries = 0u;
+    BgvUserPara *tail = p;
+    for (BgvUserPara *n = p; n != NULL; n = n->lutNext) {
+        if (LutMatches(n, param)) {
+            *holder = n;
+            return HIFHE_SUCCESS;
+        }
+        if (n->lutBlob != NULL) entries++;
+        tail = n;
+    }
+    /* An empty head takes the first set, as the single-entry cache did. */
+    if (p->lutBlob == NULL) {
+        int32_t r = BuildLutInto(p, param);
+        if (r == HIFHE_SUCCESS) *holder = p;
+        return r;
+    }
+    /* Tables already handed out stay put: contexts borrow pointers into
+     * them. A new set gets its own node. */
+    if (entries >= HIFHE_BGV_LUT_CACHE_ENTRIES) return HIFHE_PARAM_INVALID;
+    BgvUserPara *node = (BgvUserPara *)BSL_SAL_Malloc((uint32_t)sizeof(BgvUserPara));
+    if (node == NULL) return HIFHE_MEMORY_ERROR;
+    BgvUserPara_Init(node);
+    int32_t r = BuildLutInto(node, param);
+    if (r != HIFHE_SUCCESS) {
+        BgvUserPara_Clear(node);
+        BSL_SAL_Free(node);
+        return r;
+    }
+    tail->lutNext = node;
+    *holder = node;
+    return HIFHE_SUCCESS;
+}
+
 uint64_t *BgvUserPara_CipherLut(const BgvUserPara *p, uint32_t index)
 {
     if (p == NULL || p->lutBlob == NULL || index >= p->lutLimbs) {
@@ -131,6 +169,7 @@ HIFHE_ERROR BgvUserPara_Copy(BgvUserPara *dst, const BgvUserPara *src)
     dst->lutBlob = NULL;
     dst->lutLimbs = 0u;
     dst->lutPolyDegree = 0u;
+    dst->lutNext = NULL;
     int32_t r = Uint32Vector_Create(&dst->cipherModBit,
                                     src->cipherModBit.data, src->cipherModBit.size);
     if (r != HIFHE_SUCCESS) return r;

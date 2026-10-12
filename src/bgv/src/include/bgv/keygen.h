@@ -42,12 +42,15 @@ HIFHE_ERROR BGV_KeyGenerator_GenSecretKey(KeyGenerator *self);
 /* Derive pk = (-a*s + e, a) from the current secret key. */
 HIFHE_ERROR BGV_KeyGenerator_GenPublicKey(PublicKey *out, const KeyGenerator *self);
 
-/* Relin key from sk^2. `digits` = base-2^16 gadget digits per limb, 0 picks
- * ceil(log_T q) for the widest limb. Holds chainLen * digits pieces. */
+/* Relin key from sk^2. `digits` = gadget digits per limb (the base widens to
+ * cover the widest limb), 0 picks BGV_KeySwitch_DefaultDigits. Holds
+ * chainLen * digits pieces. */
 HIFHE_ERROR BGV_KeyGenerator_GenRelinKey (RelinKeys *out, uint32_t digits,
                                          const KeyGenerator *self);
 
-/* Digits needed to cover the widest limb of a chain in base 2^16. */
+/* Digits needed to cover the widest limb of a chain in base 2^16: the
+ * historic fixed gadget, and the count BGV_KeySwitch_DefaultDigits falls
+ * back to. */
 uint32_t BGV_BV_DigitsForBase(const RnsBase *base);
 
 /* Derive galois keys for the supplied Galois elements. */

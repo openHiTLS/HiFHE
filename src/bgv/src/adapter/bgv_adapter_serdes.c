@@ -54,9 +54,14 @@ static void PutU32(uint8_t *p, uint32_t v)
 {
     for (int i = 0; i < 4; ++i) p[i] = (uint8_t)((v >> (8 * i)) & 0xffu);
 }
+/* The payload is almost all 64-bit words, so these two go through memcpy,
+ * which compiles to a single load or store; the byte-wise form did not. */
 static void PutU64(uint8_t *p, uint64_t v)
 {
-    for (int i = 0; i < 8; ++i) p[i] = (uint8_t)((v >> (8 * i)) & 0xffu);
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    v = __builtin_bswap64(v);
+#endif
+    memcpy(p, &v, sizeof(v));
 }
 static uint16_t GetU16(const uint8_t *p) { return (uint16_t)(p[0] | ((uint16_t)p[1] << 8)); }
 static uint32_t GetU32(const uint8_t *p)
@@ -67,8 +72,11 @@ static uint32_t GetU32(const uint8_t *p)
 }
 static uint64_t GetU64(const uint8_t *p)
 {
-    uint64_t r = 0u;
-    for (int i = 0; i < 8; ++i) r |= ((uint64_t)p[i]) << (8 * i);
+    uint64_t r;
+    memcpy(&r, p, sizeof(r));
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    r = __builtin_bswap64(r);
+#endif
     return r;
 }
 
@@ -111,19 +119,35 @@ static HIFHE_ERROR DomainFactors_Init(DomainFactors *f, const RnsBase *base, Pol
     return HIFHE_SUCCESS;
 }
 
-/* internal (plain Z_q) -> wire (Montgomery) */
-static uint64_t ToWireWord(const DomainFactors *f, uint32_t limb, uint64_t v)
+/* One limb's words to the wire (internal Z_q -> Montgomery for NTT form)
+ * and back; wire words may arrive un-reduced up to 4q. The offset lives in
+ * a local and the limb's constants are read once, so the loop compiles to
+ * plain loads, stores and one Shoup product per word; going through *off
+ * each word kept the compiler from doing either. Byte layout is unchanged. */
+static void WriteSlice(uint8_t *dst, const uint64_t *src, uint32_t N,
+                       const DomainFactors *f, uint32_t limb)
 {
-    if (!f->scaled) return v;
-    return Kernel_ShoupMulMod(v, &f->rSc[limb]);
+    if (!f->scaled) {
+        for (uint32_t j = 0; j < N; ++j) PutU64(dst + (size_t)j * 8u, src[j]);
+        return;
+    }
+    const ShoupConst sc = f->rSc[limb];
+    for (uint32_t j = 0; j < N; ++j) {
+        PutU64(dst + (size_t)j * 8u, Kernel_ShoupMulModInl(src[j], &sc));
+    }
 }
 
-/* wire (Montgomery, possibly un-reduced up to 4q) -> internal (plain Z_q) */
-static uint64_t FromWireWord(const DomainFactors *f, uint32_t limb, uint64_t v)
+static void ReadSlice(uint64_t *dst, const uint8_t *src, uint32_t N,
+                      const DomainFactors *f, uint32_t limb)
 {
-    uint64_t reduced = (v >= f->q[limb]) ? (v % f->q[limb]) : v;
-    if (!f->scaled) return reduced;
-    return Kernel_ShoupMulMod(reduced, &f->rInvSc[limb]);
+    const Modulus q = f->q[limb];
+    const ShoupConst sc = f->rInvSc[limb];
+    const bool scaled = f->scaled;
+    for (uint32_t j = 0; j < N; ++j) {
+        uint64_t v = GetU64(src + (size_t)j * 8u);
+        if (v >= q) v %= q;
+        dst[j] = scaled ? Kernel_ShoupMulModInl(v, &sc) : v;
+    }
 }
 
 static HIFHE_ERROR WriteHeader(uint8_t *buf, uint32_t bufLen, int32_t algId, uint16_t type,
@@ -213,10 +237,8 @@ static HIFHE_ERROR WritePtBody(uint8_t *buf, uint32_t bufLen, uint32_t *off, con
         PutU64(buf + *off, pt->config.crtConfig.rnsbase.data[i]); *off += 8u;
     }
     for (uint32_t i = 0; i < rns; ++i) {
-        const uint64_t *slice = pt->data + i * N;
-        for (uint32_t j = 0; j < N; ++j) {
-            PutU64(buf + *off, ToWireWord(&f, i, slice[j])); *off += 8u;
-        }
+        WriteSlice(buf + *off, pt->data + i * N, N, &f, i);
+        *off += N * 8u;
     }
     return HIFHE_SUCCESS;
 }
@@ -259,7 +281,7 @@ static HIFHE_ERROR ReadPtBody(const uint8_t *buf, uint32_t bufLen, uint32_t *off
     }
 
     BGV_Plaintext_Destroy(pt);
-    r = BGV_Plaintext_Create(pt, &cfg, ctx);
+    r = BGV_Plaintext_CreateUninit(pt, &cfg, ctx);
     BGV_PlaintextConfig_Destroy(&cfg);
     if (r != HIFHE_SUCCESS) return r;
 
@@ -269,10 +291,8 @@ static HIFHE_ERROR ReadPtBody(const uint8_t *buf, uint32_t bufLen, uint32_t *off
         return HIFHE_SERDES_FAIL;
     }
     for (uint32_t i = 0; i < rns; ++i) {
-        uint64_t *slice = pt->data + i * N;
-        for (uint32_t j = 0; j < N; ++j) {
-            slice[j] = FromWireWord(&f, i, GetU64(buf + *off)); *off += 8u;
-        }
+        ReadSlice(pt->data + i * N, buf + *off, N, &f, i);
+        *off += N * 8u;
     }
     return HIFHE_SUCCESS;
 }
@@ -330,10 +350,8 @@ static HIFHE_ERROR WriteCtBody(uint8_t *buf, uint32_t bufLen, uint32_t *off, con
     }
     for (uint32_t k = 0; k < ct->config.ciphertextSize; ++k) {
         for (uint32_t i = 0; i < rns; ++i) {
-            const uint64_t *slice = ct->data + (k * rns + i) * N;
-            for (uint32_t j = 0; j < N; ++j) {
-                PutU64(buf + *off, ToWireWord(&f, i, slice[j])); *off += 8u;
-            }
+            WriteSlice(buf + *off, ct->data + (k * rns + i) * N, N, &f, i);
+            *off += N * 8u;
         }
     }
     return HIFHE_SUCCESS;
@@ -353,7 +371,8 @@ static HIFHE_ERROR ReadCtBody(const uint8_t *buf, uint32_t bufLen, uint32_t *off
     uint32_t N     = GetU32(buf + *off); *off += 4u;
     uint32_t rns   = GetU32(buf + *off); *off += 4u;
     uint32_t dword = GetU32(buf + *off); *off += 4u;
-    if (sz == 0u) return HIFHE_SERDES_FAIL;
+    /* Decryption work and the allocation below both scale with sz. */
+    if (sz < 2u || sz > HIFHE_BGV_MAX_CIPHERTEXT_SIZE) return HIFHE_SERDES_FAIL;
     if (N != BGV_BGVContext_GetPolyDegree(ctx)) return HIFHE_SERDES_FAIL;
     if (rns == 0u || rns > ctx->rlweContext.cipherRnsBase.size) return HIFHE_SERDES_FAIL;
     if (dword != (uint32_t)HIFHE_POLY && dword != (uint32_t)HIFHE_NTT) {
@@ -394,7 +413,7 @@ static HIFHE_ERROR ReadCtBody(const uint8_t *buf, uint32_t bufLen, uint32_t *off
     }
 
     BGV_Ciphertext_Destroy(ct);
-    r = BGV_Ciphertext_Create(ct, &cfg, ctx);
+    r = BGV_Ciphertext_CreateUninit(ct, &cfg, ctx);
     BGV_CiphertextConfig_Destroy(&cfg);
     if (r != HIFHE_SUCCESS) return r;
 
@@ -405,10 +424,8 @@ static HIFHE_ERROR ReadCtBody(const uint8_t *buf, uint32_t bufLen, uint32_t *off
     }
     for (uint32_t k = 0; k < sz; ++k) {
         for (uint32_t i = 0; i < rns; ++i) {
-            uint64_t *slice = ct->data + (k * rns + i) * N;
-            for (uint32_t j = 0; j < N; ++j) {
-                slice[j] = FromWireWord(&f, i, GetU64(buf + *off)); *off += 8u;
-            }
+            ReadSlice(ct->data + (k * rns + i) * N, buf + *off, N, &f, i);
+            *off += N * 8u;
         }
     }
     return HIFHE_SUCCESS;

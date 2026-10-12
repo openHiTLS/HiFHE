@@ -72,6 +72,47 @@ uint64_t   Kernel_ModInv           (uint64_t a, Modulus q);
 /* ceil(log2(x)), the bit count of x - 1. 0 for x <= 1. */
 uint32_t   Kernel_Log2Ceil         (uint64_t x);
 
+
+/* Inline bodies of the reductions above, for hot loops. The exported
+ * functions wrap these; without LTO a cross-file call per coefficient costs
+ * more than the arithmetic. */
+static inline uint64_t Kernel_BarrettReduce64Inl(uint64_t x, const BarrettConst *bc)
+{
+    ModulusWide acc = (ModulusWide)x * (ModulusWide)bc->ratioHi;
+    acc += ((ModulusWide)x * (ModulusWide)bc->ratioLo) >> 64;
+    uint64_t qhat = (uint64_t)(acc >> 64);
+    uint64_t r = x - qhat * bc->q;
+    while (r >= bc->q) r -= bc->q;
+    return r;
+}
+
+static inline uint64_t Kernel_BarrettReduce128Inl(uint64_t xHi, uint64_t xLo,
+                                                  const BarrettConst *bc)
+{
+    ModulusWide acc = (ModulusWide)xHi * (ModulusWide)bc->ratioHi;
+    acc += ((ModulusWide)xHi * (ModulusWide)bc->ratioLo) >> 64;
+    acc += ((ModulusWide)xLo * (ModulusWide)bc->ratioHi) >> 64;
+    uint64_t qhat = (uint64_t)acc;
+    uint64_t r = xLo - qhat * bc->q;
+    while (r >= bc->q) r -= bc->q;
+    return r;
+}
+
+/* a * b mod q through the Barrett constant; a, b < q. */
+static inline uint64_t Kernel_BarrettMulModInl(uint64_t a, uint64_t b, const BarrettConst *bc)
+{
+    ModulusWide p = (ModulusWide)a * (ModulusWide)b;
+    return Kernel_BarrettReduce128Inl((uint64_t)(p >> 64), (uint64_t)p, bc);
+}
+
+static inline uint64_t Kernel_ShoupMulModInl(uint64_t x, const ShoupConst *sc)
+{
+    uint64_t qHat = (uint64_t)(((ModulusWide)x * (ModulusWide)sc->quotient) >> 64);
+    uint64_t r = x * sc->operand - qHat * sc->q;
+    if (r >= sc->q) r -= sc->q;
+    return r;
+}
+
 #ifdef __cplusplus
 }
 #endif

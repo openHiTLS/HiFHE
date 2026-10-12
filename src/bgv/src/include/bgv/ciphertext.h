@@ -62,6 +62,9 @@ static inline uint32_t BGV_Ciphertext_CalDataSize(const CiphertextConfig *cfg,
 
 HIFHE_ERROR BGV_Ciphertext_Create        (Ciphertext *out,
                                          const CiphertextConfig *cfg, BGVContext *ctx);
+/* As BGV_Ciphertext_Create, but the buffer is left uninitialised: for callers
+ * that overwrite every word before reading any. */
+HIFHE_ERROR BGV_Ciphertext_CreateUninit(Ciphertext *out, const CiphertextConfig *cfg, BGVContext *ctx);
 /* Zeroed size-2 NTT ciphertext over `base`. The shape key switching writes
  * into, and the one relinearize and rotate build around it. */
 HIFHE_ERROR BGV_Ciphertext_CreateSize2Ntt(Ciphertext *out, uint64_t correctionFactor,

@@ -54,6 +54,9 @@ static inline uint32_t BGV_Plaintext_CalDataSize(const PlaintextConfig *cfg,
 
 HIFHE_ERROR BGV_Plaintext_Create        (Plaintext *out,
                                         const PlaintextConfig *cfg, BGVContext *ctx);
+/* As BGV_Plaintext_Create, but the buffer is left uninitialised: for callers
+ * that overwrite every word before reading any. */
+HIFHE_ERROR BGV_Plaintext_CreateUninit(Plaintext *out, const PlaintextConfig *cfg, BGVContext *ctx);
 /* Adopt a CrtPoly's storage instead of allocating and copying. `poly` must
  * own both its buffer and its config; on success it is left empty and the
  * plaintext owns what it held. Lets a producer that already built a poly
