@@ -76,26 +76,38 @@ uint32_t   Kernel_Log2Ceil         (uint64_t x);
 /* Inline bodies of the reductions above, for hot loops. The exported
  * functions wrap these; without LTO a cross-file call per coefficient costs
  * more than the arithmetic. */
+/* r - q when r >= q, r otherwise, selected by mask and not by branch. Every
+ * reduction below ends in these, and their inputs are secret-derived. */
+static inline uint64_t Kernel_CondSubInl(uint64_t r, uint64_t q)
+{
+    return r - (q & (0u - (uint64_t)(r >= q)));
+}
+
+/* x mod q, for any x. ratio >= 2^128/q - 1 and the one truncated term below
+ * cost less than two whole quotient steps together, so qhat is q or q-1 off
+ * the true quotient and r < 2q: one correction, always taken or not. */
 static inline uint64_t Kernel_BarrettReduce64Inl(uint64_t x, const BarrettConst *bc)
 {
     ModulusWide acc = (ModulusWide)x * (ModulusWide)bc->ratioHi;
     acc += ((ModulusWide)x * (ModulusWide)bc->ratioLo) >> 64;
     uint64_t qhat = (uint64_t)(acc >> 64);
     uint64_t r = x - qhat * bc->q;
-    while (r >= bc->q) r -= bc->q;
-    return r;
+    return Kernel_CondSubInl(r, bc->q);
 }
 
+/* (xHi, xLo) mod q, for xHi * 2^64 + xLo < q * 2^64. Every column carrying
+ * into the 2^128 word is kept, so qhat is floor(x * ratio / 2^128) exactly;
+ * ratio is one short of 2^128 / q at worst, which leaves r < 2q and one
+ * correction. */
 static inline uint64_t Kernel_BarrettReduce128Inl(uint64_t xHi, uint64_t xLo,
                                                   const BarrettConst *bc)
 {
-    ModulusWide acc = (ModulusWide)xHi * (ModulusWide)bc->ratioHi;
-    acc += ((ModulusWide)xHi * (ModulusWide)bc->ratioLo) >> 64;
-    acc += ((ModulusWide)xLo * (ModulusWide)bc->ratioHi) >> 64;
-    uint64_t qhat = (uint64_t)acc;
+    ModulusWide acc = ((ModulusWide)xLo * (ModulusWide)bc->ratioLo) >> 64;
+    acc += (ModulusWide)xLo * (ModulusWide)bc->ratioHi;
+    acc += (ModulusWide)xHi * (ModulusWide)bc->ratioLo;
+    uint64_t qhat = (uint64_t)(acc >> 64) + xHi * bc->ratioHi;
     uint64_t r = xLo - qhat * bc->q;
-    while (r >= bc->q) r -= bc->q;
-    return r;
+    return Kernel_CondSubInl(r, bc->q);
 }
 
 /* a * b mod q through the Barrett constant; a, b < q. */
@@ -109,8 +121,7 @@ static inline uint64_t Kernel_ShoupMulModInl(uint64_t x, const ShoupConst *sc)
 {
     uint64_t qHat = (uint64_t)(((ModulusWide)x * (ModulusWide)sc->quotient) >> 64);
     uint64_t r = x * sc->operand - qHat * sc->q;
-    if (r >= sc->q) r -= sc->q;
-    return r;
+    return Kernel_CondSubInl(r, sc->q);
 }
 
 #ifdef __cplusplus

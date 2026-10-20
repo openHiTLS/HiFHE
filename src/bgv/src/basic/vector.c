@@ -71,6 +71,7 @@ HIFHE_DEFINE_VECTOR(Uint8Vector,  uint8_t)
 
 HIFHE_DEFINE_VECTOR_CLEANSE(Uint8Vector, uint8_t)
 HIFHE_DEFINE_VECTOR_CLEANSE(Int64Vector, int64_t)
+HIFHE_DEFINE_VECTOR_CLEANSE(Uint64Vector, uint64_t)
 
 /* --- ModulusVector (= Uint64Vector) extra ops --- */
 HIFHE_ERROR ModulusVector_CopyN(ModulusVector *dst, const ModulusVector *src, uint32_t size)

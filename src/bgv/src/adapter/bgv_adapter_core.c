@@ -688,7 +688,11 @@ HIFHE_ERROR Bgv_HEMsgEncode(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input,
     r = BGV_Encoder_Encode(&pt, msg, N, &enc);
     BGV_Encoder_Destroy(&enc);
     BSL_SAL_Free(msgCopy);
-    if (r != HIFHE_SUCCESS) return r;
+    if (r != HIFHE_SUCCESS) {
+        /* Encode allocates its output before the work that can still fail. */
+        BGV_Plaintext_Destroy(&pt);
+        return r;
+    }
 
     r = BgvSerDes_DumpPlaintext(&pt, out, outLen, ctx->algId);
     BGV_Plaintext_Destroy(&pt);

@@ -88,7 +88,7 @@ HIFHE_ERROR BGV_Encoder_Encode(Plaintext *out, const uint64_t *msg, uint32_t slo
     }
     cr = Kernel_Ntt_Inverse(coeff.data, &ctx->ptNtt);
     if (cr != HIFHE_SUCCESS) {
-        Uint64Vector_Destroy(&coeff);
+        Uint64Vector_Cleanse(&coeff);
         return cr;
     }
 
@@ -96,7 +96,7 @@ HIFHE_ERROR BGV_Encoder_Encode(Plaintext *out, const uint64_t *msg, uint32_t slo
         /* coeff[j] < t < q_i, so the residue is the value itself. */
         memcpy(out->data + i * N, coeff.data, N * sizeof(uint64_t));
     }
-    Uint64Vector_Destroy(&coeff);
+    Uint64Vector_Cleanse(&coeff);
 
     out->config.crtConfig.dtype = HIFHE_POLY;
     out->config.scaleFactor     = 1u;
@@ -190,17 +190,18 @@ HIFHE_ERROR BGV_Encoder_CrtCenteredModT(uint64_t *out, const uint64_t *data,
                                    : Kernel_ShoupMulModInl(data[i * N + j], &qhatInvSc[i]);
             frac += (ModulusWide)y * recip[i];
             acc += Kernel_ShoupMulModInl(Kernel_BarrettReduce64Inl(y, &tBarrett), &qhatModTSc[i]);
-            if (acc >= t) acc -= t;   /* Both addends are below t. */
+            acc = Kernel_CondSubInl(acc, t);   /* Both addends are below t. */
         }
         uint64_t v = (uint64_t)(frac >> 96);
         uint64_t z = acc + t - Kernel_ShoupMulModInl(Kernel_BarrettReduce64Inl(v, &tBarrett), &qModTSc);
-        if (z >= t) z -= t;
-        /* Fractional part above one half means the residues stand for z - Q. */
-        if ((frac & (((ModulusWide)1u << 96) - 1u)) > ((ModulusWide)1u << 95)) {
-            z = z + t - qModT;
-            if (z >= t) z -= t;
-        }
-        out[j] = z;
+        z = Kernel_CondSubInl(z, t);
+        /* Fractional part above one half means the residues stand for z - Q.
+         * The fraction is the sign of the private phase, so it is masked in
+         * rather than branched on. */
+        uint64_t neg = 0u - (uint64_t)((frac & (((ModulusWide)1u << 96) - 1u)) >
+                                       ((ModulusWide)1u << 95));
+        z += (t - qModT) & neg;
+        out[j] = Kernel_CondSubInl(z, t);
     }
     return HIFHE_SUCCESS;
 }

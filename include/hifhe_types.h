@@ -76,7 +76,10 @@ typedef enum {
      *     BSL_PARAM_END
      * };
      * CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_HE_RERANDOMIZE, p, 0);
-     * p[1].useLen holds the bytes written. */
+     * p[1].useLen holds the bytes written.
+     * This refreshes the noise, not the ciphertext: it needs no key, and it
+     * leaves out - in a small multiple of plainMod, so anyone holding both
+     * ciphertexts can pair them. Unlinkability needs a fresh encryption. */
     HIFHE_CTRL_BGV_HE_RERANDOMIZE = HIFHE_CTRL_BGV_BASE + 9,
     HIFHE_CTRL_BGV_GET_RELIN_KEY_LEN = HIFHE_CTRL_BGV_BASE + 10,
     HIFHE_CTRL_BGV_GET_GALOIS_KEYS_LEN = HIFHE_CTRL_BGV_BASE + 11,
