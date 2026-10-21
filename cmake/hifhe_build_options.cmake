@@ -10,7 +10,11 @@
 
 add_library(_hifhe_compile_options INTERFACE)
 target_compile_features(_hifhe_compile_options INTERFACE c_std_11)
-target_compile_options(_hifhe_compile_options INTERFACE -Wall -Wextra -Werror)
+target_compile_options(_hifhe_compile_options INTERFACE
+    -Wall -Wextra -Werror -O2 -fstack-protector-strong)
+target_compile_definitions(_hifhe_compile_options INTERFACE _FORTIFY_SOURCE=2)
+target_link_options(_hifhe_compile_options INTERFACE
+    -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack)
 
 if(HIFHE_ENABLE_ASAN)
     target_compile_options(_hifhe_compile_options INTERFACE
