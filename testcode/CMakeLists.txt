@@ -55,8 +55,12 @@ ExternalProject_Add(gen_testcase
 )
 
 option(BUILD_BENCHMARK "Build the benchmark alongside the test suites" OFF)
+option(BUILD_DEMO "Build the demos alongside the test suites" OFF)
 
 add_subdirectory(sdv)
 if(BUILD_BENCHMARK)
     add_subdirectory(benchmark)
+endif()
+if(BUILD_DEMO)
+    add_subdirectory(demo)
 endif()

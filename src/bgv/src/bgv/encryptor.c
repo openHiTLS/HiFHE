@@ -76,25 +76,25 @@ static HIFHE_ERROR SampleSmallCrtNtt(CrtPoly *out, BGVContext *ctx,
     Int64Vector scratch;
     r = Int64Vector_Create(&scratch, NULL, N);
     if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_Destroy(out);
+        RLWE_CrtPoly_CleanseDestroy(out);
         return r;
     }
     r = ternary ? Kernel_Sampler_Ternary(scratch.data, N, src)
                 : Kernel_Sampler_CBD(scratch.data, N, 2u, src);
     if (r != HIFHE_SUCCESS) {
         Int64Vector_Cleanse(&scratch);
-        RLWE_CrtPoly_Destroy(out);
+        RLWE_CrtPoly_CleanseDestroy(out);
         return r;
     }
     r = RLWE_CrtPoly_SetSigned(out, scratch.data);
     Int64Vector_Cleanse(&scratch);
     if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_Destroy(out);
+        RLWE_CrtPoly_CleanseDestroy(out);
         return r;
     }
     r = RLWE_CrtPoly_ToNtt(out);
     if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_Destroy(out);
+        RLWE_CrtPoly_CleanseDestroy(out);
         return r;
     }
     return HIFHE_SUCCESS;
@@ -195,7 +195,7 @@ HIFHE_ERROR BGV_Encryptor_EncryptZeroSymmetric(Ciphertext *out, const SecretKey 
     }
     r = SymCoreFromAE(out, &a, &e, &sk_view, self->context);
     RLWE_CrtPoly_Destroy(&a);
-    RLWE_CrtPoly_Destroy(&e);
+    RLWE_CrtPoly_CleanseDestroy(&e);
     RLWE_CrtPoly_Destroy(&sk_view);
     return r;
 }
@@ -240,22 +240,22 @@ HIFHE_ERROR BGV_Encryptor_EncryptZeroAsymmetric(Ciphertext *out, const PublicKey
     if (r != HIFHE_SUCCESS) return r;
     r = SampleSmallCrtNtt(&e0, self->context, &src, false);
     if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_Destroy(&u);
+        RLWE_CrtPoly_CleanseDestroy(&u);
         return r;
     }
     r = SampleSmallCrtNtt(&e1, self->context, &src, false);
     if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_Destroy(&u);
-        RLWE_CrtPoly_Destroy(&e0);
+        RLWE_CrtPoly_CleanseDestroy(&u);
+        RLWE_CrtPoly_CleanseDestroy(&e0);
         return r;
     }
     r = BGV_Ciphertext_GetCrtPolyAt(&pk0, 0u, pk); if (r != HIFHE_SUCCESS) goto done;
     r = BGV_Ciphertext_GetCrtPolyAt(&pk1, 1u, pk); if (r != HIFHE_SUCCESS) goto done;
     r = AsymCoreFromNoise(out, &pk0, &pk1, &u, &e0, &e1, self->context);
 done:
-    RLWE_CrtPoly_Destroy(&u);
-    RLWE_CrtPoly_Destroy(&e0);
-    RLWE_CrtPoly_Destroy(&e1);
+    RLWE_CrtPoly_CleanseDestroy(&u);
+    RLWE_CrtPoly_CleanseDestroy(&e0);
+    RLWE_CrtPoly_CleanseDestroy(&e1);
     return r;
 }
 
@@ -315,15 +315,14 @@ HIFHE_ERROR BGV_Encryptor_EncryptAsymmetric(Ciphertext *out, const Plaintext *pt
 /* ---------------- decryption ---------------- */
 
 /* acc = acc * sp + ck mod q over one limb: one Horner step. All inputs are
- * reduced, so the sum needs one conditional subtraction. */
+ * reduced, so the sum needs one masked subtraction. */
 static void HornerStep(uint64_t *acc, const uint64_t *ck, const uint64_t *sp,
                        const BarrettConst *bc, uint32_t N)
 {
     Modulus q = bc->q;
     for (uint32_t j = 0; j < N; ++j) {
         uint64_t v = Kernel_BarrettMulModInl(acc[j], sp[j], bc) + ck[j];
-        if (v >= q) v -= q;
-        acc[j] = v;
+        acc[j] = Kernel_CondSubInl(v, q);
     }
 }
 

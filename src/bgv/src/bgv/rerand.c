@@ -20,6 +20,10 @@
  *
  * Decrypt evaluates sum_k c_k * s^k, so the injected term carries t and
  * vanishes mod t at decode. No public key needed.
+ *
+ * Every component of the input survives in the output, so out - in is a small
+ * multiple of t and pairs the two ciphertexts to any holder of both. This
+ * refreshes the noise budget; it is not an unlinkability primitive.
  */
 
 #include <string.h>

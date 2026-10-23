@@ -74,6 +74,7 @@ HIFHE_ERROR Uint8Vector_Destroy (Uint8Vector *v);
 /* Wipe before releasing. */
 HIFHE_ERROR Uint8Vector_Cleanse (Uint8Vector *v);
 HIFHE_ERROR Int64Vector_Cleanse (Int64Vector *v);
+HIFHE_ERROR Uint64Vector_Cleanse(Uint64Vector *v);
 
 /* ModulusVector extras. CopyN takes a pre-known slice length. */
 HIFHE_ERROR ModulusVector_CopyN (ModulusVector *dst, const ModulusVector *src, uint32_t size);

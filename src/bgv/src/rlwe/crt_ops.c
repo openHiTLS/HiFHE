@@ -114,6 +114,15 @@ HIFHE_ERROR RLWE_CrtPoly_Destroy(CrtPoly *self)
     return HIFHE_SUCCESS;
 }
 
+HIFHE_ERROR RLWE_CrtPoly_CleanseDestroy(CrtPoly *self)
+{
+    if (self == NULL) return HIFHE_NULL_INPUT;
+    if (self->ownsData && self->data != NULL && self->dataSize > 0u) {
+        BSL_SAL_CleanseData(self->data, self->dataSize * (uint32_t)sizeof(uint64_t));
+    }
+    return RLWE_CrtPoly_Destroy(self);
+}
+
 /* View onto the i-th RnsPoly slice. `out` does not own storage. */
 HIFHE_ERROR RLWE_CrtPoly_GetRnsPolyAt(RnsPoly *out, uint32_t index, const CrtPoly *self)
 {

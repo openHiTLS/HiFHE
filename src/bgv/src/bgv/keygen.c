@@ -66,17 +66,6 @@ uint32_t BGV_BV_DigitsForBase(const RnsBase *base)
 
 /* ---- Small helpers ---- */
 
-/* Secret-derived polynomials (s in coefficient form, s^2) otherwise stay
- * readable in freed memory. Views own nothing and must not be wiped: their
- * storage is the secret key itself. */
-static void CleanseAndDestroy(CrtPoly *p)
-{
-    if (p->ownsData && p->data != NULL && p->dataSize > 0u) {
-        BSL_SAL_CleanseData(p->data, p->dataSize * (uint32_t)sizeof(uint64_t));
-    }
-    RLWE_CrtPoly_Destroy(p);
-}
-
 static HIFHE_ERROR SampleUniformCrtNtt(CrtPoly *out, BGVContext *ctx,
                                      const BgvEntropy *src)
 {
@@ -126,7 +115,7 @@ static HIFHE_ERROR SampleSmallCrtCoeff(CrtPoly *out, BGVContext *ctx,
     Int64Vector scratch;
     r = Int64Vector_Create(&scratch, NULL, N);
     if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_Destroy(out);
+        RLWE_CrtPoly_CleanseDestroy(out);
         return r;
     }
     if (ternary) {
@@ -137,13 +126,13 @@ static HIFHE_ERROR SampleSmallCrtCoeff(CrtPoly *out, BGVContext *ctx,
     }
     if (r != HIFHE_SUCCESS) {
         Int64Vector_Cleanse(&scratch);
-        RLWE_CrtPoly_Destroy(out);
+        RLWE_CrtPoly_CleanseDestroy(out);
         return r;
     }
     r = RLWE_CrtPoly_SetSigned(out, scratch.data);
     Int64Vector_Cleanse(&scratch);
     if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_Destroy(out);
+        RLWE_CrtPoly_CleanseDestroy(out);
         return r;
     }
     return HIFHE_SUCCESS;
@@ -182,7 +171,7 @@ HIFHE_ERROR BGV_KeyGenerator_GenSecretKey(KeyGenerator *self)
     if (r != HIFHE_SUCCESS) return r;
     r = RLWE_CrtPoly_ToNtt(&poly);
     if (r != HIFHE_SUCCESS) {
-        CleanseAndDestroy(&poly);
+        RLWE_CrtPoly_CleanseDestroy(&poly);
         return r;
     }
 
@@ -190,13 +179,13 @@ HIFHE_ERROR BGV_KeyGenerator_GenSecretKey(KeyGenerator *self)
      * RLWE_CrtPoly_Create, so hand it over rather than allocating again. */
     self->sk = BGV_SecretKey_New();
     if (self->sk == NULL) {
-        CleanseAndDestroy(&poly);
+        RLWE_CrtPoly_CleanseDestroy(&poly);
         return HIFHE_MEMORY_ERROR;
     }
     r = BGV_Plaintext_CreateFromCrtPoly(self->sk, &poly, 1u, self->context);
     if (r != HIFHE_SUCCESS) {
         BGV_SecretKey_Free(&self->sk);
-        CleanseAndDestroy(&poly);
+        RLWE_CrtPoly_CleanseDestroy(&poly);
         return r;
     }
     return HIFHE_SUCCESS;
@@ -252,7 +241,7 @@ static HIFHE_ERROR MakeKeyPiece(Ciphertext *out,
     r = RLWE_CrtPoly_ToNtt(&e);
     if (r != HIFHE_SUCCESS) {
         RLWE_CrtPoly_Destroy(&a);
-        RLWE_CrtPoly_Destroy(&e);
+        RLWE_CrtPoly_CleanseDestroy(&e);
         BGV_Ciphertext_Destroy(out);
         return r;
     }
@@ -277,7 +266,7 @@ static HIFHE_ERROR MakeKeyPiece(Ciphertext *out,
     r = RLWE_CrtPoly_Assign(&b1, &a);
 cleanup:
     RLWE_CrtPoly_Destroy(&a);
-    RLWE_CrtPoly_Destroy(&e);
+    RLWE_CrtPoly_CleanseDestroy(&e);
     if (r != HIFHE_SUCCESS) BGV_Ciphertext_Destroy(out);
     return r;
 }
@@ -317,7 +306,7 @@ HIFHE_ERROR BGV_KeyGenerator_GenRelinKey(RelinKeys *out, uint32_t digits,
     }
     r = RLWE_CrtPoly_MulDot(&sk_sq, &sk_sq, &sk_sq);
     if (r != HIFHE_SUCCESS) {
-        CleanseAndDestroy(&sk_sq);
+        RLWE_CrtPoly_CleanseDestroy(&sk_sq);
         RLWE_CrtPoly_Destroy(&sk_view);
         return r;
     }
@@ -332,13 +321,13 @@ HIFHE_ERROR BGV_KeyGenerator_GenRelinKey(RelinKeys *out, uint32_t digits,
      * BGV_KSW_MAX_DIGITS the piece count L * digits can wrap uint32 and the
      * generation loop writes past the allocation. */
     if (digits > BGV_KSW_MAX_DIGITS) {
-        CleanseAndDestroy(&sk_sq);
+        RLWE_CrtPoly_CleanseDestroy(&sk_sq);
         RLWE_CrtPoly_Destroy(&sk_view);
         return HIFHE_PARAM_INVALID;
     }
     r = BGV_RelinKeys_Create(out, L, digits, self->context);
     if (r != HIFHE_SUCCESS) {
-        CleanseAndDestroy(&sk_sq);
+        RLWE_CrtPoly_CleanseDestroy(&sk_sq);
         RLWE_CrtPoly_Destroy(&sk_view);
         return r;
     }
@@ -359,13 +348,13 @@ HIFHE_ERROR BGV_KeyGenerator_GenRelinKey(RelinKeys *out, uint32_t digits,
                                  "relin", idx, 3u);
             }
             if (r != HIFHE_SUCCESS) {
-                CleanseAndDestroy(&sk_sq); RLWE_CrtPoly_Destroy(&sk_view);
+                RLWE_CrtPoly_CleanseDestroy(&sk_sq); RLWE_CrtPoly_Destroy(&sk_view);
                 BGV_RelinKeys_Destroy(out);
                 return r;
             }
         }
     }
-    CleanseAndDestroy(&sk_sq);
+    RLWE_CrtPoly_CleanseDestroy(&sk_sq);
     RLWE_CrtPoly_Destroy(&sk_view);
     return HIFHE_SUCCESS;
 }
@@ -395,7 +384,7 @@ static HIFHE_ERROR ApplyGaloisToCoeffPoly(CrtPoly *out, const CrtPoly *in, uint6
             uint64_t v = src[j];
             if (idx >= N) {
                 idx -= N;
-                v = (v == 0u) ? 0u : (q - v);   /* sign flip */
+                v = (q - v) & (0u - (uint64_t)(v != 0u));   /* sign flip */
             }
             dst[idx] = v;
         }
@@ -430,20 +419,20 @@ HIFHE_ERROR BGV_KeyGenerator_GenGaloisKeys(GaloisKeys *out,
     if (r != HIFHE_SUCCESS) return r;
     r = RLWE_CrtPoly_ToPoly(&sk_coeff);
     if (r != HIFHE_SUCCESS) {
-        CleanseAndDestroy(&sk_coeff);
+        RLWE_CrtPoly_CleanseDestroy(&sk_coeff);
         return r;
     }
 
     BGV_GaloisKeys_Destroy(out);
     r = BGV_GaloisKeys_Create(out, self->context);
     if (r != HIFHE_SUCCESS) {
-        CleanseAndDestroy(&sk_coeff);
+        RLWE_CrtPoly_CleanseDestroy(&sk_coeff);
         return r;
     }
 
     r = BGV_GaloisKeys_CreateEntries(out, count);
     if (r != HIFHE_SUCCESS) {
-        CleanseAndDestroy(&sk_coeff);
+        RLWE_CrtPoly_CleanseDestroy(&sk_coeff);
         return r;
     }
 
@@ -452,7 +441,7 @@ HIFHE_ERROR BGV_KeyGenerator_GenGaloisKeys(GaloisKeys *out,
     r = RLWE_CrtPoly_CreateFromExist(&sk_ntt_view, self->sk->data, self->sk->dataSize,
                                      &self->sk->config.crtConfig, &self->context->rlweContext);
     if (r != HIFHE_SUCCESS) {
-        CleanseAndDestroy(&sk_coeff); BGV_GaloisKeys_Destroy(out);
+        RLWE_CrtPoly_CleanseDestroy(&sk_coeff); BGV_GaloisKeys_Destroy(out);
         return r;
     }
 
@@ -471,13 +460,13 @@ HIFHE_ERROR BGV_KeyGenerator_GenGaloisKeys(GaloisKeys *out,
         if (r != HIFHE_SUCCESS) goto giveup;
         r = RLWE_CrtPoly_ToNtt(&target);
         if (r != HIFHE_SUCCESS) {
-            RLWE_CrtPoly_Destroy(&target);
+            RLWE_CrtPoly_CleanseDestroy(&target);
             goto giveup;
         }
 
         r = BGV_GaloisKeyPiece_Create(&out->entries[i], k, L, digits);
         if (r != HIFHE_SUCCESS) {
-            RLWE_CrtPoly_Destroy(&target);
+            RLWE_CrtPoly_CleanseDestroy(&target);
             goto giveup;
         }
         for (uint32_t li = 0; li < L; ++li) {
@@ -493,20 +482,20 @@ HIFHE_ERROR BGV_KeyGenerator_GenGaloisKeys(GaloisKeys *out,
                                      "galois", idx, 4u);
                 }
                 if (r != HIFHE_SUCCESS) {
-                    RLWE_CrtPoly_Destroy(&target);
+                    RLWE_CrtPoly_CleanseDestroy(&target);
                     goto giveup;
                 }
             }
         }
-        RLWE_CrtPoly_Destroy(&target);
+        RLWE_CrtPoly_CleanseDestroy(&target);
     }
     RLWE_CrtPoly_Destroy(&sk_ntt_view);
-    CleanseAndDestroy(&sk_coeff);
+    RLWE_CrtPoly_CleanseDestroy(&sk_coeff);
     return HIFHE_SUCCESS;
 
 giveup:
     RLWE_CrtPoly_Destroy(&sk_ntt_view);
-    CleanseAndDestroy(&sk_coeff);
+    RLWE_CrtPoly_CleanseDestroy(&sk_coeff);
     BGV_GaloisKeys_Destroy(out);
     return r;
 }
