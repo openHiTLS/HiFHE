@@ -42,15 +42,14 @@
 
 static CRYPT_EAL_PkeyCtx *BgvNewCtx(int withPreset)
 {
-    CRYPT_EAL_PkeyCtx *ctx = CRYPT_EAL_ProviderPkeyNewCtx(
-        NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
+    CRYPT_EAL_PkeyCtx *ctx =
+        CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
     if (ctx == NULL) {
         return NULL;
     }
     if (withPreset) {
         int32_t presetId = HIFHE_BGV_DEFAULT;
-        if (CRYPT_EAL_PkeyCtrl(ctx, CRYPT_CTRL_SET_PARA_BY_ID,
-                               &presetId, sizeof(presetId)) != HIFHE_SUCCESS) {
+        if (CRYPT_EAL_PkeyCtrl(ctx, CRYPT_CTRL_SET_PARA_BY_ID, &presetId, sizeof(presetId)) != HIFHE_SUCCESS) {
             CRYPT_EAL_PkeyFreeCtx(ctx);
             return NULL;
         }
@@ -77,8 +76,7 @@ void SDV_CRYPTO_HIFHE_BGV_NEWCTX_TC001(void)
     TestMemInit();
     TestRandInit();
 
-    ctx = CRYPT_EAL_ProviderPkeyNewCtx(
-        NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
+    ctx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
     ASSERT_TRUE(ctx != NULL);
 
 EXIT:
@@ -110,9 +108,7 @@ void SDV_CRYPTO_HIFHE_BGV_CTRL_PRESET_TC001(void)
     ctx = BgvNewCtx(1);
     ASSERT_TRUE(ctx != NULL);
 
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE,
-                                 &polyDegree, sizeof(polyDegree)),
-              HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &polyDegree, sizeof(polyDegree)), HIFHE_SUCCESS);
     ASSERT_EQ(polyDegree, 2048u);
 
     /* The default preset leaves plainMod to the Proth search; the ctrl
@@ -120,9 +116,7 @@ void SDV_CRYPTO_HIFHE_BGV_CTRL_PRESET_TC001(void)
      * walks k downward from 2^(17 - 11 - 1) - 1 = 31, so it lands on
      * k = 28 and plainMod = 28 * 4096 + 1 = 114689. Callers that need exactly
      * 65537 use HIFHE_BGV_2048_48_17BIT, which pins it. */
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_PLAIN_MOD,
-                                 &plainMod, sizeof(plainMod)),
-              HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_PLAIN_MOD, &plainMod, sizeof(plainMod)), HIFHE_SUCCESS);
     ASSERT_EQ(plainMod, 114689ull);
 
 EXIT:
@@ -151,16 +145,11 @@ void SDV_CRYPTO_HIFHE_BGV_CTRL_17BIT_PLAINMOD_TC001(void)
     TestMemInit();
     TestRandInit();
 
-    ctx = CRYPT_EAL_ProviderPkeyNewCtx(
-        NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
+    ctx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
     ASSERT_TRUE(ctx != NULL);
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, CRYPT_CTRL_SET_PARA_BY_ID,
-                                 &presetId, sizeof(presetId)),
-              HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, CRYPT_CTRL_SET_PARA_BY_ID, &presetId, sizeof(presetId)), HIFHE_SUCCESS);
 
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_PLAIN_MOD,
-                                 &plainMod, sizeof(plainMod)),
-              HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_PLAIN_MOD, &plainMod, sizeof(plainMod)), HIFHE_SUCCESS);
     ASSERT_EQ(plainMod, 65537ull);
 
 EXIT:
@@ -184,34 +173,27 @@ void SDV_CRYPTO_HIFHE_BGV_SETPARA_BSL_TC001(void)
     }
     CRYPT_EAL_PkeyCtx *ctx = NULL;
     uint32_t polyDegreeIn = 4096u;
-    uint32_t plainModBit  = 17u;
-    uint32_t relinDnum    = 1u;
-    uint32_t cipherModBits[] = { 48u, 48u };
+    uint32_t plainModBit = 17u;
+    uint32_t relinDnum = 1u;
+    uint32_t cipherModBits[] = {48u, 48u};
     uint32_t polyDegreeOut = 0u;
 
     BSL_Param params[] = {
-        {HIFHE_PARAM_BGV_POLY_DEGREE,     BSL_PARAM_TYPE_UINT32,
-         &polyDegreeIn, sizeof(polyDegreeIn), 0},
-        {HIFHE_PARAM_BGV_PLAIN_MOD_BIT,   BSL_PARAM_TYPE_UINT32,
-         &plainModBit,  sizeof(plainModBit),  0},
-        {HIFHE_PARAM_BGV_RELIN_DNUM,      BSL_PARAM_TYPE_UINT32,
-         &relinDnum,    sizeof(relinDnum),    0},
-        {HIFHE_PARAM_BGV_CIPHER_MOD_BITS, BSL_PARAM_TYPE_OCTETS,
-         cipherModBits, sizeof(cipherModBits), 0},
-        BSL_PARAM_END
-    };
+        {HIFHE_PARAM_BGV_POLY_DEGREE, BSL_PARAM_TYPE_UINT32, &polyDegreeIn, sizeof(polyDegreeIn), 0},
+        {HIFHE_PARAM_BGV_PLAIN_MOD_BIT, BSL_PARAM_TYPE_UINT32, &plainModBit, sizeof(plainModBit), 0},
+        {HIFHE_PARAM_BGV_RELIN_DNUM, BSL_PARAM_TYPE_UINT32, &relinDnum, sizeof(relinDnum), 0},
+        {HIFHE_PARAM_BGV_CIPHER_MOD_BITS, BSL_PARAM_TYPE_OCTETS, cipherModBits, sizeof(cipherModBits), 0},
+        BSL_PARAM_END};
 
     TestMemInit();
     TestRandInit();
 
-    ctx = CRYPT_EAL_ProviderPkeyNewCtx(
-        NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
+    ctx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
     ASSERT_TRUE(ctx != NULL);
 
     ASSERT_EQ(CRYPT_EAL_PkeySetParaEx(ctx, params), HIFHE_SUCCESS);
 
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE,
-                                 &polyDegreeOut, sizeof(polyDegreeOut)),
+    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &polyDegreeOut, sizeof(polyDegreeOut)),
               HIFHE_SUCCESS);
     ASSERT_EQ(polyDegreeOut, polyDegreeIn);
 
@@ -274,10 +256,8 @@ void SDV_CRYPTO_HIFHE_BGV_DUPCTX_PARA_TC001(void)
     dst = CRYPT_EAL_PkeyDupCtx(src);
     ASSERT_TRUE(dst != NULL);
 
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(src, HIFHE_CTRL_BGV_GET_POLY_DEGREE,
-                                 &srcDeg, sizeof(srcDeg)), HIFHE_SUCCESS);
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(dst, HIFHE_CTRL_BGV_GET_POLY_DEGREE,
-                                 &dstDeg, sizeof(dstDeg)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(src, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &srcDeg, sizeof(srcDeg)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(dst, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &dstDeg, sizeof(dstDeg)), HIFHE_SUCCESS);
     ASSERT_EQ(srcDeg, dstDeg);
     ASSERT_EQ(srcDeg, 2048u);
 
@@ -313,10 +293,8 @@ void SDV_CRYPTO_HIFHE_BGV_INHERITED_PRIMES_TC001(void)
     /* 2048 / single 48-bit modulus, plainModBit 17. */
     ctx = BgvNewCtx(1);
     ASSERT_TRUE(ctx != NULL);
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &polyDegree, sizeof(polyDegree)),
-              HIFHE_SUCCESS);
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_PLAIN_MOD, &plainMod, sizeof(plainMod)),
-              HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &polyDegree, sizeof(polyDegree)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_PLAIN_MOD, &plainMod, sizeof(plainMod)), HIFHE_SUCCESS);
     ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_LEVEL, &level, sizeof(level)), HIFHE_SUCCESS);
     ASSERT_EQ(polyDegree, 2048u);
     ASSERT_EQ(plainMod, 114689ull);
@@ -325,16 +303,12 @@ void SDV_CRYPTO_HIFHE_BGV_INHERITED_PRIMES_TC001(void)
     ctx = NULL;
 
     /* 8192 / 43,43,44,44 chain, plainModBit 20. */
-    ctx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_BGV,
-                                       CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
+    ctx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
     ASSERT_TRUE(ctx != NULL);
     int32_t preset = HIFHE_BGV_8192_44x4;
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, CRYPT_CTRL_SET_PARA_BY_ID, &preset, sizeof(preset)),
-              HIFHE_SUCCESS);
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &polyDegree, sizeof(polyDegree)),
-              HIFHE_SUCCESS);
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_PLAIN_MOD, &plainMod, sizeof(plainMod)),
-              HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, CRYPT_CTRL_SET_PARA_BY_ID, &preset, sizeof(preset)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &polyDegree, sizeof(polyDegree)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_PLAIN_MOD, &plainMod, sizeof(plainMod)), HIFHE_SUCCESS);
     ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_LEVEL, &level, sizeof(level)), HIFHE_SUCCESS);
     ASSERT_EQ(polyDegree, 8192u);
     ASSERT_EQ(plainMod, 1032193ull);

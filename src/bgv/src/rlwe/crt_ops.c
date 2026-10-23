@@ -25,16 +25,22 @@
 
 HIFHE_ERROR RLWE_CrtPolyConfig_Copy(CrtPolyConfig *dst, const CrtPolyConfig *src)
 {
-    if (dst == NULL || src == NULL) return HIFHE_NULL_INPUT;
+    if (dst == NULL || src == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     int32_t r = ModulusVector_Copy(&dst->rnsbase, &src->rnsbase);
-    if (r != HIFHE_SUCCESS) return r;
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
     dst->dtype = src->dtype;
     return HIFHE_SUCCESS;
 }
 
 HIFHE_ERROR RLWE_CrtPolyConfig_Destroy(CrtPolyConfig *self)
 {
-    if (self == NULL) return HIFHE_NULL_INPUT;
+    if (self == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     Uint64Vector_Destroy(&self->rnsbase);
     self->dtype = HIFHE_POLY;
     return HIFHE_SUCCESS;
@@ -42,41 +48,47 @@ HIFHE_ERROR RLWE_CrtPolyConfig_Destroy(CrtPolyConfig *self)
 
 /* ---------------- CrtPoly lifecycle ---------------- */
 
-HIFHE_ERROR RLWE_CrtPoly_Create(CrtPoly *out,
-                              const CrtPolyConfig *cfg, RlweContext *ctx)
+HIFHE_ERROR RLWE_CrtPoly_Create(CrtPoly *out, const CrtPolyConfig *cfg, RlweContext *ctx)
 {
-    if (out == NULL || cfg == NULL || ctx == NULL) return HIFHE_NULL_INPUT;
+    if (out == NULL || cfg == NULL || ctx == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     memset(out, 0, sizeof(*out));
     int32_t r = RLWE_CrtPolyConfig_Copy(&out->config, cfg);
-    if (r != HIFHE_SUCCESS) return r;
-    out->context   = ctx;
-    out->dataSize  = RLWE_CrtPoly_CalDataSize(cfg, ctx);
-    out->data      = (uint64_t *)BSL_SAL_Calloc(out->dataSize, (uint32_t)sizeof(uint64_t));
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
+    out->context = ctx;
+    out->dataSize = RLWE_CrtPoly_CalDataSize(cfg, ctx);
+    out->data = (uint64_t *)BSL_SAL_Calloc(out->dataSize, (uint32_t)sizeof(uint64_t));
     if (out->data == NULL) {
         RLWE_CrtPolyConfig_Destroy(&out->config);
         return HIFHE_MEMORY_ERROR;
     }
-    out->ownsData   = 1u;
+    out->ownsData = 1u;
     out->ownsConfig = 1u;
     return HIFHE_SUCCESS;
 }
 
-HIFHE_ERROR RLWE_CrtPoly_CreateFromExist(CrtPoly *out,
-                                       uint64_t *data, uint32_t size,
-                                       const CrtPolyConfig *cfg, RlweContext *ctx)
+HIFHE_ERROR RLWE_CrtPoly_CreateFromExist(CrtPoly *out, uint64_t *data, uint32_t size, const CrtPolyConfig *cfg,
+                                         RlweContext *ctx)
 {
-    if (out == NULL || cfg == NULL || ctx == NULL || data == NULL) return HIFHE_NULL_INPUT;
+    if (out == NULL || cfg == NULL || ctx == NULL || data == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     memset(out, 0, sizeof(*out));
     int32_t r = RLWE_CrtPolyConfig_Copy(&out->config, cfg);
-    if (r != HIFHE_SUCCESS) return r;
-    out->context   = ctx;
-    out->dataSize  = RLWE_CrtPoly_CalDataSize(cfg, ctx);
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
+    out->context = ctx;
+    out->dataSize = RLWE_CrtPoly_CalDataSize(cfg, ctx);
     if (size < out->dataSize) {
         RLWE_CrtPolyConfig_Destroy(&out->config);
         return HIFHE_PARAM_INVALID;
     }
-    out->data       = data;
-    out->ownsData   = 0u;
+    out->data = data;
+    out->ownsData = 0u;
     out->ownsConfig = 1u;
     return HIFHE_SUCCESS;
 }
@@ -84,12 +96,18 @@ HIFHE_ERROR RLWE_CrtPoly_CreateFromExist(CrtPoly *out,
 /* Full replacement; storage comes from RLWE_CrtPoly_Create. */
 HIFHE_ERROR RLWE_CrtPoly_Copy(CrtPoly *dst, const CrtPoly *src)
 {
-    if (dst == NULL || src == NULL) return HIFHE_NULL_INPUT;
-    if (src->context == NULL || src->data == NULL) return HIFHE_NULL_INPUT;
+    if (dst == NULL || src == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
+    if (src->context == NULL || src->data == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
 
     CrtPoly fresh;
     int32_t r = RLWE_CrtPoly_Create(&fresh, &src->config, src->context);
-    if (r != HIFHE_SUCCESS) return r;
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
     if (fresh.dataSize != src->dataSize) {
         RLWE_CrtPoly_Destroy(&fresh);
         return HIFHE_PARAM_INVALID;
@@ -103,20 +121,29 @@ HIFHE_ERROR RLWE_CrtPoly_Copy(CrtPoly *dst, const CrtPoly *src)
 
 HIFHE_ERROR RLWE_CrtPoly_Destroy(CrtPoly *self)
 {
-    if (self == NULL) return HIFHE_NULL_INPUT;
-    if (self->ownsData && self->data != NULL) BSL_SAL_Free(self->data);
-    if (self->ownsConfig) RLWE_CrtPolyConfig_Destroy(&self->config);
-    else                  memset(&self->config, 0, sizeof(self->config));
-    self->data       = NULL;
-    self->dataSize   = 0u;
-    self->ownsData   = 0u;
+    if (self == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
+    if (self->ownsData && self->data != NULL) {
+        BSL_SAL_Free(self->data);
+    }
+    if (self->ownsConfig) {
+        RLWE_CrtPolyConfig_Destroy(&self->config);
+    } else {
+        memset(&self->config, 0, sizeof(self->config));
+    }
+    self->data = NULL;
+    self->dataSize = 0u;
+    self->ownsData = 0u;
     self->ownsConfig = 0u;
     return HIFHE_SUCCESS;
 }
 
 HIFHE_ERROR RLWE_CrtPoly_CleanseDestroy(CrtPoly *self)
 {
-    if (self == NULL) return HIFHE_NULL_INPUT;
+    if (self == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     if (self->ownsData && self->data != NULL && self->dataSize > 0u) {
         BSL_SAL_CleanseData(self->data, self->dataSize * (uint32_t)sizeof(uint64_t));
     }
@@ -126,16 +153,20 @@ HIFHE_ERROR RLWE_CrtPoly_CleanseDestroy(CrtPoly *self)
 /* View onto the i-th RnsPoly slice. `out` does not own storage. */
 HIFHE_ERROR RLWE_CrtPoly_GetRnsPolyAt(RnsPoly *out, uint32_t index, const CrtPoly *self)
 {
-    if (out == NULL || self == NULL) return HIFHE_NULL_INPUT;
-    if (index >= self->config.rnsbase.size) return HIFHE_PARAM_INVALID;
+    if (out == NULL || self == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
+    if (index >= self->config.rnsbase.size) {
+        return HIFHE_PARAM_INVALID;
+    }
     uint32_t N = self->context->parameter->polyDegree;
     memset(out, 0, sizeof(*out));
     out->config.modulus = self->config.rnsbase.data[index];
-    out->config.dtype   = self->config.dtype;
-    out->context        = self->context;
-    out->dataSize       = N;
-    out->data           = self->data + (index * N);
-    out->ownsData       = 0u;
+    out->config.dtype = self->config.dtype;
+    out->context = self->context;
+    out->dataSize = N;
+    out->data = self->data + (index * N);
+    out->ownsData = 0u;
     return HIFHE_SUCCESS;
 }
 
@@ -144,29 +175,48 @@ HIFHE_ERROR RLWE_CrtPoly_GetRnsPolyAt(RnsPoly *out, uint32_t index, const CrtPol
 /* The loop alone. An accumulating op keeps whatever form `out` already
  * carries, so this does not touch it. */
 static HIFHE_ERROR ForEachSliceRaw(CrtPoly *out, const CrtPoly *a, const CrtPoly *b,
-                                  HIFHE_ERROR (*op)(RnsPoly *, const RnsPoly *, const RnsPoly *))
+                                   HIFHE_ERROR (*op)(RnsPoly *, const RnsPoly *, const RnsPoly *))
 {
-    if (out == NULL || a == NULL || b == NULL) return HIFHE_NULL_INPUT;
-    if (a->config.rnsbase.size != b->config.rnsbase.size) return HIFHE_PARAM_INVALID;
-    if (a->config.rnsbase.size != out->config.rnsbase.size) return HIFHE_PARAM_INVALID;
+    if (out == NULL || a == NULL || b == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
+    if (a->config.rnsbase.size != b->config.rnsbase.size) {
+        return HIFHE_PARAM_INVALID;
+    }
+    if (a->config.rnsbase.size != out->config.rnsbase.size) {
+        return HIFHE_PARAM_INVALID;
+    }
     for (uint32_t i = 0; i < a->config.rnsbase.size; ++i) {
         RnsPoly ap, bp, op_;
         int32_t r;
-        r = RLWE_CrtPoly_GetRnsPolyAt(&ap, i, a); if (r != HIFHE_SUCCESS) return r;
-        r = RLWE_CrtPoly_GetRnsPolyAt(&bp, i, b); if (r != HIFHE_SUCCESS) return r;
-        r = RLWE_CrtPoly_GetRnsPolyAt(&op_, i, out); if (r != HIFHE_SUCCESS) return r;
+        r = RLWE_CrtPoly_GetRnsPolyAt(&ap, i, a);
+        if (r != HIFHE_SUCCESS) {
+            return r;
+        }
+        r = RLWE_CrtPoly_GetRnsPolyAt(&bp, i, b);
+        if (r != HIFHE_SUCCESS) {
+            return r;
+        }
+        r = RLWE_CrtPoly_GetRnsPolyAt(&op_, i, out);
+        if (r != HIFHE_SUCCESS) {
+            return r;
+        }
         r = op(&op_, &ap, &bp);
-        if (r != HIFHE_SUCCESS) return r;
+        if (r != HIFHE_SUCCESS) {
+            return r;
+        }
     }
     return HIFHE_SUCCESS;
 }
 
 /* The same walk, after which `out` takes a's form. */
 static HIFHE_ERROR ForEachSlice(CrtPoly *out, const CrtPoly *a, const CrtPoly *b,
-                               HIFHE_ERROR (*op)(RnsPoly *, const RnsPoly *, const RnsPoly *))
+                                HIFHE_ERROR (*op)(RnsPoly *, const RnsPoly *, const RnsPoly *))
 {
     HIFHE_ERROR r = ForEachSliceRaw(out, a, b, op);
-    if (r == HIFHE_SUCCESS) out->config.dtype = a->config.dtype;
+    if (r == HIFHE_SUCCESS) {
+        out->config.dtype = a->config.dtype;
+    }
     return r;
 }
 
@@ -185,18 +235,29 @@ HIFHE_ERROR RLWE_CrtPoly_MulDot(CrtPoly *out, const CrtPoly *a, const CrtPoly *b
     return ForEachSlice(out, a, b, RLWE_RnsPoly_MulDot);
 }
 
-static HIFHE_ERROR ForEachSliceUnary(CrtPoly *out, const CrtPoly *a,
-                                    HIFHE_ERROR (*op)(RnsPoly *, const RnsPoly *))
+static HIFHE_ERROR ForEachSliceUnary(CrtPoly *out, const CrtPoly *a, HIFHE_ERROR (*op)(RnsPoly *, const RnsPoly *))
 {
-    if (out == NULL || a == NULL) return HIFHE_NULL_INPUT;
-    if (a->config.rnsbase.size != out->config.rnsbase.size) return HIFHE_PARAM_INVALID;
+    if (out == NULL || a == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
+    if (a->config.rnsbase.size != out->config.rnsbase.size) {
+        return HIFHE_PARAM_INVALID;
+    }
     for (uint32_t i = 0; i < a->config.rnsbase.size; ++i) {
         RnsPoly ap, op_;
         int32_t r;
-        r = RLWE_CrtPoly_GetRnsPolyAt(&ap, i, a); if (r != HIFHE_SUCCESS) return r;
-        r = RLWE_CrtPoly_GetRnsPolyAt(&op_, i, out); if (r != HIFHE_SUCCESS) return r;
+        r = RLWE_CrtPoly_GetRnsPolyAt(&ap, i, a);
+        if (r != HIFHE_SUCCESS) {
+            return r;
+        }
+        r = RLWE_CrtPoly_GetRnsPolyAt(&op_, i, out);
+        if (r != HIFHE_SUCCESS) {
+            return r;
+        }
         r = op(&op_, &ap);
-        if (r != HIFHE_SUCCESS) return r;
+        if (r != HIFHE_SUCCESS) {
+            return r;
+        }
     }
     out->config.dtype = a->config.dtype;
     return HIFHE_SUCCESS;
@@ -214,32 +275,55 @@ HIFHE_ERROR RLWE_CrtPoly_MulDotAcc(CrtPoly *out, const CrtPoly *a, const CrtPoly
 
 HIFHE_ERROR RLWE_CrtPoly_MulScalar(CrtPoly *out, const CrtPoly *a, uint64_t x)
 {
-    if (out == NULL || a == NULL) return HIFHE_NULL_INPUT;
-    if (a->config.rnsbase.size != out->config.rnsbase.size) return HIFHE_PARAM_INVALID;
+    if (out == NULL || a == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
+    if (a->config.rnsbase.size != out->config.rnsbase.size) {
+        return HIFHE_PARAM_INVALID;
+    }
     for (uint32_t i = 0; i < a->config.rnsbase.size; ++i) {
         RnsPoly ap, op_;
         int32_t r;
-        r = RLWE_CrtPoly_GetRnsPolyAt(&ap, i, a); if (r != HIFHE_SUCCESS) return r;
-        r = RLWE_CrtPoly_GetRnsPolyAt(&op_, i, out); if (r != HIFHE_SUCCESS) return r;
+        r = RLWE_CrtPoly_GetRnsPolyAt(&ap, i, a);
+        if (r != HIFHE_SUCCESS) {
+            return r;
+        }
+        r = RLWE_CrtPoly_GetRnsPolyAt(&op_, i, out);
+        if (r != HIFHE_SUCCESS) {
+            return r;
+        }
         r = RLWE_RnsPoly_MulScalar(&op_, &ap, x);
-        if (r != HIFHE_SUCCESS) return r;
+        if (r != HIFHE_SUCCESS) {
+            return r;
+        }
     }
     out->config.dtype = a->config.dtype;
     return HIFHE_SUCCESS;
 }
 
-HIFHE_ERROR RLWE_CrtPoly_MulScalarPerLimb(CrtPoly *out, const CrtPoly *a,
-                                        const uint64_t *xPerLimb)
+HIFHE_ERROR RLWE_CrtPoly_MulScalarPerLimb(CrtPoly *out, const CrtPoly *a, const uint64_t *xPerLimb)
 {
-    if (out == NULL || a == NULL || xPerLimb == NULL) return HIFHE_NULL_INPUT;
-    if (a->config.rnsbase.size != out->config.rnsbase.size) return HIFHE_PARAM_INVALID;
+    if (out == NULL || a == NULL || xPerLimb == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
+    if (a->config.rnsbase.size != out->config.rnsbase.size) {
+        return HIFHE_PARAM_INVALID;
+    }
     for (uint32_t i = 0; i < a->config.rnsbase.size; ++i) {
         RnsPoly ap, op_;
         int32_t r;
-        r = RLWE_CrtPoly_GetRnsPolyAt(&ap, i, a); if (r != HIFHE_SUCCESS) return r;
-        r = RLWE_CrtPoly_GetRnsPolyAt(&op_, i, out); if (r != HIFHE_SUCCESS) return r;
+        r = RLWE_CrtPoly_GetRnsPolyAt(&ap, i, a);
+        if (r != HIFHE_SUCCESS) {
+            return r;
+        }
+        r = RLWE_CrtPoly_GetRnsPolyAt(&op_, i, out);
+        if (r != HIFHE_SUCCESS) {
+            return r;
+        }
         r = RLWE_RnsPoly_MulScalar(&op_, &ap, xPerLimb[i]);
-        if (r != HIFHE_SUCCESS) return r;
+        if (r != HIFHE_SUCCESS) {
+            return r;
+        }
     }
     out->config.dtype = a->config.dtype;
     return HIFHE_SUCCESS;
@@ -247,8 +331,12 @@ HIFHE_ERROR RLWE_CrtPoly_MulScalarPerLimb(CrtPoly *out, const CrtPoly *a,
 
 HIFHE_ERROR RLWE_CrtPoly_Assign(CrtPoly *dst, const CrtPoly *src)
 {
-    if (dst == NULL || src == NULL) return HIFHE_NULL_INPUT;
-    if (dst->dataSize != src->dataSize) return HIFHE_PARAM_INVALID;
+    if (dst == NULL || src == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
+    if (dst->dataSize != src->dataSize) {
+        return HIFHE_PARAM_INVALID;
+    }
     if (dst->data != src->data) {
         memcpy(dst->data, src->data, src->dataSize * sizeof(uint64_t));
     }
@@ -258,13 +346,19 @@ HIFHE_ERROR RLWE_CrtPoly_Assign(CrtPoly *dst, const CrtPoly *src)
 
 HIFHE_ERROR RLWE_CrtPoly_SetSigned(CrtPoly *self, const int64_t *v)
 {
-    if (self == NULL || v == NULL) return HIFHE_NULL_INPUT;
+    if (self == NULL || v == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     for (uint32_t i = 0; i < self->config.rnsbase.size; ++i) {
         RnsPoly p;
         int32_t r = RLWE_CrtPoly_GetRnsPolyAt(&p, i, self);
-        if (r != HIFHE_SUCCESS) return r;
+        if (r != HIFHE_SUCCESS) {
+            return r;
+        }
         r = RLWE_RnsPoly_SetSigned(&p, v);
-        if (r != HIFHE_SUCCESS) return r;
+        if (r != HIFHE_SUCCESS) {
+            return r;
+        }
     }
     self->config.dtype = HIFHE_POLY;
     return HIFHE_SUCCESS;
@@ -272,17 +366,24 @@ HIFHE_ERROR RLWE_CrtPoly_SetSigned(CrtPoly *self, const int64_t *v)
 
 /* Convert every slice, then record the new form. A poly already in `want`
  * is left untouched. */
-static HIFHE_ERROR ConvertAllSlices(CrtPoly *self, PolyForm want,
-                                   HIFHE_ERROR (*op)(RnsPoly *))
+static HIFHE_ERROR ConvertAllSlices(CrtPoly *self, PolyForm want, HIFHE_ERROR (*op)(RnsPoly *))
 {
-    if (self == NULL) return HIFHE_NULL_INPUT;
-    if (self->config.dtype == want) return HIFHE_SUCCESS;
+    if (self == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
+    if (self->config.dtype == want) {
+        return HIFHE_SUCCESS;
+    }
     for (uint32_t i = 0; i < self->config.rnsbase.size; ++i) {
         RnsPoly p;
         int32_t r = RLWE_CrtPoly_GetRnsPolyAt(&p, i, self);
-        if (r != HIFHE_SUCCESS) return r;
+        if (r != HIFHE_SUCCESS) {
+            return r;
+        }
         r = op(&p);
-        if (r != HIFHE_SUCCESS) return r;
+        if (r != HIFHE_SUCCESS) {
+            return r;
+        }
     }
     self->config.dtype = want;
     return HIFHE_SUCCESS;
@@ -297,5 +398,3 @@ HIFHE_ERROR RLWE_CrtPoly_ToPoly(CrtPoly *self)
 {
     return ConvertAllSlices(self, HIFHE_POLY, RLWE_RnsPoly_ToPoly);
 }
-
-

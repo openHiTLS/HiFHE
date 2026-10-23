@@ -59,15 +59,15 @@ static void InitBenchRegistry(void)
 
 typedef struct {
     const char *s;
-    int32_t     id;
+    int32_t id;
 } StrIdMap;
 
 static const StrIdMap g_presetMap[] = {
-    {"bgv-default",         HIFHE_BGV_DEFAULT},
-    {"bgv-2048-48",         HIFHE_BGV_2048_48},
-    {"bgv-2048-48-17bit",   HIFHE_BGV_2048_48_17BIT},
+    {"bgv-default", HIFHE_BGV_DEFAULT},
+    {"bgv-2048-48", HIFHE_BGV_2048_48},
+    {"bgv-2048-48-17bit", HIFHE_BGV_2048_48_17BIT},
     {"bgv-4096-44x2-17bit", HIFHE_BGV_4096_44x2_17BIT},
-    {"bgv-8192-44x4",       HIFHE_BGV_8192_44x4},
+    {"bgv-8192-44x4", HIFHE_BGV_8192_44x4},
     {"bgv-8192-44x4-17bit", HIFHE_BGV_8192_44x4_17BIT},
 };
 
@@ -94,10 +94,10 @@ static int32_t PresetStr2Id(const char *str)
 typedef struct {
     const char *algorithm;
     const char *providerPath;
-    uint32_t    times;
-    uint32_t    seconds;
-    int32_t     presetId;
-    bool        footprint;
+    uint32_t times;
+    uint32_t seconds;
+    int32_t presetId;
+    bool footprint;
 } BenchOptions;
 
 static void PrintUsage(void)
@@ -213,14 +213,12 @@ static uint32_t MatchOperation(const char *pattern, const BenchCtx *bench)
     return mask;
 }
 
-static void RunBenchCase(const CtxOps *ctxOps, const Operation *op,
-                         const BenchExecOptions *execOpts)
+static void RunBenchCase(const CtxOps *ctxOps, const Operation *op, const BenchExecOptions *execOpts)
 {
     void *ctx = NULL;
     int32_t ret = ctxOps->setUp(&ctx, execOpts->presetId);
     if (ret != HIFHE_SUCCESS) {
-        printf("Failed to set up %s (%s): %08x\n", op->name,
-               BenchPresetName(execOpts->presetId), ret);
+        printf("Failed to set up %s (%s): %08x\n", op->name, BenchPresetName(execOpts->presetId), ret);
         g_benchFailureCount++;
         return;
     }
@@ -236,16 +234,16 @@ static void RunBenchCase(const CtxOps *ctxOps, const Operation *op,
 
 static void FootprintOne(int32_t presetId)
 {
-    CRYPT_EAL_PkeyCtx *ctx = CRYPT_EAL_ProviderPkeyNewCtx(
-        NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
+    CRYPT_EAL_PkeyCtx *ctx =
+        CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
     if (ctx == NULL) {
         printf("%-22s  <context creation failed>\n", BenchPresetName(presetId));
         return;
     }
     int32_t id = presetId;
     uint32_t n = 0u, level = 0u, pkLen = 0u, skLen = 0u, ctLen = 0u, ptLen = 0u;
-    if (CRYPT_EAL_PkeyCtrl(ctx, CRYPT_CTRL_SET_PARA_BY_ID, &id, sizeof(id)) != HIFHE_SUCCESS
-        || CRYPT_EAL_PkeyGen(ctx) != HIFHE_SUCCESS) {
+    if (CRYPT_EAL_PkeyCtrl(ctx, CRYPT_CTRL_SET_PARA_BY_ID, &id, sizeof(id)) != HIFHE_SUCCESS ||
+        CRYPT_EAL_PkeyGen(ctx) != HIFHE_SUCCESS) {
         printf("%-22s  <keygen failed>\n", BenchPresetName(presetId));
         CRYPT_EAL_PkeyFreeCtx(ctx);
         return;
@@ -262,16 +260,14 @@ static void FootprintOne(int32_t presetId)
      * HIFHE_NTT_TABLE_WORDS(polyDegree) uint64 covering forward and inverse
      * twiddles and their Shoup quotients. The slot map is uint32[polyDegree]
      * and exists only after a slot-mapped encode has run. */
-    uint64_t block     = (uint64_t)HIFHE_NTT_TABLE_WORDS(n) * sizeof(uint64_t);
+    uint64_t block = (uint64_t)HIFHE_NTT_TABLE_WORDS(n) * sizeof(uint64_t);
     uint64_t cipherTbl = block * level;
-    uint64_t plainTbl  = block;
-    uint64_t slotMap   = (uint64_t)n * sizeof(uint32_t);
+    uint64_t plainTbl = block;
+    uint64_t slotMap = (uint64_t)n * sizeof(uint32_t);
 
-    printf("%-22s %6u %6u %10" PRIu64 " %10" PRIu64 " %8" PRIu64 " %10" PRIu64
-           " %9u %9u %9u\n",
-           BenchPresetName(presetId), n, level,
-           cipherTbl, plainTbl, slotMap, cipherTbl + plainTbl + slotMap,
-           ptLen, ctLen, pkLen);
+    printf("%-22s %6u %6u %10" PRIu64 " %10" PRIu64 " %8" PRIu64 " %10" PRIu64 " %9u %9u %9u\n",
+           BenchPresetName(presetId), n, level, cipherTbl, plainTbl, slotMap, cipherTbl + plainTbl + slotMap, ptLen,
+           ctLen, pkLen);
     CRYPT_EAL_PkeyFreeCtx(ctx);
 }
 
@@ -282,8 +278,7 @@ static void FootprintReport(int32_t only)
     printf("Relin and Galois key sizes are absent because\n");
     printf("HIFHE_CTRL_BGV_GET_RELIN_KEY_LEN and HIFHE_CTRL_BGV_GET_GALOIS_KEYS_LEN are\n");
     printf("stubs that always report 0.\n\n");
-    printf("%-22s %6s %6s %10s %10s %8s %10s %9s %9s %9s\n",
-           "preset", "N", "limbs", "cipherTbl", "plainTbl", "slotMap",
+    printf("%-22s %6s %6s %10s %10s %8s %10s %9s %9s %9s\n", "preset", "N", "limbs", "cipherTbl", "plainTbl", "slotMap",
            "tableTotal", "plaintext", "cipher", "pubkey");
     for (size_t i = 0; i < SIZEOF(g_presetMap); i++) {
         if (only != -1 && g_presetMap[i].id != only) {
@@ -320,12 +315,12 @@ static int32_t BenchmarkInit(const char *providerPath)
 int main(int argc, char **argv)
 {
     BenchOptions opts = {
-        .algorithm    = NULL,
+        .algorithm = NULL,
         .providerPath = NULL,
-        .times        = 0u,
-        .seconds      = 0u,
-        .presetId     = -1,
-        .footprint    = false,
+        .times = 0u,
+        .seconds = 0u,
+        .presetId = -1,
+        .footprint = false,
     };
     ParseOptions(argc, argv, &opts);
 
@@ -343,10 +338,9 @@ int main(int argc, char **argv)
         return 0;
     }
 
-
     InitBenchRegistry();
-    printf("%-38s, %8s, %12s, %14s, %14s, %14s\n",
-           "module operation", "slots", "run times", "elapsed(ms)", "us/op", "ops/s");
+    printf("%-38s, %8s, %12s, %14s, %14s, %14s\n", "module operation", "slots", "run times", "elapsed(ms)", "us/op",
+           "ops/s");
 
     bool hasMatch = false;
     for (size_t i = 0; i < SIZEOF(g_benchs); i++) {
@@ -361,8 +355,8 @@ int main(int argc, char **argv)
         hasMatch = true;
 
         BenchExecOptions execOpts = {
-            .times    = (opts.times != 0u) ? opts.times : bench->times,
-            .seconds  = (opts.seconds != 0u) ? opts.seconds : bench->seconds,
+            .times = (opts.times != 0u) ? opts.times : bench->times,
+            .seconds = (opts.seconds != 0u) ? opts.seconds : bench->seconds,
             .presetId = 0,
         };
 
@@ -386,8 +380,7 @@ int main(int argc, char **argv)
     BgvBenchReleaseCache();
     CRYPT_EAL_RandDeinitEx(NULL);
     if (!hasMatch) {
-        printf("No benchmark matched: %s\n",
-               (opts.algorithm != NULL) ? opts.algorithm : "*");
+        printf("No benchmark matched: %s\n", (opts.algorithm != NULL) ? opts.algorithm : "*");
         return 1;
     }
     return (g_benchFailureCount != 0u) ? 1 : 0;

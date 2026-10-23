@@ -43,7 +43,9 @@ static uint64_t PowMod(uint64_t base, uint64_t exp, Modulus q)
     uint64_t r = 1u % q;
     base %= q;
     while (exp > 0u) {
-        if (exp & 1u) r = MulMod(r, base, q);
+        if (exp & 1u) {
+            r = MulMod(r, base, q);
+        }
         base = MulMod(base, base, q);
         exp >>= 1;
     }
@@ -70,56 +72,60 @@ static inline uint64_t ShoupMulLazy(uint64_t x, uint64_t w, uint64_t wq, uint64_
     return x * w - hi * q;
 }
 
-static HIFHE_ERROR FillStruct(NttTables *tbl, const uint64_t *buf,
-                            Modulus q, uint32_t polyDegree)
+static HIFHE_ERROR FillStruct(NttTables *tbl, const uint64_t *buf, Modulus q, uint32_t polyDegree)
 {
     uint32_t logN = 0u;
-    for (uint32_t v = polyDegree; v > 1u; v >>= 1) logN++;
+    for (uint32_t v = polyDegree; v > 1u; v >>= 1) {
+        logN++;
+    }
 
     const uint64_t *scalars = buf + 4u * (size_t)polyDegree;
-    tbl->q            = q;
-    tbl->polyDegree   = polyDegree;
-    tbl->logN         = logN;
-    tbl->roots        = buf;
-    tbl->invRoots     = buf + polyDegree;
-    tbl->rootsQuot    = buf + 2u * (size_t)polyDegree;
+    tbl->q = q;
+    tbl->polyDegree = polyDegree;
+    tbl->logN = logN;
+    tbl->roots = buf;
+    tbl->invRoots = buf + polyDegree;
+    tbl->rootsQuot = buf + 2u * (size_t)polyDegree;
     tbl->invRootsQuot = buf + 3u * (size_t)polyDegree;
-    tbl->nInvModQ     = scalars[0];
-    tbl->nInvQuot     = scalars[1];
+    tbl->nInvModQ = scalars[0];
+    tbl->nInvQuot = scalars[1];
     /* Derived, not stored in buf, so cached table blocks keep their layout. */
-    tbl->lastInvScaled     = (polyDegree > 1u) ? MulMod(tbl->invRoots[1], tbl->nInvModQ, q)
-                                               : tbl->nInvModQ;
+    tbl->lastInvScaled = (polyDegree > 1u) ? MulMod(tbl->invRoots[1], tbl->nInvModQ, q) : tbl->nInvModQ;
     tbl->lastInvScaledQuot = ShoupQuot(tbl->lastInvScaled, q);
     return Kernel_BarrettConst_Init(&tbl->barrett, q);
 }
 
-HIFHE_ERROR Kernel_Ntt_AttachTables(NttTables *tbl, const uint64_t *buf,
-                                  Modulus q, uint32_t polyDegree)
+HIFHE_ERROR Kernel_Ntt_AttachTables(NttTables *tbl, const uint64_t *buf, Modulus q, uint32_t polyDegree)
 {
-    if (tbl == NULL || buf == NULL) return HIFHE_NULL_INPUT;
+    if (tbl == NULL || buf == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     if (polyDegree == 0u || (polyDegree & (polyDegree - 1u)) != 0u) {
         return HIFHE_PARAM_INVALID;
     }
     return FillStruct(tbl, buf, q, polyDegree);
 }
 
-HIFHE_ERROR Kernel_Ntt_BuildTables(NttTables *tbl, uint64_t *buf,
-                                 Modulus q, uint32_t polyDegree)
+HIFHE_ERROR Kernel_Ntt_BuildTables(NttTables *tbl, uint64_t *buf, Modulus q, uint32_t polyDegree)
 {
-    if (tbl == NULL || buf == NULL) return HIFHE_NULL_INPUT;
+    if (tbl == NULL || buf == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     if (polyDegree == 0u || (polyDegree & (polyDegree - 1u)) != 0u) {
         return HIFHE_PARAM_INVALID;
     }
     uint64_t psi = 0u;
     int32_t ret = Kernel_Prime_PrimitiveRoot2N(&psi, q, polyDegree);
-    if (ret != HIFHE_SUCCESS) return ret;
+    if (ret != HIFHE_SUCCESS) {
+        return ret;
+    }
     uint64_t psiInv = InvMod(psi, q);
 
-    uint64_t *roots        = buf;
-    uint64_t *invRoots     = buf + polyDegree;
-    uint64_t *rootsQuot    = buf + 2u * (size_t)polyDegree;
+    uint64_t *roots = buf;
+    uint64_t *invRoots = buf + polyDegree;
+    uint64_t *rootsQuot = buf + 2u * (size_t)polyDegree;
     uint64_t *invRootsQuot = buf + 3u * (size_t)polyDegree;
-    uint64_t *scalars      = buf + 4u * (size_t)polyDegree;
+    uint64_t *scalars = buf + 4u * (size_t)polyDegree;
 
     /* Build psi^j by repeated multiplication, then permute. One
      * exponentiation per entry would cost a log N factor more. The ascending
@@ -167,24 +173,28 @@ HIFHE_ERROR Kernel_Ntt_BuildTables(NttTables *tbl, uint64_t *buf,
  * and the closing pass reduces them. */
 HIFHE_ERROR Kernel_Ntt_Forward(uint64_t *a, const NttTables *tbl)
 {
-    if (a == NULL || tbl == NULL) return HIFHE_NULL_INPUT;
+    if (a == NULL || tbl == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     Modulus q = tbl->q;
     uint64_t q2 = q << 1;
     uint32_t N = tbl->polyDegree;
     uint32_t t = N;
-    uint32_t mLast = N >> 1;   /* the t == 1 layer, peeled below */
+    uint32_t mLast = N >> 1; /* the t == 1 layer, peeled below */
     for (uint32_t m = 1; m < mLast; m <<= 1) {
         t >>= 1;
         for (uint32_t i = 0; i < m; ++i) {
             uint32_t j1 = 2u * i * t;
             uint32_t j2 = j1 + t;
-            uint64_t w  = tbl->roots[m + i];
+            uint64_t w = tbl->roots[m + i];
             uint64_t wq = tbl->rootsQuot[m + i];
             for (uint32_t j = j1; j < j2; ++j) {
                 uint64_t x = a[j];
-                if (x >= q2) x -= q2;
+                if (x >= q2) {
+                    x -= q2;
+                }
                 uint64_t y = ShoupMulLazy(a[j + t], w, wq, q);
-                a[j]     = x + y;
+                a[j] = x + y;
                 a[j + t] = x - y + q2;
             }
         }
@@ -195,21 +205,35 @@ HIFHE_ERROR Kernel_Ntt_Forward(uint64_t *a, const NttTables *tbl)
         for (uint32_t i = 0; i < mLast; ++i) {
             uint32_t j = 2u * i;
             uint64_t x = a[j];
-            if (x >= q2) x -= q2;
+            if (x >= q2) {
+                x -= q2;
+            }
             uint64_t y = ShoupMulLazy(a[j + 1u], tbl->roots[mLast + i], tbl->rootsQuot[mLast + i], q);
             uint64_t u = x + y;
             uint64_t v = x - y + q2;
-            if (u >= q2) u -= q2;
-            if (u >= q)  u -= q;
-            if (v >= q2) v -= q2;
-            if (v >= q)  v -= q;
-            a[j]      = u;
+            if (u >= q2) {
+                u -= q2;
+            }
+            if (u >= q) {
+                u -= q;
+            }
+            if (v >= q2) {
+                v -= q2;
+            }
+            if (v >= q) {
+                v -= q;
+            }
+            a[j] = u;
             a[j + 1u] = v;
         }
     } else {
         uint64_t v = a[0];
-        if (v >= q2) v -= q2;
-        if (v >= q)  v -= q;
+        if (v >= q2) {
+            v -= q2;
+        }
+        if (v >= q) {
+            v -= q;
+        }
         a[0] = v;
     }
     return HIFHE_SUCCESS;
@@ -222,7 +246,9 @@ HIFHE_ERROR Kernel_Ntt_Forward(uint64_t *a, const NttTables *tbl)
  * over all N coefficients. */
 HIFHE_ERROR Kernel_Ntt_Inverse(uint64_t *a, const NttTables *tbl)
 {
-    if (a == NULL || tbl == NULL) return HIFHE_NULL_INPUT;
+    if (a == NULL || tbl == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     Modulus q = tbl->q;
     uint64_t q2 = q << 1;
     uint32_t N = tbl->polyDegree;
@@ -237,16 +263,18 @@ HIFHE_ERROR Kernel_Ntt_Inverse(uint64_t *a, const NttTables *tbl)
     uint32_t t = 1u;
     for (uint32_t m = N; m > 2u; m >>= 1) {
         uint32_t j1 = 0u;
-        uint32_t h  = m >> 1;
+        uint32_t h = m >> 1;
         for (uint32_t i = 0; i < h; ++i) {
             uint32_t j2 = j1 + t;
-            uint64_t w  = tbl->invRoots[h + i];
+            uint64_t w = tbl->invRoots[h + i];
             uint64_t wq = tbl->invRootsQuot[h + i];
             for (uint32_t j = j1; j < j2; ++j) {
                 uint64_t x = a[j], y = a[j + t];
                 uint64_t u = x + y;
-                if (u >= q2) u -= q2;
-                a[j]     = u;
+                if (u >= q2) {
+                    u -= q2;
+                }
+                a[j] = u;
                 a[j + t] = ShoupMulLazy(x - y + q2, w, wq, q);
             }
             j1 = j1 + 2u * t;
@@ -257,20 +285,26 @@ HIFHE_ERROR Kernel_Ntt_Inverse(uint64_t *a, const NttTables *tbl)
     /* Last layer: m == 2, so h == 1 and the only twiddle is invRoots[1].
      * Both outputs are scaled by N^-1 here; the difference takes
      * invRoots[1] * N^-1 as a single precomputed multiplier. */
-    uint64_t w  = tbl->lastInvScaled;
+    uint64_t w = tbl->lastInvScaled;
     uint64_t wq = tbl->lastInvScaledQuot;
     for (uint32_t j = 0; j < t; ++j) {
         uint64_t x = a[j], y = a[j + t];
         uint64_t u = x + y;
-        if (u >= q2) u -= q2;
+        if (u >= q2) {
+            u -= q2;
+        }
         uint64_t v = x - y + q2;
 
         uint64_t ru = ShoupMulLazy(u, nInv, nInvQ, q);
-        if (ru >= q) ru -= q;
+        if (ru >= q) {
+            ru -= q;
+        }
         uint64_t rv = ShoupMulLazy(v, w, wq, q);
-        if (rv >= q) rv -= q;
+        if (rv >= q) {
+            rv -= q;
+        }
 
-        a[j]     = ru;
+        a[j] = ru;
         a[j + t] = rv;
     }
     return HIFHE_SUCCESS;

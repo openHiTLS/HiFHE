@@ -22,18 +22,18 @@ extern "C" {
 #endif
 
 #define HIFHE_PKEY_CKKS ((int32_t)0x89000001u)
-#define HIFHE_PKEY_BGV ((int32_t)0x89000002u)
+#define HIFHE_PKEY_BGV  ((int32_t)0x89000002u)
 
 #define HIFHE_FEATURE_CKKS (1u << 0)
-#define HIFHE_FEATURE_BGV (1u << 1)
+#define HIFHE_FEATURE_BGV  (1u << 1)
 
 /* Provider attribute, passed to CRYPT_EAL_ProviderPkeyNewCtx. */
 #define HIFHE_PROVIDER_ATTR "provider=hifhe"
 
 uint32_t HIFHE_GetFeatures(void);
 
-int32_t CRYPT_EAL_ProviderInit(CRYPT_EAL_ProvMgrCtx *mgrCtx, BSL_Param *param,
-    CRYPT_EAL_Func *capFuncs, CRYPT_EAL_Func **outFuncs, void **provCtx);
+int32_t CRYPT_EAL_ProviderInit(CRYPT_EAL_ProvMgrCtx *mgrCtx, BSL_Param *param, CRYPT_EAL_Func *capFuncs,
+                               CRYPT_EAL_Func **outFuncs, void **provCtx);
 
 #ifdef __cplusplus
 }

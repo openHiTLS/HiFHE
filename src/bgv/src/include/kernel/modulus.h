@@ -32,46 +32,45 @@ typedef uint64_t Modulus;
 #if defined(__SIZEOF_INT128__)
 typedef unsigned __int128 ModulusWide;
 #else
-#  error "requires a compiler with __int128 support (GCC/Clang)."
+#error "requires a compiler with __int128 support (GCC/Clang)."
 #endif
 
 /* Barrett constant: ratio = floor(2^128 / q), kept as two words.
  * Populated at BGVContext build time. */
 typedef struct {
-    Modulus  q;
-    uint64_t ratioLo;   /* low  64 bits of floor(2^128 / q) */
-    uint64_t ratioHi;   /* high 64 bits */
-    uint32_t qBits;     /* ceil(log2(q)); useful for lazy-reduction bounds */
+    Modulus q;
+    uint64_t ratioLo; /* low  64 bits of floor(2^128 / q) */
+    uint64_t ratioHi; /* high 64 bits */
+    uint32_t qBits; /* ceil(log2(q)); useful for lazy-reduction bounds */
 } BarrettConst;
 
 /* Shoup constant: quotient = floor((m << 64) / q). Turns mul-mod into one
  * 128-bit mul plus a conditional subtraction. Populated lazily per (m, q). */
 typedef struct {
-    Modulus  q;
+    Modulus q;
     uint64_t operand;
     uint64_t quotient;
 } ShoupConst;
 
 HIFHE_ERROR Kernel_BarrettConst_Init(BarrettConst *out, Modulus q);
-uint64_t   Kernel_BarrettReduce64  (uint64_t x, const BarrettConst *bc);
-uint64_t   Kernel_BarrettReduce128 (uint64_t xHi, uint64_t xLo, const BarrettConst *bc);
+uint64_t Kernel_BarrettReduce64(uint64_t x, const BarrettConst *bc);
+uint64_t Kernel_BarrettReduce128(uint64_t xHi, uint64_t xLo, const BarrettConst *bc);
 
-HIFHE_ERROR Kernel_ShoupConst_Init  (ShoupConst *out, uint64_t operand, Modulus q);
-uint64_t   Kernel_ShoupMulMod      (uint64_t x, const ShoupConst *sc);
+HIFHE_ERROR Kernel_ShoupConst_Init(ShoupConst *out, uint64_t operand, Modulus q);
+uint64_t Kernel_ShoupMulMod(uint64_t x, const ShoupConst *sc);
 
 /* Straightforward mul-mod, no precomputation. Uses ModulusWide internally. */
-uint64_t   Kernel_MulMod           (uint64_t a, uint64_t b, Modulus q);
+uint64_t Kernel_MulMod(uint64_t a, uint64_t b, Modulus q);
 
 /* a^e mod q via square-and-multiply. */
-uint64_t   Kernel_PowMod           (uint64_t a, uint64_t e, Modulus q);
+uint64_t Kernel_PowMod(uint64_t a, uint64_t e, Modulus q);
 
 /* Extended Euclid. Returns 0 when gcd(a, q) != 1. For the moduli shipped
  * here (primes, or t coprime to q) 0 always means failure. */
-uint64_t   Kernel_ModInv           (uint64_t a, Modulus q);
+uint64_t Kernel_ModInv(uint64_t a, Modulus q);
 
 /* ceil(log2(x)), the bit count of x - 1. 0 for x <= 1. */
-uint32_t   Kernel_Log2Ceil         (uint64_t x);
-
+uint32_t Kernel_Log2Ceil(uint64_t x);
 
 /* Inline bodies of the reductions above, for hot loops. The exported
  * functions wrap these; without LTO a cross-file call per coefficient costs
@@ -99,8 +98,7 @@ static inline uint64_t Kernel_BarrettReduce64Inl(uint64_t x, const BarrettConst 
  * into the 2^128 word is kept, so qhat is floor(x * ratio / 2^128) exactly;
  * ratio is one short of 2^128 / q at worst, which leaves r < 2q and one
  * correction. */
-static inline uint64_t Kernel_BarrettReduce128Inl(uint64_t xHi, uint64_t xLo,
-                                                  const BarrettConst *bc)
+static inline uint64_t Kernel_BarrettReduce128Inl(uint64_t xHi, uint64_t xLo, const BarrettConst *bc)
 {
     ModulusWide acc = ((ModulusWide)xLo * (ModulusWide)bc->ratioLo) >> 64;
     acc += (ModulusWide)xLo * (ModulusWide)bc->ratioHi;

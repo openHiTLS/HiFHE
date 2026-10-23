@@ -26,7 +26,9 @@ SecretKey *BGV_SecretKey_New(void)
 
 void BGV_SecretKey_Free(SecretKey **self)
 {
-    if (self == NULL || *self == NULL) return;
+    if (self == NULL || *self == NULL) {
+        return;
+    }
     BGV_Plaintext_Destroy(*self);
     BSL_SAL_Free(*self);
     *self = NULL;
@@ -36,13 +38,23 @@ void BGV_SecretKey_Free(SecretKey **self)
  * key's own RNS base. */
 HIFHE_ERROR BGV_SecretKey_GetPow(CrtPoly *out, const SecretKey *sk, uint32_t power)
 {
-    if (out == NULL || sk == NULL) return HIFHE_NULL_INPUT;
-    if (sk->context == NULL || sk->data == NULL) return HIFHE_NULL_INPUT;
-    if (power == 0u) return HIFHE_PARAM_INVALID;
-    if (sk->config.crtConfig.dtype != HIFHE_NTT) return HIFHE_PARAM_INVALID;
+    if (out == NULL || sk == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
+    if (sk->context == NULL || sk->data == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
+    if (power == 0u) {
+        return HIFHE_PARAM_INVALID;
+    }
+    if (sk->config.crtConfig.dtype != HIFHE_NTT) {
+        return HIFHE_PARAM_INVALID;
+    }
 
     int32_t r = RLWE_CrtPoly_Create(out, &sk->config.crtConfig, &sk->context->rlweContext);
-    if (r != HIFHE_SUCCESS) return r;
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
     if (out->dataSize != sk->dataSize) {
         RLWE_CrtPoly_Destroy(out);
         return HIFHE_PARAM_INVALID;
@@ -68,27 +80,34 @@ HIFHE_ERROR BGV_SecretKey_GetPow(CrtPoly *out, const SecretKey *sk, uint32_t pow
     return HIFHE_SUCCESS;
 }
 
-HIFHE_ERROR BGV_RelinKeys_Create(RelinKeys *out, uint32_t rnsSize, uint32_t digits,
-                               BGVContext *ctx)
+HIFHE_ERROR BGV_RelinKeys_Create(RelinKeys *out, uint32_t rnsSize, uint32_t digits, BGVContext *ctx)
 {
-    if (out == NULL || ctx == NULL || rnsSize == 0u || digits == 0u) return HIFHE_NULL_INPUT;
+    if (out == NULL || ctx == NULL || rnsSize == 0u || digits == 0u) {
+        return HIFHE_NULL_INPUT;
+    }
     memset(out, 0, sizeof(*out));
     uint32_t dnum = rnsSize * digits;
     out->pieces = (Ciphertext *)BSL_SAL_Calloc(dnum, (uint32_t)sizeof(Ciphertext));
-    if (out->pieces == NULL) return HIFHE_MEMORY_ERROR;
-    out->dnum    = dnum;
+    if (out->pieces == NULL) {
+        return HIFHE_MEMORY_ERROR;
+    }
+    out->dnum = dnum;
     out->rnsSize = rnsSize;
-    out->digits  = digits;
+    out->digits = digits;
     out->context = ctx;
     return HIFHE_SUCCESS;
 }
 
 HIFHE_ERROR BGV_RelinKeys_Copy(RelinKeys *dst, const RelinKeys *src)
 {
-    if (dst == NULL || src == NULL) return HIFHE_NULL_INPUT;
+    if (dst == NULL || src == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     BGV_RelinKeys_Destroy(dst);
     int32_t r = BGV_RelinKeys_Create(dst, src->rnsSize, src->digits, src->context);
-    if (r != HIFHE_SUCCESS) return r;
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
     for (uint32_t i = 0; i < src->dnum; ++i) {
         r = BGV_Ciphertext_Copy(&dst->pieces[i], &src->pieces[i]);
         if (r != HIFHE_SUCCESS) {
@@ -101,24 +120,28 @@ HIFHE_ERROR BGV_RelinKeys_Copy(RelinKeys *dst, const RelinKeys *src)
 
 HIFHE_ERROR BGV_RelinKeys_Destroy(RelinKeys *self)
 {
-    if (self == NULL) return HIFHE_NULL_INPUT;
+    if (self == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     if (self->pieces != NULL) {
         for (uint32_t i = 0; i < self->dnum; ++i) {
             BGV_Ciphertext_Destroy(&self->pieces[i]);
         }
         BSL_SAL_Free(self->pieces);
     }
-    self->pieces  = NULL;
-    self->dnum    = 0u;
+    self->pieces = NULL;
+    self->dnum = 0u;
     self->rnsSize = 0u;
-    self->digits  = 0u;
+    self->digits = 0u;
     self->context = NULL;
     return HIFHE_SUCCESS;
 }
 
 HIFHE_ERROR BGV_GaloisKeys_Create(GaloisKeys *out, BGVContext *ctx)
 {
-    if (out == NULL || ctx == NULL) return HIFHE_NULL_INPUT;
+    if (out == NULL || ctx == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     memset(out, 0, sizeof(*out));
     out->context = ctx;
     return HIFHE_SUCCESS;
@@ -126,37 +149,54 @@ HIFHE_ERROR BGV_GaloisKeys_Create(GaloisKeys *out, BGVContext *ctx)
 
 HIFHE_ERROR BGV_GaloisKeys_CreateEntries(GaloisKeys *self, uint32_t count)
 {
-    if (self == NULL || count == 0u) return HIFHE_NULL_INPUT;
-    if (self->entries != NULL) return HIFHE_KEY_REPEATED_SET;
+    if (self == NULL || count == 0u) {
+        return HIFHE_NULL_INPUT;
+    }
+    if (self->entries != NULL) {
+        return HIFHE_KEY_REPEATED_SET;
+    }
     self->entries = (GaloisKeyPiece *)BSL_SAL_Calloc(count, (uint32_t)sizeof(GaloisKeyPiece));
-    if (self->entries == NULL) return HIFHE_MEMORY_ERROR;
+    if (self->entries == NULL) {
+        return HIFHE_MEMORY_ERROR;
+    }
     self->count = count;
     return HIFHE_SUCCESS;
 }
 
-HIFHE_ERROR BGV_GaloisKeyPiece_Create(GaloisKeyPiece *out, uint64_t galoisElt,
-                                    uint32_t rnsSize, uint32_t digits)
+HIFHE_ERROR BGV_GaloisKeyPiece_Create(GaloisKeyPiece *out, uint64_t galoisElt, uint32_t rnsSize, uint32_t digits)
 {
-    if (out == NULL || rnsSize == 0u || digits == 0u) return HIFHE_NULL_INPUT;
+    if (out == NULL || rnsSize == 0u || digits == 0u) {
+        return HIFHE_NULL_INPUT;
+    }
     uint32_t dnum = rnsSize * digits;
     out->pieces = (Ciphertext *)BSL_SAL_Calloc(dnum, (uint32_t)sizeof(Ciphertext));
-    if (out->pieces == NULL) return HIFHE_MEMORY_ERROR;
+    if (out->pieces == NULL) {
+        return HIFHE_MEMORY_ERROR;
+    }
     out->galoisElt = galoisElt;
-    out->dnum      = dnum;
-    out->rnsSize   = rnsSize;
-    out->digits    = digits;
+    out->dnum = dnum;
+    out->rnsSize = rnsSize;
+    out->digits = digits;
     return HIFHE_SUCCESS;
 }
 
 HIFHE_ERROR BGV_GaloisKeys_Copy(GaloisKeys *dst, const GaloisKeys *src)
 {
-    if (dst == NULL || src == NULL) return HIFHE_NULL_INPUT;
+    if (dst == NULL || src == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     BGV_GaloisKeys_Destroy(dst);
     int32_t r = BGV_GaloisKeys_Create(dst, src->context);
-    if (r != HIFHE_SUCCESS) return r;
-    if (src->count == 0u || src->entries == NULL) return HIFHE_SUCCESS;
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
+    if (src->count == 0u || src->entries == NULL) {
+        return HIFHE_SUCCESS;
+    }
     r = BGV_GaloisKeys_CreateEntries(dst, src->count);
-    if (r != HIFHE_SUCCESS) return r;
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
     for (uint32_t i = 0; i < src->count; ++i) {
         const GaloisKeyPiece *s = &src->entries[i];
         r = BGV_GaloisKeyPiece_Create(&dst->entries[i], s->galoisElt, s->rnsSize, s->digits);
@@ -177,7 +217,9 @@ HIFHE_ERROR BGV_GaloisKeys_Copy(GaloisKeys *dst, const GaloisKeys *src)
 
 HIFHE_ERROR BGV_GaloisKeys_Destroy(GaloisKeys *self)
 {
-    if (self == NULL) return HIFHE_NULL_INPUT;
+    if (self == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     if (self->entries != NULL) {
         for (uint32_t i = 0; i < self->count; ++i) {
             GaloisKeyPiece *p = &self->entries[i];
@@ -191,17 +233,20 @@ HIFHE_ERROR BGV_GaloisKeys_Destroy(GaloisKeys *self)
         BSL_SAL_Free(self->entries);
     }
     self->entries = NULL;
-    self->count   = 0u;
+    self->count = 0u;
     self->context = NULL;
     return HIFHE_SUCCESS;
 }
 
 const GaloisKeyPiece *BGV_GaloisKeys_GetByElt(const GaloisKeys *self, uint64_t elt)
 {
-    if (self == NULL) return NULL;
+    if (self == NULL) {
+        return NULL;
+    }
     for (uint32_t i = 0; i < self->count; ++i) {
-        if (self->entries[i].galoisElt == elt) return &self->entries[i];
+        if (self->entries[i].galoisElt == elt) {
+            return &self->entries[i];
+        }
     }
     return NULL;
 }
-

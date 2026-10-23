@@ -68,8 +68,7 @@ static int32_t CKKS_ScaleUp(double value, uint32_t scaleBits, BN_BigNum *result)
     return ret;
 }
 
-static int32_t CKKS_ScaleDown(const BN_BigNum *value, const BN_BigNum *modulus,
-    uint32_t scaleBits, double *result)
+static int32_t CKKS_ScaleDown(const BN_BigNum *value, const BN_BigNum *modulus, uint32_t scaleBits, double *result)
 {
     if (value == NULL || modulus == NULL || result == NULL) {
         return CRYPT_NULL_INPUT;
@@ -99,8 +98,7 @@ static int32_t CKKS_ScaleDown(const BN_BigNum *value, const BN_BigNum *modulus,
     return ret;
 }
 
-int32_t CKKS_Encode(const CRYPT_CKKS_Ctx *ctx, const double complex *input, uint32_t slots,
-    CRYPT_CKKS_Poly *plaintext)
+int32_t CKKS_Encode(const CRYPT_CKKS_Ctx *ctx, const double complex *input, uint32_t slots, CRYPT_CKKS_Poly *plaintext)
 {
     if (ctx == NULL || ctx->para == NULL || input == NULL || plaintext == NULL) {
         return CRYPT_NULL_INPUT;
@@ -124,8 +122,8 @@ int32_t CKKS_Encode(const CRYPT_CKKS_Ctx *ctx, const double complex *input, uint
     return CRYPT_SUCCESS;
 }
 
-int32_t CKKS_Decode(const CRYPT_CKKS_Ctx *ctx, const CRYPT_CKKS_Poly *plaintext,
-    double complex *output, uint32_t *slots)
+int32_t CKKS_Decode(const CRYPT_CKKS_Ctx *ctx, const CRYPT_CKKS_Poly *plaintext, double complex *output,
+                    uint32_t *slots)
 {
     if (ctx == NULL || ctx->para == NULL || plaintext == NULL || output == NULL || slots == NULL) {
         return CRYPT_NULL_INPUT;
@@ -139,13 +137,11 @@ int32_t CKKS_Decode(const CRYPT_CKKS_Ctx *ctx, const CRYPT_CKKS_Poly *plaintext,
     for (uint32_t i = 0; i < count; i++) {
         double realPart = 0;
         double imagPart = 0;
-        int32_t ret = CKKS_ScaleDown(plaintext->coeffs[i * gap], ctx->para->Q,
-            ctx->para->pBits, &realPart);
+        int32_t ret = CKKS_ScaleDown(plaintext->coeffs[i * gap], ctx->para->Q, ctx->para->pBits, &realPart);
         if (ret != CRYPT_SUCCESS) {
             return ret;
         }
-        ret = CKKS_ScaleDown(plaintext->coeffs[half + i * gap], ctx->para->Q,
-            ctx->para->pBits, &imagPart);
+        ret = CKKS_ScaleDown(plaintext->coeffs[half + i * gap], ctx->para->Q, ctx->para->pBits, &imagPart);
         if (ret != CRYPT_SUCCESS) {
             return ret;
         }

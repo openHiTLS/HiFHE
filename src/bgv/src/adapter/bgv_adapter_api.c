@@ -23,20 +23,28 @@
 
 void *CRYPT_BGV_NewCtx(int32_t algId)
 {
-    if (algId != HIFHE_PKEY_BGV) return NULL;
+    if (algId != HIFHE_PKEY_BGV) {
+        return NULL;
+    }
     CRYPT_BGV_Ctx *ctx = (CRYPT_BGV_Ctx *)BSL_SAL_Calloc(1u, sizeof(CRYPT_BGV_Ctx));
-    if (ctx == NULL) return NULL;
+    if (ctx == NULL) {
+        return NULL;
+    }
     ctx->algId = algId;
-    ctx->role  = HIFHE_ROLE_UNINIT;
+    ctx->role = HIFHE_ROLE_UNINIT;
     BgvUserPara_Init(&ctx->para);
     return ctx;
 }
 
 void *CRYPT_BGV_NewCtxWithCache(int32_t algId, BgvUserPara **cache)
 {
-    if (cache == NULL) return NULL;
+    if (cache == NULL) {
+        return NULL;
+    }
     CRYPT_BGV_Ctx *ctx = (CRYPT_BGV_Ctx *)CRYPT_BGV_NewCtx(algId);
-    if (ctx == NULL) return NULL;
+    if (ctx == NULL) {
+        return NULL;
+    }
     if (*cache == NULL) {
         BgvUserPara *fresh = (BgvUserPara *)BSL_SAL_Malloc((uint32_t)sizeof(BgvUserPara));
         if (fresh == NULL) {
@@ -53,14 +61,18 @@ void *CRYPT_BGV_NewCtxWithCache(int32_t algId, BgvUserPara **cache)
 
 void CRYPT_BGV_FreeCache(BgvUserPara *cache)
 {
-    if (cache == NULL) return;
+    if (cache == NULL) {
+        return;
+    }
     BgvUserPara_Clear(cache);
     BSL_SAL_Free(cache);
 }
 
 void CRYPT_BGV_FreeCtx(CRYPT_BGV_Ctx *ctx)
 {
-    if (ctx == NULL) return;
+    if (ctx == NULL) {
+        return;
+    }
     Bgv_FreeState(&ctx->bgv);
     BgvUserPara_Clear(&ctx->para);
     BSL_SAL_Free(ctx);
@@ -69,9 +81,13 @@ void CRYPT_BGV_FreeCtx(CRYPT_BGV_Ctx *ctx)
 /* Deep copy ctx */
 CRYPT_BGV_Ctx *CRYPT_BGV_DupCtx(CRYPT_BGV_Ctx *src)
 {
-    if (src == NULL) return NULL;
+    if (src == NULL) {
+        return NULL;
+    }
     CRYPT_BGV_Ctx *dst = (CRYPT_BGV_Ctx *)CRYPT_BGV_NewCtx(src->algId);
-    if (dst == NULL) return NULL;
+    if (dst == NULL) {
+        return NULL;
+    }
     /* Share the caller's cache handle rather than recomputing the tables: a
      * duplicate carries identical parameters, which is what the cache
      * contract asks for, and the handle outlives its contexts. */
@@ -90,9 +106,13 @@ CRYPT_BGV_Ctx *CRYPT_BGV_DupCtx(CRYPT_BGV_Ctx *src)
 
 int32_t CRYPT_BGV_SetParaEx(CRYPT_BGV_Ctx *ctx, const BSL_Param *param)
 {
-    if (ctx == NULL || param == NULL) return HIFHE_NULL_INPUT;
+    if (ctx == NULL || param == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     int32_t r = BgvUserPara_ParseFromBSL(&ctx->para, param);
-    if (r != HIFHE_SUCCESS) return r;
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
     /* Bgv_BuildContext returns early once a context exists, so anything built
      * on the previous parameters would keep being used while the ctrl surface
      * reports the new ring. */
@@ -104,7 +124,9 @@ int32_t CRYPT_BGV_SetParaEx(CRYPT_BGV_Ctx *ctx, const BSL_Param *param)
 int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t valLen);
 int32_t CRYPT_BGV_Ctrl(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t valLen)
 {
-    if (ctx == NULL) return HIFHE_NULL_INPUT;
+    if (ctx == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     return BgvCtrl_Dispatch(ctx, cmd, val, valLen);
 }
 
@@ -113,39 +135,44 @@ int32_t CRYPT_BGV_Gen(CRYPT_BGV_Ctx *ctx)
     return Bgv_Gen(ctx);
 }
 
-int32_t CRYPT_BGV_GetPubKeyEx(CRYPT_BGV_Ctx *ctx, BSL_Param *param) { return Bgv_GetPub(ctx, param); }
-int32_t CRYPT_BGV_GetPrvKeyEx(CRYPT_BGV_Ctx *ctx, BSL_Param *param) { return Bgv_GetPrv(ctx, param); }
-int32_t CRYPT_BGV_SetPubKeyEx(CRYPT_BGV_Ctx *ctx, BSL_Param *param) { return Bgv_SetPub(ctx, param); }
-int32_t CRYPT_BGV_SetPrvKeyEx(CRYPT_BGV_Ctx *ctx, BSL_Param *param) { return Bgv_SetPrv(ctx, param); }
+int32_t CRYPT_BGV_GetPubKeyEx(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
+{
+    return Bgv_GetPub(ctx, param);
+}
+int32_t CRYPT_BGV_GetPrvKeyEx(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
+{
+    return Bgv_GetPrv(ctx, param);
+}
+int32_t CRYPT_BGV_SetPubKeyEx(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
+{
+    return Bgv_SetPub(ctx, param);
+}
+int32_t CRYPT_BGV_SetPrvKeyEx(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
+{
+    return Bgv_SetPrv(ctx, param);
+}
 
-int32_t CRYPT_BGV_Encrypt(CRYPT_BGV_Ctx *ctx, const uint8_t *data, uint32_t dataLen,
-                         uint8_t *out, uint32_t *outLen)
+int32_t CRYPT_BGV_Encrypt(CRYPT_BGV_Ctx *ctx, const uint8_t *data, uint32_t dataLen, uint8_t *out, uint32_t *outLen)
 {
     return Bgv_Encrypt(ctx, data, dataLen, out, outLen);
 }
-int32_t CRYPT_BGV_Decrypt(CRYPT_BGV_Ctx *ctx, const uint8_t *data, uint32_t dataLen,
-                         uint8_t *out, uint32_t *outLen)
+int32_t CRYPT_BGV_Decrypt(CRYPT_BGV_Ctx *ctx, const uint8_t *data, uint32_t dataLen, uint8_t *out, uint32_t *outLen)
 {
     return Bgv_Decrypt(ctx, data, dataLen, out, outLen);
 }
-int32_t CRYPT_BGV_HEAdd(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input,
-                       uint8_t *out, uint32_t *outLen)
+int32_t CRYPT_BGV_HEAdd(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, uint8_t *out, uint32_t *outLen)
 {
     return Bgv_HEAdd(ctx, input, out, outLen);
 }
-int32_t CRYPT_BGV_HEMul(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input,
-                       uint8_t *out, uint32_t *outLen)
+int32_t CRYPT_BGV_HEMul(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, uint8_t *out, uint32_t *outLen)
 {
     return Bgv_HEMul(ctx, input, out, outLen);
 }
-int32_t CRYPT_BGV_HEMsgEncode(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input,
-                             uint8_t *out, uint32_t *outLen)
+int32_t CRYPT_BGV_HEMsgEncode(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, uint8_t *out, uint32_t *outLen)
 {
     return Bgv_HEMsgEncode(ctx, input, out, outLen);
 }
-int32_t CRYPT_BGV_HEMsgDecode(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input,
-                             uint8_t *out, uint32_t *outLen)
+int32_t CRYPT_BGV_HEMsgDecode(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, uint8_t *out, uint32_t *outLen)
 {
     return Bgv_HEMsgDecode(ctx, input, out, outLen);
 }
-

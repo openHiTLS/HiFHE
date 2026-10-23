@@ -19,40 +19,45 @@
 #include "bgv/plaintext.h"
 #include "rlwe/rlwe.h"
 
-HIFHE_ERROR BGV_PlaintextConfig_Create(PlaintextConfig *out,
-                                     const CrtPolyConfig *crtConfig,
-                                     uint64_t scale)
+HIFHE_ERROR BGV_PlaintextConfig_Create(PlaintextConfig *out, const CrtPolyConfig *crtConfig, uint64_t scale)
 {
-    if (out == NULL || crtConfig == NULL) return HIFHE_NULL_INPUT;
+    if (out == NULL || crtConfig == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     memset(out, 0, sizeof(*out));
     int32_t r = RLWE_CrtPolyConfig_Copy(&out->crtConfig, crtConfig);
-    if (r != HIFHE_SUCCESS) return r;
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
     out->scaleFactor = scale;
     return HIFHE_SUCCESS;
 }
 
 HIFHE_ERROR BGV_PlaintextConfig_Destroy(PlaintextConfig *self)
 {
-    if (self == NULL) return HIFHE_NULL_INPUT;
+    if (self == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     RLWE_CrtPolyConfig_Destroy(&self->crtConfig);
     self->scaleFactor = 0u;
     return HIFHE_SUCCESS;
 }
 
-static HIFHE_ERROR PlaintextCreateImpl(Plaintext *out,
-                                       const PlaintextConfig *cfg, BGVContext *ctx,
-                                       bool zeroed)
+static HIFHE_ERROR PlaintextCreateImpl(Plaintext *out, const PlaintextConfig *cfg, BGVContext *ctx, bool zeroed)
 {
-    if (out == NULL || cfg == NULL || ctx == NULL) return HIFHE_NULL_INPUT;
+    if (out == NULL || cfg == NULL || ctx == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     memset(out, 0, sizeof(*out));
     int32_t r = BGV_PlaintextConfig_Create(&out->config, &cfg->crtConfig, cfg->scaleFactor);
-    if (r != HIFHE_SUCCESS) return r;
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
     out->config.caps = cfg->caps;
-    out->context  = ctx;
+    out->context = ctx;
     out->dataSize = BGV_Plaintext_CalDataSize(cfg, ctx);
-    out->data     = zeroed
-        ? (uint64_t *)BSL_SAL_Calloc(out->dataSize, (uint32_t)sizeof(uint64_t))
-        : (uint64_t *)BSL_SAL_Malloc(out->dataSize * (uint32_t)sizeof(uint64_t));
+    out->data = zeroed ? (uint64_t *)BSL_SAL_Calloc(out->dataSize, (uint32_t)sizeof(uint64_t)) :
+                         (uint64_t *)BSL_SAL_Malloc(out->dataSize * (uint32_t)sizeof(uint64_t));
     if (out->data == NULL) {
         BGV_PlaintextConfig_Destroy(&out->config);
         return HIFHE_MEMORY_ERROR;
@@ -61,46 +66,51 @@ static HIFHE_ERROR PlaintextCreateImpl(Plaintext *out,
     return HIFHE_SUCCESS;
 }
 
-HIFHE_ERROR BGV_Plaintext_Create(Plaintext *out,
-                                 const PlaintextConfig *cfg, BGVContext *ctx)
+HIFHE_ERROR BGV_Plaintext_Create(Plaintext *out, const PlaintextConfig *cfg, BGVContext *ctx)
 {
     return PlaintextCreateImpl(out, cfg, ctx, true);
 }
 
-HIFHE_ERROR BGV_Plaintext_CreateUninit(Plaintext *out,
-                                       const PlaintextConfig *cfg, BGVContext *ctx)
+HIFHE_ERROR BGV_Plaintext_CreateUninit(Plaintext *out, const PlaintextConfig *cfg, BGVContext *ctx)
 {
     return PlaintextCreateImpl(out, cfg, ctx, false);
 }
 
-HIFHE_ERROR BGV_Plaintext_CreateFromCrtPoly(Plaintext *out, CrtPoly *poly,
-                                          uint64_t scale, BGVContext *ctx)
+HIFHE_ERROR BGV_Plaintext_CreateFromCrtPoly(Plaintext *out, CrtPoly *poly, uint64_t scale, BGVContext *ctx)
 {
-    if (out == NULL || poly == NULL || ctx == NULL) return HIFHE_NULL_INPUT;
+    if (out == NULL || poly == NULL || ctx == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     if (poly->data == NULL || !poly->ownsData || !poly->ownsConfig) {
         return HIFHE_PARAM_INVALID;
     }
     memset(out, 0, sizeof(*out));
-    out->config.crtConfig   = poly->config;      /* moves the rnsbase vector */
+    out->config.crtConfig = poly->config; /* moves the rnsbase vector */
     out->config.scaleFactor = scale;
-    out->config.caps        = HIFHE_CAP_NONE;
-    out->context  = ctx;
+    out->config.caps = HIFHE_CAP_NONE;
+    out->context = ctx;
     out->dataSize = poly->dataSize;
-    out->data     = poly->data;
+    out->data = poly->data;
     out->ownsData = 1u;
-    memset(poly, 0, sizeof(*poly));              /* ownership has moved */
+    memset(poly, 0, sizeof(*poly)); /* ownership has moved */
     return HIFHE_SUCCESS;
 }
 
 /* Storage comes from BGV_Plaintext_Create. */
 HIFHE_ERROR BGV_Plaintext_Copy(Plaintext *dst, const Plaintext *src)
 {
-    if (dst == NULL || src == NULL) return HIFHE_NULL_INPUT;
-    if (src->context == NULL || src->data == NULL) return HIFHE_NULL_INPUT;
+    if (dst == NULL || src == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
+    if (src->context == NULL || src->data == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
 
     Plaintext fresh;
     int32_t r = BGV_Plaintext_Create(&fresh, &src->config, src->context);
-    if (r != HIFHE_SUCCESS) return r;
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
     if (fresh.dataSize != src->dataSize) {
         BGV_Plaintext_Destroy(&fresh);
         return HIFHE_PARAM_INVALID;
@@ -114,7 +124,9 @@ HIFHE_ERROR BGV_Plaintext_Copy(Plaintext *dst, const Plaintext *src)
 
 HIFHE_ERROR BGV_Plaintext_Destroy(Plaintext *self)
 {
-    if (self == NULL) return HIFHE_NULL_INPUT;
+    if (self == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     /* Secret keys are plaintexts, and decrypted messages are too: wipe the
      * coefficients rather than leaving them in freed memory. */
     if (self->ownsData && self->data != NULL) {
@@ -122,7 +134,7 @@ HIFHE_ERROR BGV_Plaintext_Destroy(Plaintext *self)
         BSL_SAL_Free(self->data);
     }
     BGV_PlaintextConfig_Destroy(&self->config);
-    self->data     = NULL;
+    self->data = NULL;
     self->dataSize = 0u;
     self->ownsData = 0u;
     return HIFHE_SUCCESS;
@@ -131,14 +143,15 @@ HIFHE_ERROR BGV_Plaintext_Destroy(Plaintext *self)
 /* Owns neither buffer nor config, so RLWE_CrtPoly_Destroy frees nothing. */
 HIFHE_ERROR BGV_Plaintext_GetCrtPoly(CrtPoly *out, const Plaintext *self)
 {
-    if (out == NULL || self == NULL) return HIFHE_NULL_INPUT;
+    if (out == NULL || self == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     memset(out, 0, sizeof(*out));
-    out->config     = self->config.crtConfig;   /* shallow: rnsbase aliased */
-    out->context    = (RlweContext *)&self->context->rlweContext;
-    out->dataSize   = self->dataSize;
-    out->data       = self->data;
-    out->ownsData   = 0u;
+    out->config = self->config.crtConfig; /* shallow: rnsbase aliased */
+    out->context = (RlweContext *)&self->context->rlweContext;
+    out->dataSize = self->dataSize;
+    out->data = self->data;
+    out->ownsData = 0u;
     out->ownsConfig = 0u;
     return HIFHE_SUCCESS;
 }
-
