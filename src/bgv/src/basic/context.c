@@ -19,18 +19,24 @@
 
 void BgvContext_Init(BgvContext *ctx)
 {
-    if (ctx == NULL) return;
+    if (ctx == NULL) {
+        return;
+    }
     memset(ctx, 0, sizeof(*ctx));
 }
 
 HIFHE_ERROR BgvContext_SetSeed(BgvContext *ctx, const uint8_t *seed, uint32_t seedLen)
 {
-    if (ctx == NULL) return HIFHE_NULL_INPUT;
+    if (ctx == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     if (seed == NULL) {
         BgvContext_ClearSeed(ctx);
         return HIFHE_SUCCESS;
     }
-    if (seedLen != HIFHE_CTX_SEED_LEN) return HIFHE_PARAM_INVALID;
+    if (seedLen != HIFHE_CTX_SEED_LEN) {
+        return HIFHE_PARAM_INVALID;
+    }
     memcpy(ctx->seed, seed, HIFHE_CTX_SEED_LEN);
     ctx->hasSeed = 1u;
     return HIFHE_SUCCESS;
@@ -38,8 +44,9 @@ HIFHE_ERROR BgvContext_SetSeed(BgvContext *ctx, const uint8_t *seed, uint32_t se
 
 void BgvContext_ClearSeed(BgvContext *ctx)
 {
-    if (ctx == NULL) return;
+    if (ctx == NULL) {
+        return;
+    }
     BSL_SAL_CleanseData(ctx->seed, HIFHE_CTX_SEED_LEN);
     ctx->hasSeed = 0u;
 }
-

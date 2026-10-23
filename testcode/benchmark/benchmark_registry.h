@@ -45,8 +45,7 @@ typedef struct BenchCtx_ BenchCtx;
     BENCHMARK_LIST_BGV(X) \
     BENCHMARK_LIST_CKKS(X)
 
-#define DECLARE_BENCH_GETTER(name) \
-    const BenchCtx *BenchmarkGet##name(void);
+#define DECLARE_BENCH_GETTER(name) const BenchCtx *BenchmarkGet##name(void);
 
 BENCHMARK_LIST(DECLARE_BENCH_GETTER)
 

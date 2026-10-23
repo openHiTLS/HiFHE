@@ -29,11 +29,11 @@ extern "C" {
 #endif
 
 typedef struct {
-    BGVContext *context;      /* not owned */
-    SecretKey  *sk;           /* owned when non-NULL */
+    BGVContext *context; /* not owned */
+    SecretKey *sk; /* owned when non-NULL */
 } KeyGenerator;
 
-HIFHE_ERROR BGV_KeyGenerator_Create (KeyGenerator *out, BGVContext *ctx);
+HIFHE_ERROR BGV_KeyGenerator_Create(KeyGenerator *out, BGVContext *ctx);
 HIFHE_ERROR BGV_KeyGenerator_Destroy(KeyGenerator *self);
 
 /* Draw sk from the ternary distribution using ctx's seed / DRBG. */
@@ -45,8 +45,7 @@ HIFHE_ERROR BGV_KeyGenerator_GenPublicKey(PublicKey *out, const KeyGenerator *se
 /* Relin key from sk^2. `digits` = gadget digits per limb (the base widens to
  * cover the widest limb), 0 picks BGV_KeySwitch_DefaultDigits. Holds
  * chainLen * digits pieces. */
-HIFHE_ERROR BGV_KeyGenerator_GenRelinKey (RelinKeys *out, uint32_t digits,
-                                         const KeyGenerator *self);
+HIFHE_ERROR BGV_KeyGenerator_GenRelinKey(RelinKeys *out, uint32_t digits, const KeyGenerator *self);
 
 /* Digits needed to cover the widest limb of a chain in base 2^16: the
  * historic fixed gadget, and the count BGV_KeySwitch_DefaultDigits falls
@@ -54,9 +53,8 @@ HIFHE_ERROR BGV_KeyGenerator_GenRelinKey (RelinKeys *out, uint32_t digits,
 uint32_t BGV_BV_DigitsForBase(const RnsBase *base);
 
 /* Derive galois keys for the supplied Galois elements. */
-HIFHE_ERROR BGV_KeyGenerator_GenGaloisKeys(GaloisKeys *out,
-                                         const uint64_t *elts, uint32_t count,
-                                         const KeyGenerator *self);
+HIFHE_ERROR BGV_KeyGenerator_GenGaloisKeys(GaloisKeys *out, const uint64_t *elts, uint32_t count,
+                                           const KeyGenerator *self);
 
 #ifdef __cplusplus
 }

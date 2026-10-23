@@ -181,10 +181,10 @@ int TestRandInitEx(void *libCtx)
 #ifndef HITLS_CRYPTO_ENTROPY
     BSL_Param param[4] = {0};
     (void)BSL_PARAM_InitValue(&param[0], CRYPT_PARAM_RAND_SEEDCTX, BSL_PARAM_TYPE_CTX_PTR, &seedCtx, 0);
-    (void)BSL_PARAM_InitValue(&param[1], CRYPT_PARAM_RAND_SEED_GETENTROPY, BSL_PARAM_TYPE_FUNC_PTR,
-        seedMeth.getEntropy, 0);
+    (void)BSL_PARAM_InitValue(&param[1], CRYPT_PARAM_RAND_SEED_GETENTROPY, BSL_PARAM_TYPE_FUNC_PTR, seedMeth.getEntropy,
+                              0);
     (void)BSL_PARAM_InitValue(&param[2], CRYPT_PARAM_RAND_SEED_CLEANENTROPY, BSL_PARAM_TYPE_FUNC_PTR,
-        seedMeth.cleanEntropy, 0);
+                              seedMeth.cleanEntropy, 0);
     ret = CRYPT_EAL_ProviderRandInitCtx(libCtx, (CRYPT_RAND_AlgId)drbgAlgId, "provider=default", NULL, 0, param);
 #else
     ret = CRYPT_EAL_ProviderRandInitCtx(libCtx, (CRYPT_RAND_AlgId)drbgAlgId, "provider=default", NULL, 0, NULL);

@@ -36,8 +36,7 @@ void SDV_CRYPTO_HIFHE_CKKS_ROUNDTRIP_API_TC001(void)
     TestMemInit();
     CRYPT_RandRegistEx(TestSimpleRandEx);
 
-    ctx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_CKKS,
-        CRYPT_EAL_PKEY_CIPHER_OPERATE, "provider=hifhe");
+    ctx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_CKKS, CRYPT_EAL_PKEY_CIPHER_OPERATE, "provider=hifhe");
     ASSERT_TRUE(ctx != NULL);
 
     uint32_t n = 16;
@@ -45,25 +44,22 @@ void SDV_CRYPTO_HIFHE_CKKS_ROUNDTRIP_API_TC001(void)
     uint32_t pBits = 20;
     uint32_t sigmaMilli = 3200;
     uint32_t slots = 2;
-    BSL_Param params[] = {
-        {HIFHE_PARAM_CKKS_N, BSL_PARAM_TYPE_UINT32, &n, sizeof(n), 0},
-        {HIFHE_PARAM_CKKS_Q_BITS, BSL_PARAM_TYPE_UINT32, &qBits, sizeof(qBits), 0},
-        {HIFHE_PARAM_CKKS_P_BITS, BSL_PARAM_TYPE_UINT32, &pBits, sizeof(pBits), 0},
-        {HIFHE_PARAM_CKKS_SIGMA_MILLI, BSL_PARAM_TYPE_UINT32, &sigmaMilli, sizeof(sigmaMilli), 0},
-        {HIFHE_PARAM_CKKS_SLOTS, BSL_PARAM_TYPE_UINT32, &slots, sizeof(slots), 0},
-        BSL_PARAM_END
-    };
+    BSL_Param params[] = {{HIFHE_PARAM_CKKS_N, BSL_PARAM_TYPE_UINT32, &n, sizeof(n), 0},
+                          {HIFHE_PARAM_CKKS_Q_BITS, BSL_PARAM_TYPE_UINT32, &qBits, sizeof(qBits), 0},
+                          {HIFHE_PARAM_CKKS_P_BITS, BSL_PARAM_TYPE_UINT32, &pBits, sizeof(pBits), 0},
+                          {HIFHE_PARAM_CKKS_SIGMA_MILLI, BSL_PARAM_TYPE_UINT32, &sigmaMilli, sizeof(sigmaMilli), 0},
+                          {HIFHE_PARAM_CKKS_SLOTS, BSL_PARAM_TYPE_UINT32, &slots, sizeof(slots), 0},
+                          BSL_PARAM_END};
     ASSERT_EQ(CRYPT_EAL_PkeySetParaEx(ctx, params), CRYPT_SUCCESS);
     ASSERT_EQ(CRYPT_EAL_PkeyGen(ctx), CRYPT_SUCCESS);
 
     double complex input[] = {1.25 + 0.5 * I, -2.0 + 0.75 * I};
     uint32_t cipherLen = 0;
     ASSERT_EQ(CRYPT_EAL_PkeyEncrypt(ctx, (const uint8_t *)input, sizeof(input), NULL, &cipherLen),
-        HIFHE_BUFFER_TOO_SMALL);
+              HIFHE_BUFFER_TOO_SMALL);
     cipher = malloc(cipherLen);
     ASSERT_TRUE(cipher != NULL);
-    ASSERT_EQ(CRYPT_EAL_PkeyEncrypt(ctx, (const uint8_t *)input, sizeof(input), cipher, &cipherLen),
-        CRYPT_SUCCESS);
+    ASSERT_EQ(CRYPT_EAL_PkeyEncrypt(ctx, (const uint8_t *)input, sizeof(input), cipher, &cipherLen), CRYPT_SUCCESS);
 
     double complex output[2] = {0};
     uint32_t outputLen = sizeof(output);
@@ -85,8 +81,8 @@ void SDV_CRYPTO_HIFHE_CKKS_INVALID_PARAM_API_TC001(void)
     if ((HIFHE_GetFeatures() & HIFHE_FEATURE_CKKS) == 0) {
         SKIP_TEST();
     }
-    CRYPT_EAL_PkeyCtx *ctx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_CKKS,
-        CRYPT_EAL_PKEY_CIPHER_OPERATE, "provider=hifhe");
+    CRYPT_EAL_PkeyCtx *ctx =
+        CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_CKKS, CRYPT_EAL_PKEY_CIPHER_OPERATE, "provider=hifhe");
     ASSERT_TRUE(ctx != NULL);
 
     uint32_t n = 15;
@@ -94,14 +90,12 @@ void SDV_CRYPTO_HIFHE_CKKS_INVALID_PARAM_API_TC001(void)
     uint32_t pBits = 20;
     uint32_t sigmaMilli = 3200;
     uint32_t slots = 2;
-    BSL_Param params[] = {
-        {HIFHE_PARAM_CKKS_N, BSL_PARAM_TYPE_UINT32, &n, sizeof(n), 0},
-        {HIFHE_PARAM_CKKS_Q_BITS, BSL_PARAM_TYPE_UINT32, &qBits, sizeof(qBits), 0},
-        {HIFHE_PARAM_CKKS_P_BITS, BSL_PARAM_TYPE_UINT32, &pBits, sizeof(pBits), 0},
-        {HIFHE_PARAM_CKKS_SIGMA_MILLI, BSL_PARAM_TYPE_UINT32, &sigmaMilli, sizeof(sigmaMilli), 0},
-        {HIFHE_PARAM_CKKS_SLOTS, BSL_PARAM_TYPE_UINT32, &slots, sizeof(slots), 0},
-        BSL_PARAM_END
-    };
+    BSL_Param params[] = {{HIFHE_PARAM_CKKS_N, BSL_PARAM_TYPE_UINT32, &n, sizeof(n), 0},
+                          {HIFHE_PARAM_CKKS_Q_BITS, BSL_PARAM_TYPE_UINT32, &qBits, sizeof(qBits), 0},
+                          {HIFHE_PARAM_CKKS_P_BITS, BSL_PARAM_TYPE_UINT32, &pBits, sizeof(pBits), 0},
+                          {HIFHE_PARAM_CKKS_SIGMA_MILLI, BSL_PARAM_TYPE_UINT32, &sigmaMilli, sizeof(sigmaMilli), 0},
+                          {HIFHE_PARAM_CKKS_SLOTS, BSL_PARAM_TYPE_UINT32, &slots, sizeof(slots), 0},
+                          BSL_PARAM_END};
     ASSERT_EQ(CRYPT_EAL_PkeySetParaEx(ctx, params), HIFHE_INVALID_ARGUMENT);
 
 EXIT:
@@ -126,36 +120,25 @@ void SDV_CRYPTO_HIFHE_CKKS_KEY_IMPORT_API_TC001(void)
     uint32_t pBits = 20;
     uint32_t sigmaMilli = 3200;
     uint32_t slots = 2;
-    BSL_Param params[] = {
-        {HIFHE_PARAM_CKKS_N, BSL_PARAM_TYPE_UINT32, &n, sizeof(n), 0},
-        {HIFHE_PARAM_CKKS_Q_BITS, BSL_PARAM_TYPE_UINT32, &qBits, sizeof(qBits), 0},
-        {HIFHE_PARAM_CKKS_P_BITS, BSL_PARAM_TYPE_UINT32, &pBits, sizeof(pBits), 0},
-        {HIFHE_PARAM_CKKS_SIGMA_MILLI, BSL_PARAM_TYPE_UINT32, &sigmaMilli, sizeof(sigmaMilli), 0},
-        {HIFHE_PARAM_CKKS_SLOTS, BSL_PARAM_TYPE_UINT32, &slots, sizeof(slots), 0},
-        BSL_PARAM_END
-    };
+    BSL_Param params[] = {{HIFHE_PARAM_CKKS_N, BSL_PARAM_TYPE_UINT32, &n, sizeof(n), 0},
+                          {HIFHE_PARAM_CKKS_Q_BITS, BSL_PARAM_TYPE_UINT32, &qBits, sizeof(qBits), 0},
+                          {HIFHE_PARAM_CKKS_P_BITS, BSL_PARAM_TYPE_UINT32, &pBits, sizeof(pBits), 0},
+                          {HIFHE_PARAM_CKKS_SIGMA_MILLI, BSL_PARAM_TYPE_UINT32, &sigmaMilli, sizeof(sigmaMilli), 0},
+                          {HIFHE_PARAM_CKKS_SLOTS, BSL_PARAM_TYPE_UINT32, &slots, sizeof(slots), 0},
+                          BSL_PARAM_END};
     CRYPT_RandRegistEx(TestSimpleRandEx);
 
-    keyCtx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_CKKS,
-        CRYPT_EAL_PKEY_CIPHER_OPERATE, "provider=hifhe");
-    encCtx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_CKKS,
-        CRYPT_EAL_PKEY_CIPHER_OPERATE, "provider=hifhe");
-    decCtx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_CKKS,
-        CRYPT_EAL_PKEY_CIPHER_OPERATE, "provider=hifhe");
+    keyCtx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_CKKS, CRYPT_EAL_PKEY_CIPHER_OPERATE, "provider=hifhe");
+    encCtx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_CKKS, CRYPT_EAL_PKEY_CIPHER_OPERATE, "provider=hifhe");
+    decCtx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_CKKS, CRYPT_EAL_PKEY_CIPHER_OPERATE, "provider=hifhe");
     ASSERT_TRUE(keyCtx != NULL && encCtx != NULL && decCtx != NULL);
     ASSERT_EQ(CRYPT_EAL_PkeySetParaEx(keyCtx, params), CRYPT_SUCCESS);
     ASSERT_EQ(CRYPT_EAL_PkeySetParaEx(encCtx, params), CRYPT_SUCCESS);
     ASSERT_EQ(CRYPT_EAL_PkeySetParaEx(decCtx, params), CRYPT_SUCCESS);
     ASSERT_EQ(CRYPT_EAL_PkeyGen(keyCtx), CRYPT_SUCCESS);
 
-    BSL_Param pubParam[] = {
-        {HIFHE_PARAM_CKKS_PUBKEY, BSL_PARAM_TYPE_OCTETS, NULL, 0, 0},
-        BSL_PARAM_END
-    };
-    BSL_Param prvParam[] = {
-        {HIFHE_PARAM_CKKS_PRVKEY, BSL_PARAM_TYPE_OCTETS, NULL, 0, 0},
-        BSL_PARAM_END
-    };
+    BSL_Param pubParam[] = {{HIFHE_PARAM_CKKS_PUBKEY, BSL_PARAM_TYPE_OCTETS, NULL, 0, 0}, BSL_PARAM_END};
+    BSL_Param prvParam[] = {{HIFHE_PARAM_CKKS_PRVKEY, BSL_PARAM_TYPE_OCTETS, NULL, 0, 0}, BSL_PARAM_END};
     ASSERT_EQ(CRYPT_EAL_PkeyGetPubEx(keyCtx, pubParam), HIFHE_BUFFER_TOO_SMALL);
     ASSERT_EQ(CRYPT_EAL_PkeyGetPrvEx(keyCtx, prvParam), HIFHE_BUFFER_TOO_SMALL);
     pub = malloc(pubParam[0].useLen);
@@ -173,11 +156,10 @@ void SDV_CRYPTO_HIFHE_CKKS_KEY_IMPORT_API_TC001(void)
     double complex input[] = {0.25 - 0.5 * I, 3.0 + 1.25 * I};
     uint32_t cipherLen = 0;
     ASSERT_EQ(CRYPT_EAL_PkeyEncrypt(encCtx, (const uint8_t *)input, sizeof(input), NULL, &cipherLen),
-        HIFHE_BUFFER_TOO_SMALL);
+              HIFHE_BUFFER_TOO_SMALL);
     cipher = malloc(cipherLen);
     ASSERT_TRUE(cipher != NULL);
-    ASSERT_EQ(CRYPT_EAL_PkeyEncrypt(encCtx, (const uint8_t *)input, sizeof(input), cipher, &cipherLen),
-        CRYPT_SUCCESS);
+    ASSERT_EQ(CRYPT_EAL_PkeyEncrypt(encCtx, (const uint8_t *)input, sizeof(input), cipher, &cipherLen), CRYPT_SUCCESS);
     double complex output[2] = {0};
     uint32_t outputLen = sizeof(output);
     ASSERT_EQ(CRYPT_EAL_PkeyDecrypt(decCtx, cipher, cipherLen, (uint8_t *)output, &outputLen), CRYPT_SUCCESS);

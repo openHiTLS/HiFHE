@@ -35,11 +35,10 @@ static int32_t CKKS_SampleBinary(void *libCtx, BN_BigNum **poly, uint32_t N)
     return ret;
 }
 
-static int32_t CKKS_PubEnc(const CRYPT_CKKS_Ctx *ctx, const CRYPT_CKKS_Poly *plaintext,
-    CRYPT_CKKS_Poly *c0, CRYPT_CKKS_Poly *c1)
+static int32_t CKKS_PubEnc(const CRYPT_CKKS_Ctx *ctx, const CRYPT_CKKS_Poly *plaintext, CRYPT_CKKS_Poly *c0,
+                           CRYPT_CKKS_Poly *c1)
 {
-    if (ctx == NULL || ctx->para == NULL || ctx->pubKey == NULL || plaintext == NULL ||
-        c0 == NULL || c1 == NULL) {
+    if (ctx == NULL || ctx->para == NULL || ctx->pubKey == NULL || plaintext == NULL || c0 == NULL || c1 == NULL) {
         return CRYPT_NULL_INPUT;
     }
     uint32_t N = ctx->para->N;
@@ -54,20 +53,15 @@ static int32_t CKKS_PubEnc(const CRYPT_CKKS_Ctx *ctx, const CRYPT_CKKS_Poly *pla
     }
     BN_OptimizerSetLibCtx(ctx->libCtx, optimizer);
     if ((ret = CKKS_SampleBinary(ctx->libCtx, v->coeffs, N)) != CRYPT_SUCCESS ||
-        (ret = CKKS_SampleGauss(ctx->libCtx, e0->coeffs, N, ctx->para->sigma,
-            ctx->para->Q, optimizer)) != CRYPT_SUCCESS ||
-        (ret = CKKS_SampleGauss(ctx->libCtx, e1->coeffs, N, ctx->para->sigma,
-            ctx->para->Q, optimizer)) != CRYPT_SUCCESS ||
-        (ret = CKKS_PolyMult(temp->coeffs, v->coeffs, ctx->pubKey->bx, N,
-            ctx->para->Q, optimizer)) != CRYPT_SUCCESS ||
-        (ret = CKKS_PolyAdd(c0->coeffs, temp->coeffs, e0->coeffs, N,
-            ctx->para->Q, optimizer)) != CRYPT_SUCCESS ||
-        (ret = CKKS_PolyAdd(c0->coeffs, c0->coeffs, plaintext->coeffs, N,
-            ctx->para->Q, optimizer)) != CRYPT_SUCCESS ||
-        (ret = CKKS_PolyMult(temp->coeffs, v->coeffs, ctx->pubKey->ax, N,
-            ctx->para->Q, optimizer)) != CRYPT_SUCCESS ||
-        (ret = CKKS_PolyAdd(c1->coeffs, temp->coeffs, e1->coeffs, N,
-            ctx->para->Q, optimizer)) != CRYPT_SUCCESS) {
+        (ret = CKKS_SampleGauss(ctx->libCtx, e0->coeffs, N, ctx->para->sigma, ctx->para->Q, optimizer)) !=
+            CRYPT_SUCCESS ||
+        (ret = CKKS_SampleGauss(ctx->libCtx, e1->coeffs, N, ctx->para->sigma, ctx->para->Q, optimizer)) !=
+            CRYPT_SUCCESS ||
+        (ret = CKKS_PolyMult(temp->coeffs, v->coeffs, ctx->pubKey->bx, N, ctx->para->Q, optimizer)) != CRYPT_SUCCESS ||
+        (ret = CKKS_PolyAdd(c0->coeffs, temp->coeffs, e0->coeffs, N, ctx->para->Q, optimizer)) != CRYPT_SUCCESS ||
+        (ret = CKKS_PolyAdd(c0->coeffs, c0->coeffs, plaintext->coeffs, N, ctx->para->Q, optimizer)) != CRYPT_SUCCESS ||
+        (ret = CKKS_PolyMult(temp->coeffs, v->coeffs, ctx->pubKey->ax, N, ctx->para->Q, optimizer)) != CRYPT_SUCCESS ||
+        (ret = CKKS_PolyAdd(c1->coeffs, temp->coeffs, e1->coeffs, N, ctx->para->Q, optimizer)) != CRYPT_SUCCESS) {
         goto EXIT;
     }
 
@@ -80,11 +74,10 @@ EXIT:
     return ret;
 }
 
-static int32_t CKKS_PrvDec(const CRYPT_CKKS_Ctx *ctx, const CRYPT_CKKS_Poly *c0,
-    const CRYPT_CKKS_Poly *c1, CRYPT_CKKS_Poly *plaintext)
+static int32_t CKKS_PrvDec(const CRYPT_CKKS_Ctx *ctx, const CRYPT_CKKS_Poly *c0, const CRYPT_CKKS_Poly *c1,
+                           CRYPT_CKKS_Poly *plaintext)
 {
-    if (ctx == NULL || ctx->para == NULL || ctx->prvKey == NULL || c0 == NULL ||
-        c1 == NULL || plaintext == NULL) {
+    if (ctx == NULL || ctx->para == NULL || ctx->prvKey == NULL || c0 == NULL || c1 == NULL || plaintext == NULL) {
         return CRYPT_NULL_INPUT;
     }
     CRYPT_CKKS_Poly *temp = CKKS_NewPoly(ctx->para->N);
@@ -92,11 +85,9 @@ static int32_t CKKS_PrvDec(const CRYPT_CKKS_Ctx *ctx, const CRYPT_CKKS_Poly *c0,
     int32_t ret = CRYPT_MEM_ALLOC_FAIL;
     if (temp != NULL && optimizer != NULL) {
         BN_OptimizerSetLibCtx(ctx->libCtx, optimizer);
-        ret = CKKS_PolyMult(temp->coeffs, c1->coeffs, ctx->prvKey->sx,
-            ctx->para->N, ctx->para->Q, optimizer);
+        ret = CKKS_PolyMult(temp->coeffs, c1->coeffs, ctx->prvKey->sx, ctx->para->N, ctx->para->Q, optimizer);
         if (ret == CRYPT_SUCCESS) {
-            ret = CKKS_PolyAdd(plaintext->coeffs, c0->coeffs, temp->coeffs,
-                ctx->para->N, ctx->para->Q, optimizer);
+            ret = CKKS_PolyAdd(plaintext->coeffs, c0->coeffs, temp->coeffs, ctx->para->N, ctx->para->Q, optimizer);
         }
     }
     CKKS_FreePoly(temp);
@@ -104,8 +95,8 @@ static int32_t CKKS_PrvDec(const CRYPT_CKKS_Ctx *ctx, const CRYPT_CKKS_Poly *c0,
     return ret;
 }
 
-static int32_t CKKS_SerializeCiphertext(const CRYPT_CKKS_Poly *c0, const CRYPT_CKKS_Poly *c1,
-    uint8_t *out, uint32_t *outLen)
+static int32_t CKKS_SerializeCiphertext(const CRYPT_CKKS_Poly *c0, const CRYPT_CKKS_Poly *c1, uint8_t *out,
+                                        uint32_t *outLen)
 {
     uint32_t c0Len = 0;
     uint32_t c1Len = 0;
@@ -131,8 +122,8 @@ static int32_t CKKS_SerializeCiphertext(const CRYPT_CKKS_Poly *c0, const CRYPT_C
     return ret;
 }
 
-static int32_t CKKS_DeserializeCiphertext(uint32_t N, const uint8_t *data, uint32_t dataLen,
-    CRYPT_CKKS_Poly *c0, CRYPT_CKKS_Poly *c1)
+static int32_t CKKS_DeserializeCiphertext(uint32_t N, const uint8_t *data, uint32_t dataLen, CRYPT_CKKS_Poly *c0,
+                                          CRYPT_CKKS_Poly *c1)
 {
     if (data == NULL || c0 == NULL || c1 == NULL || dataLen < 12 || memcmp(data + 8, "CKKS", 4) != 0) {
         return HIFHE_DECODE_ERROR;
@@ -151,8 +142,8 @@ static int32_t CKKS_DeserializeCiphertext(uint32_t N, const uint8_t *data, uint3
     return ret;
 }
 
-int32_t CRYPT_CKKS_EncryptEx(CRYPT_CKKS_Ctx *ctx, const double complex *input, uint32_t slots,
-    uint8_t *out, uint32_t *outLen)
+int32_t CRYPT_CKKS_EncryptEx(CRYPT_CKKS_Ctx *ctx, const double complex *input, uint32_t slots, uint8_t *out,
+                             uint32_t *outLen)
 {
     if (ctx == NULL || ctx->para == NULL || ctx->pubKey == NULL || input == NULL || outLen == NULL) {
         return CRYPT_NULL_INPUT;
@@ -189,11 +180,10 @@ EXIT:
     return ret;
 }
 
-int32_t CRYPT_CKKS_DecryptEx(CRYPT_CKKS_Ctx *ctx, const uint8_t *data, uint32_t dataLen,
-    double complex *output, uint32_t *slots)
+int32_t CRYPT_CKKS_DecryptEx(CRYPT_CKKS_Ctx *ctx, const uint8_t *data, uint32_t dataLen, double complex *output,
+                             uint32_t *slots)
 {
-    if (ctx == NULL || ctx->para == NULL || ctx->prvKey == NULL || data == NULL ||
-        output == NULL || slots == NULL) {
+    if (ctx == NULL || ctx->para == NULL || ctx->prvKey == NULL || data == NULL || output == NULL || slots == NULL) {
         return CRYPT_NULL_INPUT;
     }
     CRYPT_CKKS_Poly *c0 = CKKS_NewPoly(ctx->para->N);
@@ -218,8 +208,7 @@ EXIT:
     return ret;
 }
 
-int32_t CRYPT_CKKS_Encrypt(CRYPT_CKKS_Ctx *ctx, const uint8_t *data, uint32_t dataLen,
-    uint8_t *out, uint32_t *outLen)
+int32_t CRYPT_CKKS_Encrypt(CRYPT_CKKS_Ctx *ctx, const uint8_t *data, uint32_t dataLen, uint8_t *out, uint32_t *outLen)
 {
     if (data == NULL || dataLen == 0 || dataLen % sizeof(double complex) != 0) {
         return HIFHE_INVALID_ARGUMENT;
@@ -235,8 +224,7 @@ int32_t CRYPT_CKKS_Encrypt(CRYPT_CKKS_Ctx *ctx, const uint8_t *data, uint32_t da
     return ret;
 }
 
-int32_t CRYPT_CKKS_Decrypt(CRYPT_CKKS_Ctx *ctx, const uint8_t *data, uint32_t dataLen,
-    uint8_t *out, uint32_t *outLen)
+int32_t CRYPT_CKKS_Decrypt(CRYPT_CKKS_Ctx *ctx, const uint8_t *data, uint32_t dataLen, uint8_t *out, uint32_t *outLen)
 {
     if (ctx == NULL || ctx->para == NULL || outLen == NULL) {
         return CRYPT_NULL_INPUT;

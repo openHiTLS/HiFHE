@@ -17,20 +17,27 @@
 
 uint32_t Kernel_Log2Ceil(uint64_t x)
 {
-    if (x <= 1u) return 0u;
+    if (x <= 1u) {
+        return 0u;
+    }
     uint32_t r = 0u;
     uint64_t v = x - 1u;
-    while (v > 0u) { v >>= 1; r++; }
+    while (v > 0u) {
+        v >>= 1;
+        r++;
+    }
     return r;
 }
 
 HIFHE_ERROR Kernel_BarrettConst_Init(BarrettConst *out, Modulus q)
 {
-    if (out == NULL || q < 2u) return HIFHE_PARAM_INVALID;
+    if (out == NULL || q < 2u) {
+        return HIFHE_PARAM_INVALID;
+    }
     out->q = q;
     out->qBits = Kernel_Log2Ceil(q);
     /* ratio = floor((2^128 - 1) / q), which equals floor(2^128 / q) for q >= 3. */
-    ModulusWide num = (~(ModulusWide)0);           /* 2^128 - 1 */
+    ModulusWide num = (~(ModulusWide)0); /* 2^128 - 1 */
     ModulusWide r = num / (ModulusWide)q;
     out->ratioLo = (uint64_t)r;
     out->ratioHi = (uint64_t)(r >> 64);
@@ -45,11 +52,15 @@ uint64_t Kernel_MulMod(uint64_t a, uint64_t b, Modulus q)
 
 uint64_t Kernel_PowMod(uint64_t a, uint64_t e, Modulus q)
 {
-    if (q <= 1u) return 0u;
+    if (q <= 1u) {
+        return 0u;
+    }
     uint64_t base = a % q;
-    uint64_t acc  = 1u % q;
+    uint64_t acc = 1u % q;
     while (e > 0u) {
-        if ((e & 1u) != 0u) acc = Kernel_MulMod(acc, base, q);
+        if ((e & 1u) != 0u) {
+            acc = Kernel_MulMod(acc, base, q);
+        }
         base = Kernel_MulMod(base, base, q);
         e >>= 1;
     }
@@ -58,20 +69,28 @@ uint64_t Kernel_PowMod(uint64_t a, uint64_t e, Modulus q)
 
 uint64_t Kernel_ModInv(uint64_t a, Modulus q)
 {
-    if (q <= 1u) return 0u;
+    if (q <= 1u) {
+        return 0u;
+    }
     uint64_t r0 = q, r1 = a % q;
     /* Bezout coefficient of r1, signed, in [-q, q]. */
     __int128 s0 = 0, s1 = 1;
     while (r1 != 0u) {
         uint64_t quo = r0 / r1;
-        uint64_t r2  = r0 - quo * r1;
-        __int128 s2  = s0 - (__int128)quo * s1;
-        r0 = r1; r1 = r2;
-        s0 = s1; s1 = s2;
+        uint64_t r2 = r0 - quo * r1;
+        __int128 s2 = s0 - (__int128)quo * s1;
+        r0 = r1;
+        r1 = r2;
+        s0 = s1;
+        s1 = s2;
     }
-    if (r0 != 1u) return 0u;            /* not invertible */
+    if (r0 != 1u) {
+        return 0u; /* not invertible */
+    }
     __int128 inv = s0 % (__int128)q;
-    if (inv < 0) inv += (__int128)q;
+    if (inv < 0) {
+        inv += (__int128)q;
+    }
     return (uint64_t)inv;
 }
 
@@ -99,8 +118,12 @@ uint64_t Kernel_BarrettReduce128(uint64_t xHi, uint64_t xLo, const BarrettConst 
 
 HIFHE_ERROR Kernel_ShoupConst_Init(ShoupConst *out, uint64_t operand, Modulus q)
 {
-    if (out == NULL || q < 2u) return HIFHE_PARAM_INVALID;
-    if (operand >= q) operand %= q;
+    if (out == NULL || q < 2u) {
+        return HIFHE_PARAM_INVALID;
+    }
+    if (operand >= q) {
+        operand %= q;
+    }
     out->q = q;
     out->operand = operand;
     /* quotient = floor((operand << 64) / q) */
@@ -114,4 +137,3 @@ uint64_t Kernel_ShoupMulMod(uint64_t x, const ShoupConst *sc)
 {
     return Kernel_ShoupMulModInl(x, sc);
 }
-

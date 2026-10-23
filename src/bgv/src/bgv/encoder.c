@@ -38,39 +38,51 @@
 
 HIFHE_ERROR BGV_Encoder_Create(Encoder *out, BGVContext *ctx)
 {
-    if (out == NULL || ctx == NULL) return HIFHE_NULL_INPUT;
+    if (out == NULL || ctx == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     out->context = ctx;
     return HIFHE_SUCCESS;
 }
 
 HIFHE_ERROR BGV_Encoder_Destroy(Encoder *self)
 {
-    if (self == NULL) return HIFHE_NULL_INPUT;
+    if (self == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     self->context = NULL;
     return HIFHE_SUCCESS;
 }
 
-HIFHE_ERROR BGV_Encoder_Encode(Plaintext *out, const uint64_t *msg, uint32_t slotCount,
-                             const Encoder *self)
+HIFHE_ERROR BGV_Encoder_Encode(Plaintext *out, const uint64_t *msg, uint32_t slotCount, const Encoder *self)
 {
-    if (out == NULL || msg == NULL || self == NULL) return HIFHE_NULL_INPUT;
+    if (out == NULL || msg == NULL || self == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     BGVContext *ctx = self->context;
     uint32_t N = ctx->rlweContext.parameter->polyDegree;
-    if (slotCount != N) return HIFHE_PARAM_INVALID;
+    if (slotCount != N) {
+        return HIFHE_PARAM_INVALID;
+    }
 
     uint8_t useMap = BGV_BGVContext_GetUseSlotMap(ctx);
-    int32_t pr = useMap ? BGV_BGVContext_EnsureSlotMap(ctx)
-                        : BGV_BGVContext_EnsurePlainNtt(ctx);
-    if (pr != HIFHE_SUCCESS) return pr;
+    int32_t pr = useMap ? BGV_BGVContext_EnsureSlotMap(ctx) : BGV_BGVContext_EnsurePlainNtt(ctx);
+    if (pr != HIFHE_SUCCESS) {
+        return pr;
+    }
 
     /* data == NULL: allocate with the default config. Else reuse. */
     if (out->data == NULL) {
         PlaintextConfig cfg;
         int32_t r = BGV_BGVContext_GetDefaultPlaintextConfig(&cfg, ctx);
-        if (r != HIFHE_SUCCESS) return r;
+        if (r != HIFHE_SUCCESS) {
+            return r;
+        }
         r = BGV_Plaintext_Create(out, &cfg, ctx);
         BGV_PlaintextConfig_Destroy(&cfg);
-        if (r != HIFHE_SUCCESS) return r;
+        if (r != HIFHE_SUCCESS) {
+            return r;
+        }
     }
 
     Modulus t = ctx->bgvParameter->plainMod;
@@ -79,12 +91,18 @@ HIFHE_ERROR BGV_Encoder_Encode(Plaintext *out, const uint64_t *msg, uint32_t slo
     /* Coefficient vector in [0, t), built once and replicated into limbs. */
     Uint64Vector coeff;
     int32_t cr = Uint64Vector_Create(&coeff, NULL, N);
-    if (cr != HIFHE_SUCCESS) return cr;
+    if (cr != HIFHE_SUCCESS) {
+        return cr;
+    }
     if (useMap) {
         const uint32_t *map = ctx->slotMap.data;
-        for (uint32_t j = 0; j < N; ++j) coeff.data[map[j]] = msg[j] % t;
+        for (uint32_t j = 0; j < N; ++j) {
+            coeff.data[map[j]] = msg[j] % t;
+        }
     } else {
-        for (uint32_t j = 0; j < N; ++j) coeff.data[j] = msg[j] % t;
+        for (uint32_t j = 0; j < N; ++j) {
+            coeff.data[j] = msg[j] % t;
+        }
     }
     cr = Kernel_Ntt_Inverse(coeff.data, &ctx->ptNtt);
     if (cr != HIFHE_SUCCESS) {
@@ -99,18 +117,22 @@ HIFHE_ERROR BGV_Encoder_Encode(Plaintext *out, const uint64_t *msg, uint32_t slo
     Uint64Vector_Cleanse(&coeff);
 
     out->config.crtConfig.dtype = HIFHE_POLY;
-    out->config.scaleFactor     = 1u;
-    out->config.caps            = HIFHE_CAP_LUT | (useMap ? HIFHE_CAP_SLOT_MAP : 0u);
+    out->config.scaleFactor = 1u;
+    out->config.caps = HIFHE_CAP_LUT | (useMap ? HIFHE_CAP_SLOT_MAP : 0u);
 
     /* Move to the NTT domain. */
     CrtPoly view;
-    int32_t r = RLWE_CrtPoly_CreateFromExist(&view, out->data, out->dataSize,
-                                             &out->config.crtConfig, &ctx->rlweContext);
-    if (r != HIFHE_SUCCESS) return r;
+    int32_t r =
+        RLWE_CrtPoly_CreateFromExist(&view, out->data, out->dataSize, &out->config.crtConfig, &ctx->rlweContext);
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
     r = RLWE_CrtPoly_ToNtt(&view);
     /* view is an alias; Destroy only reclaims its config. */
     RLWE_CrtPoly_Destroy(&view);
-    if (r != HIFHE_SUCCESS) return r;
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
     out->config.crtConfig.dtype = HIFHE_NTT;
     return HIFHE_SUCCESS;
 }
@@ -125,15 +147,18 @@ HIFHE_ERROR BGV_Encoder_Encode(Plaintext *out, const uint64_t *msg, uint32_t slo
  * formed: only Q mod t is needed, and v comes off a long-double accumulation
  * of y_i/q_i.
  */
-HIFHE_ERROR BGV_Encoder_CrtCenteredModT(uint64_t *out, const uint64_t *data,
-                                        const RnsBase *base, uint32_t N, Modulus t)
+HIFHE_ERROR BGV_Encoder_CrtCenteredModT(uint64_t *out, const uint64_t *data, const RnsBase *base, uint32_t N, Modulus t)
 {
-    if (out == NULL || data == NULL || base == NULL) return HIFHE_NULL_INPUT;
+    if (out == NULL || data == NULL || base == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     uint32_t L = base->size;
-    if (L == 0u || L > HIFHE_BGV_MAX_CHAIN_LEN) return HIFHE_PARAM_INVALID;
+    if (L == 0u || L > HIFHE_BGV_MAX_CHAIN_LEN) {
+        return HIFHE_PARAM_INVALID;
+    }
 
     uint64_t qhatModT[HIFHE_BGV_MAX_CHAIN_LEN];
-    ModulusWide recip[HIFHE_BGV_MAX_CHAIN_LEN];   /* floor(2^96 / q_i) */
+    ModulusWide recip[HIFHE_BGV_MAX_CHAIN_LEN]; /* floor(2^96 / q_i) */
     ShoupConst qhatInvSc[HIFHE_BGV_MAX_CHAIN_LEN];
     ShoupConst qhatModTSc[HIFHE_BGV_MAX_CHAIN_LEN];
     BarrettConst tBarrett;
@@ -141,19 +166,25 @@ HIFHE_ERROR BGV_Encoder_CrtCenteredModT(uint64_t *out, const uint64_t *data,
     ShoupConst qModTSc;
 
     int32_t br = Kernel_BarrettConst_Init(&tBarrett, t);
-    if (br != HIFHE_SUCCESS) return br;
+    if (br != HIFHE_SUCCESS) {
+        return br;
+    }
 
     for (uint32_t i = 0; i < L; ++i) {
         Modulus qi = base->data[i];
         uint64_t prodModQi = 1u % qi;
-        uint64_t prodModT  = 1u % t;
+        uint64_t prodModT = 1u % t;
         for (uint32_t m = 0; m < L; ++m) {
-            if (m == i) continue;
+            if (m == i) {
+                continue;
+            }
             prodModQi = Kernel_MulMod(prodModQi, base->data[m] % qi, qi);
-            prodModT  = Kernel_MulMod(prodModT,  base->data[m] % t,  t);
+            prodModT = Kernel_MulMod(prodModT, base->data[m] % t, t);
         }
         uint64_t qhatInv = (L == 1u) ? 1u : Kernel_ModInv(prodModQi, qi);
-        if (qhatInv == 0u && L > 1u) return HIFHE_INTERNAL;
+        if (qhatInv == 0u && L > 1u) {
+            return HIFHE_INTERNAL;
+        }
         qhatModT[i] = prodModT;
         qModT = Kernel_MulMod(qModT, qi % t, t);
 
@@ -181,16 +212,17 @@ HIFHE_ERROR BGV_Encoder_CrtCenteredModT(uint64_t *out, const uint64_t *data,
      * accumulator would be 80-bit only on x86 and would lose precision or run
      * in soft float elsewhere.
      */
-    if (Kernel_ShoupConst_Init(&qModTSc, qModT, t) != HIFHE_SUCCESS) return HIFHE_INTERNAL;
+    if (Kernel_ShoupConst_Init(&qModTSc, qModT, t) != HIFHE_SUCCESS) {
+        return HIFHE_INTERNAL;
+    }
     for (uint32_t j = 0; j < N; ++j) {
         ModulusWide frac = 0;
         uint64_t acc = 0u;
         for (uint32_t i = 0; i < L; ++i) {
-            uint64_t y = (L == 1u) ? data[j]
-                                   : Kernel_ShoupMulModInl(data[i * N + j], &qhatInvSc[i]);
+            uint64_t y = (L == 1u) ? data[j] : Kernel_ShoupMulModInl(data[i * N + j], &qhatInvSc[i]);
             frac += (ModulusWide)y * recip[i];
             acc += Kernel_ShoupMulModInl(Kernel_BarrettReduce64Inl(y, &tBarrett), &qhatModTSc[i]);
-            acc = Kernel_CondSubInl(acc, t);   /* Both addends are below t. */
+            acc = Kernel_CondSubInl(acc, t); /* Both addends are below t. */
         }
         uint64_t v = (uint64_t)(frac >> 96);
         uint64_t z = acc + t - Kernel_ShoupMulModInl(Kernel_BarrettReduce64Inl(v, &tBarrett), &qModTSc);
@@ -198,36 +230,40 @@ HIFHE_ERROR BGV_Encoder_CrtCenteredModT(uint64_t *out, const uint64_t *data,
         /* Fractional part above one half means the residues stand for z - Q.
          * The fraction is the sign of the private phase, so it is masked in
          * rather than branched on. */
-        uint64_t neg = 0u - (uint64_t)((frac & (((ModulusWide)1u << 96) - 1u)) >
-                                       ((ModulusWide)1u << 95));
+        uint64_t neg = 0u - (uint64_t)((frac & (((ModulusWide)1u << 96) - 1u)) > ((ModulusWide)1u << 95));
         z += (t - qModT) & neg;
         out[j] = Kernel_CondSubInl(z, t);
     }
     return HIFHE_SUCCESS;
 }
 
-HIFHE_ERROR BGV_Encoder_Decode(uint64_t *msg, uint32_t slotCount,
-                             const Plaintext *pt, const Encoder *self)
+HIFHE_ERROR BGV_Encoder_Decode(uint64_t *msg, uint32_t slotCount, const Plaintext *pt, const Encoder *self)
 {
-    if (msg == NULL || pt == NULL || self == NULL) return HIFHE_NULL_INPUT;
+    if (msg == NULL || pt == NULL || self == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     BGVContext *ctx = self->context;
     uint32_t N = ctx->rlweContext.parameter->polyDegree;
-    if (slotCount != N) return HIFHE_PARAM_INVALID;
+    if (slotCount != N) {
+        return HIFHE_PARAM_INVALID;
+    }
 
     /* Decode as encoded, not as the context reads now. */
     bool useMap = (pt->config.caps & HIFHE_CAP_SLOT_MAP) != 0u;
-    int32_t pr = useMap ? BGV_BGVContext_EnsureSlotMap(ctx)
-                        : BGV_BGVContext_EnsurePlainNtt(ctx);
-    if (pr != HIFHE_SUCCESS) return pr;
+    int32_t pr = useMap ? BGV_BGVContext_EnsureSlotMap(ctx) : BGV_BGVContext_EnsurePlainNtt(ctx);
+    if (pr != HIFHE_SUCCESS) {
+        return pr;
+    }
 
     /* Work on a coefficient-form copy. */
     Plaintext tmp;
     memset(&tmp, 0, sizeof(tmp));
     int32_t r = BGV_Plaintext_Copy(&tmp, pt);
-    if (r != HIFHE_SUCCESS) return r;
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
     CrtPoly view;
-    r = RLWE_CrtPoly_CreateFromExist(&view, tmp.data, tmp.dataSize,
-                                     &tmp.config.crtConfig, &ctx->rlweContext);
+    r = RLWE_CrtPoly_CreateFromExist(&view, tmp.data, tmp.dataSize, &tmp.config.crtConfig, &ctx->rlweContext);
     if (r != HIFHE_SUCCESS) {
         BGV_Plaintext_Destroy(&tmp);
         return r;
@@ -242,28 +278,41 @@ HIFHE_ERROR BGV_Encoder_Decode(uint64_t *msg, uint32_t slotCount,
     Modulus t = ctx->bgvParameter->plainMod;
     r = BGV_Encoder_CrtCenteredModT(msg, tmp.data, &tmp.config.crtConfig.rnsbase, N, t);
     BGV_Plaintext_Destroy(&tmp);
-    if (r != HIFHE_SUCCESS) return r;
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
 
     /* Undo the accumulated BGV scale factor. */
     uint64_t scale = pt->config.scaleFactor % t;
     if (scale != 1u) {
         uint64_t inv = Kernel_ModInv(scale, t);
-        if (inv == 0u) return HIFHE_PARAM_INVALID;
+        if (inv == 0u) {
+            return HIFHE_PARAM_INVALID;
+        }
         ShoupConst invSc;
-        if (Kernel_ShoupConst_Init(&invSc, inv, t) != HIFHE_SUCCESS) return HIFHE_INTERNAL;
-        for (uint32_t j = 0; j < N; ++j) msg[j] = Kernel_ShoupMulModInl(msg[j], &invSc);
+        if (Kernel_ShoupConst_Init(&invSc, inv, t) != HIFHE_SUCCESS) {
+            return HIFHE_INTERNAL;
+        }
+        for (uint32_t j = 0; j < N; ++j) {
+            msg[j] = Kernel_ShoupMulModInl(msg[j], &invSc);
+        }
     }
 
     r = Kernel_Ntt_Forward(msg, &ctx->ptNtt);
-    if (r != HIFHE_SUCCESS) return r;
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
     if (useMap) {
         Uint64Vector gathered;
         r = Uint64Vector_Create(&gathered, msg, N);
-        if (r != HIFHE_SUCCESS) return r;
+        if (r != HIFHE_SUCCESS) {
+            return r;
+        }
         const uint32_t *map = ctx->slotMap.data;
-        for (uint32_t j = 0; j < N; ++j) msg[j] = gathered.data[map[j]];
+        for (uint32_t j = 0; j < N; ++j) {
+            msg[j] = gathered.data[map[j]];
+        }
         Uint64Vector_Destroy(&gathered);
     }
     return HIFHE_SUCCESS;
 }
-

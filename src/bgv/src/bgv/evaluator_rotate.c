@@ -42,7 +42,9 @@
 uint64_t BGV_GaloisEltForStep(int32_t step, uint32_t N)
 {
     uint64_t twoN = 2u * (uint64_t)N;
-    if (step == 0) return 1u;
+    if (step == 0) {
+        return 1u;
+    }
     uint64_t mag = (step > 0) ? (uint64_t)step : (uint64_t)(-(int64_t)step);
     uint64_t k = Kernel_PowMod(3u, mag, twoN);
     /* k is odd and twoN is a power of two, so the inverse exists. */
@@ -69,7 +71,9 @@ static uint32_t BitRev(uint32_t x, uint32_t bits)
 static HIFHE_ERROR BuildNttPermutation(uint32_t *perm, uint32_t N, uint64_t k)
 {
     uint32_t logN = 0u;
-    for (uint32_t v = N; v > 1u; v >>= 1) logN++;
+    for (uint32_t v = N; v > 1u; v >>= 1) {
+        logN++;
+    }
     const uint64_t mask = 2u * (uint64_t)N - 1u;
     for (uint32_t i = 0; i < N; ++i) {
         uint64_t e = ((uint64_t)(2u * BitRev(i, logN) + 1u) * (k & mask)) & mask;
@@ -79,33 +83,47 @@ static HIFHE_ERROR BuildNttPermutation(uint32_t *perm, uint32_t N, uint64_t k)
 }
 
 /* sigma_k on one ciphertext component in NTT form, in place. */
-static void PermuteComponentNtt(uint64_t *comp, uint64_t *scratch, const uint32_t *perm,
-                                uint32_t L, uint32_t N)
+static void PermuteComponentNtt(uint64_t *comp, uint64_t *scratch, const uint32_t *perm, uint32_t L, uint32_t N)
 {
     for (uint32_t i = 0; i < L; ++i) {
         uint64_t *limb = comp + (size_t)i * N;
         memcpy(scratch, limb, N * sizeof(uint64_t));
-        for (uint32_t j = 0; j < N; ++j) limb[j] = scratch[perm[j]];
+        for (uint32_t j = 0; j < N; ++j) {
+            limb[j] = scratch[perm[j]];
+        }
     }
 }
 
-HIFHE_ERROR BGV_Evaluator_RotateByElt(Ciphertext *out, const Ciphertext *in,
-                                    uint64_t galoisElt, const Evaluator *self)
+HIFHE_ERROR BGV_Evaluator_RotateByElt(Ciphertext *out, const Ciphertext *in, uint64_t galoisElt, const Evaluator *self)
 {
-    if (out == NULL || in == NULL || self == NULL) return HIFHE_NULL_INPUT;
-    if (self->galoisKeys == NULL) return HIFHE_NO_GALOIS_KEY;
-    if (in->config.ciphertextSize != 2u) return HIFHE_CT_DEGREE_MISMATCH;
+    if (out == NULL || in == NULL || self == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
+    if (self->galoisKeys == NULL) {
+        return HIFHE_NO_GALOIS_KEY;
+    }
+    if (in->config.ciphertextSize != 2u) {
+        return HIFHE_CT_DEGREE_MISMATCH;
+    }
     const GaloisKeyPiece *gk = BGV_GaloisKeys_GetByElt(self->galoisKeys, galoisElt);
-    if (gk == NULL) return HIFHE_NO_GALOIS_KEY;
+    if (gk == NULL) {
+        return HIFHE_NO_GALOIS_KEY;
+    }
 
     BGVContext *ctx = self->context;
     uint32_t L = in->config.crtConfig.rnsbase.size;
     uint32_t N = ctx->rlweContext.parameter->polyDegree;
     /* Same level constraint as relinearize. */
-    if (L != gk->rnsSize) return HIFHE_PARAM_INVALID;
+    if (L != gk->rnsSize) {
+        return HIFHE_PARAM_INVALID;
+    }
 
-    if (in->config.crtConfig.dtype != HIFHE_NTT) return HIFHE_PARAM_INVALID;
-    if ((galoisElt & 1u) == 0u) return HIFHE_PARAM_INVALID;
+    if (in->config.crtConfig.dtype != HIFHE_NTT) {
+        return HIFHE_PARAM_INVALID;
+    }
+    if ((galoisElt & 1u) == 0u) {
+        return HIFHE_PARAM_INVALID;
+    }
 
     uint32_t *perm = (uint32_t *)BSL_SAL_Malloc(N * (uint32_t)sizeof(uint32_t));
     uint64_t *scratch = (uint64_t *)BSL_SAL_Malloc(N * (uint32_t)sizeof(uint64_t));
@@ -118,7 +136,9 @@ HIFHE_ERROR BGV_Evaluator_RotateByElt(Ciphertext *out, const Ciphertext *in,
 
     /* Deep copy in to out, then permute each component in place. */
     int32_t r = BGV_Ciphertext_Destroy(out);
-    if (r == HIFHE_SUCCESS) r = BGV_Ciphertext_Copy(out, in);
+    if (r == HIFHE_SUCCESS) {
+        r = BGV_Ciphertext_Copy(out, in);
+    }
     if (r == HIFHE_SUCCESS) {
         for (uint32_t k = 0; k < 2u; ++k) {
             PermuteComponentNtt(out->data + (size_t)k * L * N, scratch, perm, L, N);
@@ -126,7 +146,9 @@ HIFHE_ERROR BGV_Evaluator_RotateByElt(Ciphertext *out, const Ciphertext *in,
     }
     BSL_SAL_Free(perm);
     BSL_SAL_Free(scratch);
-    if (r != HIFHE_SUCCESS) return r;
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
 
     /* Key-switch the (permuted) c1 back under s. */
     CrtPoly c1;
@@ -137,8 +159,7 @@ HIFHE_ERROR BGV_Evaluator_RotateByElt(Ciphertext *out, const Ciphertext *in,
     }
 
     Ciphertext delta;
-    r = BGV_Ciphertext_CreateSize2Ntt(&delta, out->config.correctionFactor,
-                                      &out->config.crtConfig.rnsbase, ctx);
+    r = BGV_Ciphertext_CreateSize2Ntt(&delta, out->config.correctionFactor, &out->config.crtConfig.rnsbase, ctx);
     if (r != HIFHE_SUCCESS) {
         BGV_Ciphertext_Destroy(out);
         return r;
@@ -154,19 +175,25 @@ HIFHE_ERROR BGV_Evaluator_RotateByElt(Ciphertext *out, const Ciphertext *in,
     /* out.c0 <- out.c0 + delta.c0;  out.c1 <- delta.c1  (replace, not add) */
     CrtPoly d0, d1;
     r = BGV_Ciphertext_GetCrtPolyAt(&d0, 0u, &delta);
-    if (r == HIFHE_SUCCESS) r = BGV_Ciphertext_AddCrtPolyAt(out, 0u, &d0);
-    if (r == HIFHE_SUCCESS) r = BGV_Ciphertext_GetCrtPolyAt(&d1, 1u, &delta);
-    if (r == HIFHE_SUCCESS) r = BGV_Ciphertext_SetCrtPolyAt(out, 1u, &d1);
+    if (r == HIFHE_SUCCESS) {
+        r = BGV_Ciphertext_AddCrtPolyAt(out, 0u, &d0);
+    }
+    if (r == HIFHE_SUCCESS) {
+        r = BGV_Ciphertext_GetCrtPolyAt(&d1, 1u, &delta);
+    }
+    if (r == HIFHE_SUCCESS) {
+        r = BGV_Ciphertext_SetCrtPolyAt(out, 1u, &d1);
+    }
     BGV_Ciphertext_Destroy(&delta);
     return r;
 }
 
-HIFHE_ERROR BGV_Evaluator_RotateByStep(Ciphertext *out, const Ciphertext *in,
-                                     int32_t steps, const Evaluator *self)
+HIFHE_ERROR BGV_Evaluator_RotateByStep(Ciphertext *out, const Ciphertext *in, int32_t steps, const Evaluator *self)
 {
-    if (in == NULL) return HIFHE_NULL_INPUT;
+    if (in == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
     uint32_t N = in->context->rlweContext.parameter->polyDegree;
     uint64_t k = BGV_GaloisEltForStep(steps, N);
     return BGV_Evaluator_RotateByElt(out, in, k, self);
 }
-

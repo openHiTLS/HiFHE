@@ -46,26 +46,35 @@
 #include "kernel/ntt.h"
 #include "bgv/params_check.h"
 
-HIFHE_ERROR BGV_Evaluator_ModSwitch(Ciphertext *out, const Ciphertext *in,
-                                  const Evaluator *self)
+HIFHE_ERROR BGV_Evaluator_ModSwitch(Ciphertext *out, const Ciphertext *in, const Evaluator *self)
 {
-    if (out == NULL || in == NULL || self == NULL) return HIFHE_NULL_INPUT;
-    if (in->context == NULL || in->data == NULL) return HIFHE_NULL_INPUT;
+    if (out == NULL || in == NULL || self == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
+    if (in->context == NULL || in->data == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
 
     BGVContext *ctx = self->context;
     uint32_t L = in->config.crtConfig.rnsbase.size;
-    if (L <= 1u) return HIFHE_MODSWITCH_EXHAUSTED;
+    if (L <= 1u) {
+        return HIFHE_MODSWITCH_EXHAUSTED;
+    }
 
     uint32_t N = ctx->rlweContext.parameter->polyDegree;
     uint32_t K = in->config.ciphertextSize;
-    Modulus  t = ctx->bgvParameter->plainMod;
+    Modulus t = ctx->bgvParameter->plainMod;
     const uint64_t *chain = in->config.crtConfig.rnsbase.data;
     Modulus qLast = chain[L - 1u];
 
     uint64_t invT = Kernel_ModInv(t % qLast, qLast);
-    if (invT == 0u) return HIFHE_PARAM_INVALID;      /* t must be coprime to q_last */
+    if (invT == 0u) {
+        return HIFHE_PARAM_INVALID; /* t must be coprime to q_last */
+    }
     uint64_t invQLastModT = Kernel_ModInv(qLast % t, t);
-    if (invQLastModT == 0u) return HIFHE_PARAM_INVALID;
+    if (invQLastModT == 0u) {
+        return HIFHE_PARAM_INVALID;
+    }
 
     /* NTT-domain view of `in`; a coefficient-form input is converted once. */
     Ciphertext work;
@@ -77,7 +86,9 @@ HIFHE_ERROR BGV_Evaluator_ModSwitch(Ciphertext *out, const Ciphertext *in,
         for (uint32_t k = 0; k < K && r == HIFHE_SUCCESS; ++k) {
             CrtPoly comp;
             r = BGV_Ciphertext_GetCrtPolyAt(&comp, k, &work);
-            if (r == HIFHE_SUCCESS) r = RLWE_CrtPoly_ToNtt(&comp);
+            if (r == HIFHE_SUCCESS) {
+                r = RLWE_CrtPoly_ToNtt(&comp);
+            }
         }
         if (r != HIFHE_SUCCESS) {
             BGV_Ciphertext_Destroy(&work);
@@ -105,7 +116,7 @@ HIFHE_ERROR BGV_Evaluator_ModSwitch(Ciphertext *out, const Ciphertext *in,
         return r;
     }
     cfg.crtConfig.dtype = HIFHE_NTT;
-    cfg.caps            = in->config.caps;
+    cfg.caps = in->config.caps;
     memcpy(cfg.seed, in->config.seed, sizeof(cfg.seed));
 
     Ciphertext res;
@@ -133,10 +144,12 @@ HIFHE_ERROR BGV_Evaluator_ModSwitch(Ciphertext *out, const Ciphertext *in,
         uint64_t invQLast = Kernel_ModInv(qLast % qi, qi);
         tbl[i] = RLWE_RlweContext_GetNttTablesByModulus(&ctx->rlweContext, qi);
         bc[i] = RLWE_RlweContext_GetBarrettByModulus(&ctx->rlweContext, qi);
-        if (invQLast == 0u) r = HIFHE_PARAM_INVALID;
-        else if (tbl[i] == NULL || bc[i] == NULL) r = HIFHE_INTERNAL;
-        else if (Kernel_ShoupConst_Init(&invQLastSc[i], invQLast, qi) != HIFHE_SUCCESS ||
-                 Kernel_ShoupConst_Init(&tSc[i], t % qi, qi) != HIFHE_SUCCESS) {
+        if (invQLast == 0u) {
+            r = HIFHE_PARAM_INVALID;
+        } else if (tbl[i] == NULL || bc[i] == NULL) {
+            r = HIFHE_INTERNAL;
+        } else if (Kernel_ShoupConst_Init(&invQLastSc[i], invQLast, qi) != HIFHE_SUCCESS ||
+                   Kernel_ShoupConst_Init(&tSc[i], t % qi, qi) != HIFHE_SUCCESS) {
             r = HIFHE_INTERNAL;
         }
     }
@@ -148,14 +161,18 @@ HIFHE_ERROR BGV_Evaluator_ModSwitch(Ciphertext *out, const Ciphertext *in,
     if (r == HIFHE_SUCCESS) {
         u = (int64_t *)BSL_SAL_Malloc(N * (uint32_t)sizeof(int64_t));
         buf = (uint64_t *)BSL_SAL_Malloc(N * (uint32_t)sizeof(uint64_t));
-        if (u == NULL || buf == NULL) r = HIFHE_MEMORY_ERROR;
+        if (u == NULL || buf == NULL) {
+            r = HIFHE_MEMORY_ERROR;
+        }
     }
 
     uint64_t halfQLast = qLast >> 1;
     for (uint32_t k = 0; k < K && r == HIFHE_SUCCESS; ++k) {
         memcpy(buf, src->data + ((size_t)k * L + outL) * N, N * sizeof(uint64_t));
         r = Kernel_Ntt_Inverse(buf, lastTbl);
-        if (r != HIFHE_SUCCESS) break;
+        if (r != HIFHE_SUCCESS) {
+            break;
+        }
         for (uint32_t j = 0; j < N; ++j) {
             uint64_t v = Kernel_ShoupMulModInl(buf[j], &invTSc);
             /* Centre u so |delta| stays small. */
@@ -170,12 +187,16 @@ HIFHE_ERROR BGV_Evaluator_ModSwitch(Ciphertext *out, const Ciphertext *in,
                 buf[j] = (uj < 0 && d != 0u) ? qi - d : d;
             }
             r = Kernel_Ntt_Forward(buf, tbl[i]);
-            if (r != HIFHE_SUCCESS) break;
+            if (r != HIFHE_SUCCESS) {
+                break;
+            }
             const uint64_t *ci = src->data + ((size_t)k * L + i) * N;
             uint64_t *dst = res.data + ((size_t)k * outL + i) * N;
             for (uint32_t j = 0; j < N; ++j) {
                 uint64_t diff = ci[j] + qi - buf[j];
-                if (diff >= qi) diff -= qi;
+                if (diff >= qi) {
+                    diff -= qi;
+                }
                 dst[j] = Kernel_ShoupMulModInl(diff, &invQLastSc[i]);
             }
         }

@@ -41,21 +41,21 @@
  * and Galois keys, which that work deliberately changed.
  */
 
-#define KAT_SK            0
-#define KAT_PK            1
-#define KAT_ENCODE        2
-#define KAT_DECODE        3
-#define KAT_ADD_CTCT      4
-#define KAT_ADD_CTPT      5
-#define KAT_NEGATE        6
-#define KAT_MUL_CTPT      7
-#define KAT_MUL_CTCT      8
-#define KAT_MODSWITCH     9
-#define KAT_DECRYPT       10
-#define KAT_RELIN         11
-#define KAT_ROTATE        12
+#define KAT_SK        0
+#define KAT_PK        1
+#define KAT_ENCODE    2
+#define KAT_DECODE    3
+#define KAT_ADD_CTCT  4
+#define KAT_ADD_CTPT  5
+#define KAT_NEGATE    6
+#define KAT_MUL_CTPT  7
+#define KAT_MUL_CTCT  8
+#define KAT_MODSWITCH 9
+#define KAT_DECRYPT   10
+#define KAT_RELIN     11
+#define KAT_ROTATE    12
 
-#define KAT_DIGEST_LEN    32u
+#define KAT_DIGEST_LEN 32u
 
 typedef struct {
     CRYPT_EAL_PkeyCtx *ctx;
@@ -78,13 +78,17 @@ static uint64_t KatNext(uint64_t *s)
 static uint64_t KatLoadU64(const uint8_t *p)
 {
     uint64_t v = 0u;
-    for (int i = 7; i >= 0; --i) v = (v << 8) | p[i];
+    for (int i = 7; i >= 0; --i) {
+        v = (v << 8) | p[i];
+    }
     return v;
 }
 
 static void KatStoreU64(uint8_t *p, uint64_t v)
 {
-    for (int i = 0; i < 8; ++i) p[i] = (uint8_t)(v >> (8 * i));
+    for (int i = 0; i < 8; ++i) {
+        p[i] = (uint8_t)(v >> (8 * i));
+    }
 }
 
 static void KatEnvFree(KatEnv *e)
@@ -97,11 +101,14 @@ static void KatEnvFree(KatEnv *e)
 static int KatEnvInit(KatEnv *e, int32_t preset)
 {
     memset(e, 0, sizeof(*e));
-    e->ctx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE,
-                                          HIFHE_PROVIDER_ATTR);
-    if (e->ctx == NULL) return -1;
+    e->ctx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
+    if (e->ctx == NULL) {
+        return -1;
+    }
     uint8_t seed[HIFHE_BGV_SEED_LEN];
-    for (uint32_t i = 0; i < HIFHE_BGV_SEED_LEN; ++i) seed[i] = (uint8_t)(0xa5u ^ (i * 7u));
+    for (uint32_t i = 0; i < HIFHE_BGV_SEED_LEN; ++i) {
+        seed[i] = (uint8_t)(0xa5u ^ (i * 7u));
+    }
     if (CRYPT_EAL_PkeyCtrl(e->ctx, CRYPT_CTRL_SET_PARA_BY_ID, &preset, sizeof(preset)) != HIFHE_SUCCESS ||
         CRYPT_EAL_PkeyCtrl(e->ctx, HIFHE_CTRL_BGV_SET_SEED, seed, sizeof(seed)) != HIFHE_SUCCESS ||
         CRYPT_EAL_PkeyGen(e->ctx) != HIFHE_SUCCESS ||
@@ -121,13 +128,19 @@ static int KatEnvInit(KatEnv *e, int32_t preset)
 static int KatEncode(KatEnv *e, uint64_t s, uint8_t *pt, uint32_t *ptLen)
 {
     uint64_t *msg = (uint64_t *)BSL_SAL_Malloc(e->msgLen);
-    if (msg == NULL) return -1;
-    for (uint32_t i = 0; i < e->n; ++i) msg[i] = KatNext(&s) % e->t;
-    BSL_Param in[] = { {HIFHE_PARAM_BGV_MSG, BSL_PARAM_TYPE_OCTETS, msg, e->msgLen, 0}, BSL_PARAM_END };
+    if (msg == NULL) {
+        return -1;
+    }
+    for (uint32_t i = 0; i < e->n; ++i) {
+        msg[i] = KatNext(&s) % e->t;
+    }
+    BSL_Param in[] = {{HIFHE_PARAM_BGV_MSG, BSL_PARAM_TYPE_OCTETS, msg, e->msgLen, 0}, BSL_PARAM_END};
     uint32_t out = e->ptLen;
     int32_t rc = CRYPT_EAL_PkeyHEMsgEncode(e->ctx, in, pt, &out);
     BSL_SAL_Free(msg);
-    if (rc != HIFHE_SUCCESS) return -1;
+    if (rc != HIFHE_SUCCESS) {
+        return -1;
+    }
     *ptLen = out;
     return 0;
 }
@@ -145,7 +158,9 @@ static void KatFillBody(const KatEnv *e, uint8_t *buf, uint32_t len, uint32_t po
         for (uint32_t i = 0; i < e->level; ++i) {
             uint64_t q = KatLoadU64(mods + (size_t)i * 8u);
             uint8_t *slice = data + ((size_t)k * e->level + i) * e->n * 8u;
-            for (uint32_t j = 0; j < e->n; ++j) KatStoreU64(slice + (size_t)j * 8u, KatNext(&s) % q);
+            for (uint32_t j = 0; j < e->n; ++j) {
+                KatStoreU64(slice + (size_t)j * 8u, KatNext(&s) % q);
+            }
         }
     }
 }
@@ -155,13 +170,19 @@ static void KatFillBody(const KatEnv *e, uint8_t *buf, uint32_t len, uint32_t po
 static int KatCiphertext(KatEnv *e, uint64_t s, uint8_t *ct, uint32_t *ctLen)
 {
     uint8_t *pt = (uint8_t *)BSL_SAL_Malloc(e->ptLen);
-    if (pt == NULL) return -1;
+    if (pt == NULL) {
+        return -1;
+    }
     uint32_t ptL = 0u;
     int rc = KatEncode(e, s, pt, &ptL);
     uint32_t out = e->ctLen;
-    if (rc == 0 && CRYPT_EAL_PkeyEncrypt(e->ctx, pt, ptL, ct, &out) != HIFHE_SUCCESS) rc = -1;
+    if (rc == 0 && CRYPT_EAL_PkeyEncrypt(e->ctx, pt, ptL, ct, &out) != HIFHE_SUCCESS) {
+        rc = -1;
+    }
     BSL_SAL_Free(pt);
-    if (rc != 0) return -1;
+    if (rc != 0) {
+        return -1;
+    }
     /* header(12) | size(4) | correction(8) | seed | N(4) | rns(4) | dtype(4) | moduli | data */
     uint32_t dataOff = out - 2u * e->level * e->n * 8u;
     uint32_t seedEnd = dataOff - e->level * 8u - 12u;
@@ -174,10 +195,8 @@ static int KatCiphertext(KatEnv *e, uint64_t s, uint8_t *ct, uint32_t *ctLen)
 static int KatGenRotateKey(KatEnv *e)
 {
     int32_t step = 1;
-    BSL_Param gk[] = {
-        {HIFHE_PARAM_BGV_ROTATE_STEPS, BSL_PARAM_TYPE_OCTETS, &step, (uint32_t)sizeof(step), 0},
-        BSL_PARAM_END
-    };
+    BSL_Param gk[] = {{HIFHE_PARAM_BGV_ROTATE_STEPS, BSL_PARAM_TYPE_OCTETS, &step, (uint32_t)sizeof(step), 0},
+                      BSL_PARAM_END};
     return (CRYPT_EAL_PkeyCtrl(e->ctx, HIFHE_CTRL_BGV_GEN_GALOIS_KEYS, gk, 0u) == HIFHE_SUCCESS) ? 0 : -1;
 }
 
@@ -191,7 +210,9 @@ static int KatRun(KatEnv *e, int op, uint8_t *out, uint32_t cap, uint32_t *outLe
     ct1 = (uint8_t *)BSL_SAL_Malloc(e->ctLen);
     ct2 = (uint8_t *)BSL_SAL_Malloc(e->ctLen);
     pt = (uint8_t *)BSL_SAL_Malloc(e->ptLen);
-    if (ct1 == NULL || ct2 == NULL || pt == NULL) goto EXIT;
+    if (ct1 == NULL || ct2 == NULL || pt == NULL) {
+        goto EXIT;
+    }
     if (KatCiphertext(e, 0x1111ull, ct1, &ct1L) != 0 || KatCiphertext(e, 0x2222ull, ct2, &ct2L) != 0 ||
         KatEncode(e, 0x3333ull, pt, &ptL) != 0) {
         goto EXIT;
@@ -199,90 +220,103 @@ static int KatRun(KatEnv *e, int op, uint8_t *out, uint32_t cap, uint32_t *outLe
 
     switch (op) {
         case KAT_SK: {
-            BSL_Param g[] = { {HIFHE_PARAM_BGV_PRVKEY, BSL_PARAM_TYPE_OCTETS, out, cap, 0}, BSL_PARAM_END };
-            if (CRYPT_EAL_PkeyGetPrvEx(e->ctx, g) != HIFHE_SUCCESS) goto EXIT;
+            BSL_Param g[] = {{HIFHE_PARAM_BGV_PRVKEY, BSL_PARAM_TYPE_OCTETS, out, cap, 0}, BSL_PARAM_END};
+            if (CRYPT_EAL_PkeyGetPrvEx(e->ctx, g) != HIFHE_SUCCESS) {
+                goto EXIT;
+            }
             len = g[0].useLen;
             break;
         }
         case KAT_PK: {
-            BSL_Param g[] = { {HIFHE_PARAM_BGV_PUBKEY, BSL_PARAM_TYPE_OCTETS, out, cap, 0}, BSL_PARAM_END };
-            if (CRYPT_EAL_PkeyGetPubEx(e->ctx, g) != HIFHE_SUCCESS) goto EXIT;
+            BSL_Param g[] = {{HIFHE_PARAM_BGV_PUBKEY, BSL_PARAM_TYPE_OCTETS, out, cap, 0}, BSL_PARAM_END};
+            if (CRYPT_EAL_PkeyGetPubEx(e->ctx, g) != HIFHE_SUCCESS) {
+                goto EXIT;
+            }
             len = g[0].useLen;
             break;
         }
         case KAT_ENCODE:
-            if (ptL > cap) goto EXIT;
+            if (ptL > cap) {
+                goto EXIT;
+            }
             memcpy(out, pt, ptL);
             len = ptL;
             break;
         case KAT_DECODE: {
             KatFillBody(e, pt, ptL, 1u, 0x4444ull);
-            BSL_Param in[] = { {HIFHE_PARAM_BGV_PLAINTEXT, BSL_PARAM_TYPE_OCTETS, pt, ptL, 0}, BSL_PARAM_END };
+            BSL_Param in[] = {{HIFHE_PARAM_BGV_PLAINTEXT, BSL_PARAM_TYPE_OCTETS, pt, ptL, 0}, BSL_PARAM_END};
             len = e->msgLen;
-            if (len > cap || CRYPT_EAL_PkeyHEMsgDecode(e->ctx, in, out, &len) != HIFHE_SUCCESS) goto EXIT;
+            if (len > cap || CRYPT_EAL_PkeyHEMsgDecode(e->ctx, in, out, &len) != HIFHE_SUCCESS) {
+                goto EXIT;
+            }
             break;
         }
         case KAT_ADD_CTCT:
         case KAT_MUL_CTCT:
         case KAT_RELIN: {
-            if (op == KAT_RELIN && CRYPT_EAL_PkeyCtrl(e->ctx, HIFHE_CTRL_BGV_GEN_RELIN_KEY, NULL, 0u) != HIFHE_SUCCESS) {
+            if (op == KAT_RELIN &&
+                CRYPT_EAL_PkeyCtrl(e->ctx, HIFHE_CTRL_BGV_GEN_RELIN_KEY, NULL, 0u) != HIFHE_SUCCESS) {
                 goto EXIT;
             }
-            BSL_Param in[] = {
-                {HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
-                {HIFHE_PARAM_BGV_CIPHERTEXT2, BSL_PARAM_TYPE_OCTETS, ct2, ct2L, 0},
-                BSL_PARAM_END
-            };
-            int32_t r = (op == KAT_ADD_CTCT) ? CRYPT_EAL_PkeyHEAdd(e->ctx, in, out, &len)
-                                             : CRYPT_EAL_PkeyHEMul(e->ctx, in, out, &len);
-            if (r != HIFHE_SUCCESS) goto EXIT;
+            BSL_Param in[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
+                              {HIFHE_PARAM_BGV_CIPHERTEXT2, BSL_PARAM_TYPE_OCTETS, ct2, ct2L, 0},
+                              BSL_PARAM_END};
+            int32_t r = (op == KAT_ADD_CTCT) ? CRYPT_EAL_PkeyHEAdd(e->ctx, in, out, &len) :
+                                               CRYPT_EAL_PkeyHEMul(e->ctx, in, out, &len);
+            if (r != HIFHE_SUCCESS) {
+                goto EXIT;
+            }
             break;
         }
         case KAT_ADD_CTPT:
         case KAT_MUL_CTPT: {
-            BSL_Param in[] = {
-                {HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
-                {HIFHE_PARAM_BGV_PLAINTEXT,   BSL_PARAM_TYPE_OCTETS, pt, ptL, 0},
-                BSL_PARAM_END
-            };
-            int32_t r = (op == KAT_ADD_CTPT) ? CRYPT_EAL_PkeyHEAdd(e->ctx, in, out, &len)
-                                             : CRYPT_EAL_PkeyHEMul(e->ctx, in, out, &len);
-            if (r != HIFHE_SUCCESS) goto EXIT;
+            BSL_Param in[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
+                              {HIFHE_PARAM_BGV_PLAINTEXT, BSL_PARAM_TYPE_OCTETS, pt, ptL, 0},
+                              BSL_PARAM_END};
+            int32_t r = (op == KAT_ADD_CTPT) ? CRYPT_EAL_PkeyHEAdd(e->ctx, in, out, &len) :
+                                               CRYPT_EAL_PkeyHEMul(e->ctx, in, out, &len);
+            if (r != HIFHE_SUCCESS) {
+                goto EXIT;
+            }
             break;
         }
         case KAT_NEGATE: {
             uint8_t marker = 1u;
-            BSL_Param in[] = {
-                {HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
-                {HIFHE_PARAM_BGV_NEGATE,      BSL_PARAM_TYPE_OCTETS, &marker, 1u, 0},
-                BSL_PARAM_END
-            };
-            if (CRYPT_EAL_PkeyHEAdd(e->ctx, in, out, &len) != HIFHE_SUCCESS) goto EXIT;
+            BSL_Param in[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
+                              {HIFHE_PARAM_BGV_NEGATE, BSL_PARAM_TYPE_OCTETS, &marker, 1u, 0},
+                              BSL_PARAM_END};
+            if (CRYPT_EAL_PkeyHEAdd(e->ctx, in, out, &len) != HIFHE_SUCCESS) {
+                goto EXIT;
+            }
             break;
         }
         case KAT_MODSWITCH: {
-            BSL_Param in[] = {
-                {HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
-                {HIFHE_PARAM_BGV_CIPHERTEXT2, BSL_PARAM_TYPE_OCTETS, out, cap, 0},
-                BSL_PARAM_END
-            };
-            if (CRYPT_EAL_PkeyCtrl(e->ctx, HIFHE_CTRL_BGV_HE_MODSWITCH, in, 0u) != HIFHE_SUCCESS) goto EXIT;
+            BSL_Param in[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
+                              {HIFHE_PARAM_BGV_CIPHERTEXT2, BSL_PARAM_TYPE_OCTETS, out, cap, 0},
+                              BSL_PARAM_END};
+            if (CRYPT_EAL_PkeyCtrl(e->ctx, HIFHE_CTRL_BGV_HE_MODSWITCH, in, 0u) != HIFHE_SUCCESS) {
+                goto EXIT;
+            }
             len = in[1].useLen;
             break;
         }
         case KAT_DECRYPT:
-            if (CRYPT_EAL_PkeyDecrypt(e->ctx, ct1, ct1L, out, &len) != HIFHE_SUCCESS) goto EXIT;
+            if (CRYPT_EAL_PkeyDecrypt(e->ctx, ct1, ct1L, out, &len) != HIFHE_SUCCESS) {
+                goto EXIT;
+            }
             break;
         case KAT_ROTATE: {
-            if (KatGenRotateKey(e) != 0) goto EXIT;
+            if (KatGenRotateKey(e) != 0) {
+                goto EXIT;
+            }
             int32_t step = 1;
-            BSL_Param in[] = {
-                {HIFHE_PARAM_BGV_CIPHERTEXT1,  BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
-                {HIFHE_PARAM_BGV_ROTATE_STEPS, BSL_PARAM_TYPE_INT32,  &step, (uint32_t)sizeof(step), 0},
-                {HIFHE_PARAM_BGV_CIPHERTEXT2,  BSL_PARAM_TYPE_OCTETS, out, cap, 0},
-                BSL_PARAM_END
-            };
-            if (CRYPT_EAL_PkeyCtrl(e->ctx, HIFHE_CTRL_BGV_HE_ROTATE_STEP, in, 0u) != HIFHE_SUCCESS) goto EXIT;
+            BSL_Param in[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
+                              {HIFHE_PARAM_BGV_ROTATE_STEPS, BSL_PARAM_TYPE_INT32, &step, (uint32_t)sizeof(step), 0},
+                              {HIFHE_PARAM_BGV_CIPHERTEXT2, BSL_PARAM_TYPE_OCTETS, out, cap, 0},
+                              BSL_PARAM_END};
+            if (CRYPT_EAL_PkeyCtrl(e->ctx, HIFHE_CTRL_BGV_HE_ROTATE_STEP, in, 0u) != HIFHE_SUCCESS) {
+                goto EXIT;
+            }
             len = in[2].useLen;
             break;
         }
@@ -301,7 +335,9 @@ EXIT:
 static void KatPrintDigest(int32_t preset, int op, const uint8_t *d)
 {
     char hex[KAT_DIGEST_LEN * 2u + 1u];
-    for (uint32_t i = 0; i < KAT_DIGEST_LEN; ++i) (void)sprintf(hex + 2u * i, "%02x", d[i]);
+    for (uint32_t i = 0; i < KAT_DIGEST_LEN; ++i) {
+        (void)sprintf(hex + 2u * i, "%02x", d[i]);
+    }
     Print("KAT preset=%d op=%d digest=%s\n", (int)preset, op, hex);
 }
 

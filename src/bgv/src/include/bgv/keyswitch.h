@@ -44,7 +44,7 @@ extern "C" {
 
 /* Digit width of the historic fixed gadget, and the fallback base: the
  * widest a digit is allowed to be when the chain has no noise to spare. */
-#define BGV_KSW_LOG_T   16u
+#define BGV_KSW_LOG_T 16u
 /* A limb is at most 64 bits, so no further base-2^16 digit can be nonzero. */
 #define BGV_KSW_MAX_DIGITS ((64u + BGV_KSW_LOG_T - 1u) / BGV_KSW_LOG_T)
 /* Bits of budget, beyond one limb and the plaintext modulus, that the
@@ -60,23 +60,20 @@ uint32_t BGV_KeySwitch_LogT(const RnsBase *base, uint32_t digits);
  * Q / (q_last * t * 2^BGV_KSW_NOISE_MARGIN_BITS): the switched ciphertext
  * keeps more than a limb of budget, and one mod-switch after the
  * relinearization or rotation brings the term down to rounding level. */
-uint32_t BGV_KeySwitch_DefaultDigits(const RnsBase *base, uint32_t polyDegree,
-                                     Modulus plainMod);
+uint32_t BGV_KeySwitch_DefaultDigits(const RnsBase *base, uint32_t polyDegree, Modulus plainMod);
 
 /* `polyNtt` is the target factor: c2 for relin, sigma_k(c1) for rotate.
  * `kswPieces` is the gadget array, indexed [i * digits + j]. `out` must be a
  * size-2 ciphertext on the full chain; it is zeroed, then accumulated into.
  * The caller folds it back into its running (c0, c1). */
-HIFHE_ERROR BGV_KeySwitch_Run(Ciphertext *out, const CrtPoly *polyNtt,
-                            const Ciphertext *kswPieces,
-                            uint32_t rnsSize, uint32_t digits,
-                            BGVContext *ctx);
+HIFHE_ERROR BGV_KeySwitch_Run(Ciphertext *out, const CrtPoly *polyNtt, const Ciphertext *kswPieces, uint32_t rnsSize,
+                              uint32_t digits, BGVContext *ctx);
 
 /* gadgetPerLimb[l] = (2^logT)^digit * q-hat_i mod q_l, for l over the whole chain.
  * Shared with keygen, which needs the same factor to build piece (i, digit).
  * `out` must have room for `base->size` entries. */
-HIFHE_ERROR BGV_KeySwitch_GadgetFactor(uint64_t *out, const RnsBase *base,
-                                     uint32_t limbIndex, uint32_t digit, uint32_t logT);
+HIFHE_ERROR BGV_KeySwitch_GadgetFactor(uint64_t *out, const RnsBase *base, uint32_t limbIndex, uint32_t digit,
+                                       uint32_t logT);
 
 #ifdef __cplusplus
 }

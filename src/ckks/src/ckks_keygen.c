@@ -176,10 +176,9 @@ static int32_t CKKS_CheckPara(const CRYPT_CkksPara *para)
     if (para == NULL) {
         return CRYPT_NULL_INPUT;
     }
-    if (para->N < CKKS_MIN_N || para->N > CKKS_MAX_N || (para->N & (para->N - 1)) != 0 ||
-        para->qBits < CKKS_MIN_LOGQ || para->qBits > CKKS_MAX_LOGQ || para->pBits == 0 ||
-        para->pBits >= para->qBits || para->sigma <= 0.0 || para->slots == 0 ||
-        para->slots > para->N / 2 || (para->slots & (para->slots - 1)) != 0) {
+    if (para->N < CKKS_MIN_N || para->N > CKKS_MAX_N || (para->N & (para->N - 1)) != 0 || para->qBits < CKKS_MIN_LOGQ ||
+        para->qBits > CKKS_MAX_LOGQ || para->pBits == 0 || para->pBits >= para->qBits || para->sigma <= 0.0 ||
+        para->slots == 0 || para->slots > para->N / 2 || (para->slots & (para->slots - 1)) != 0) {
         return HIFHE_INVALID_ARGUMENT;
     }
     return CRYPT_SUCCESS;
@@ -371,12 +370,10 @@ int32_t CRYPT_CKKS_Gen(CRYPT_CKKS_Ctx *ctx)
     BN_OptimizerSetLibCtx(ctx->libCtx, optimizer);
     if ((ret = CKKS_SampleTernary(ctx->libCtx, prv->sx, N)) != CRYPT_SUCCESS ||
         (ret = CKKS_SampleUniform(ctx->libCtx, pub->ax, N, ctx->para->Q)) != CRYPT_SUCCESS ||
-        (ret = CKKS_SampleGauss(ctx->libCtx, error->coeffs, N, ctx->para->sigma,
-            ctx->para->Q, optimizer)) != CRYPT_SUCCESS ||
-        (ret = CKKS_PolyMult(product->coeffs, pub->ax, prv->sx, N,
-            ctx->para->Q, optimizer)) != CRYPT_SUCCESS ||
-        (ret = CKKS_PolySub(pub->bx, error->coeffs, product->coeffs, N,
-            ctx->para->Q, optimizer)) != CRYPT_SUCCESS) {
+        (ret = CKKS_SampleGauss(ctx->libCtx, error->coeffs, N, ctx->para->sigma, ctx->para->Q, optimizer)) !=
+            CRYPT_SUCCESS ||
+        (ret = CKKS_PolyMult(product->coeffs, pub->ax, prv->sx, N, ctx->para->Q, optimizer)) != CRYPT_SUCCESS ||
+        (ret = CKKS_PolySub(pub->bx, error->coeffs, product->coeffs, N, ctx->para->Q, optimizer)) != CRYPT_SUCCESS) {
         goto EXIT;
     }
     CKKS_FreeKeys(ctx);

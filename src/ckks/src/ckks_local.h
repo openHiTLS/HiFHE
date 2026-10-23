@@ -67,23 +67,21 @@ CRYPT_CKKS_Para *CRYPT_CKKS_DupPara(const CRYPT_CKKS_Para *para);
 CRYPT_CKKS_Poly *CKKS_NewPoly(uint32_t N);
 void CKKS_FreePoly(CRYPT_CKKS_Poly *poly);
 void CKKS_CoeffsDestroy(BN_BigNum **coeffs, uint32_t N);
-int32_t CKKS_SampleGauss(void *libCtx, BN_BigNum **coeffs, uint32_t N, double sigma,
-    const BN_BigNum *Q, BN_Optimizer *optimizer);
+int32_t CKKS_SampleGauss(void *libCtx, BN_BigNum **coeffs, uint32_t N, double sigma, const BN_BigNum *Q,
+                         BN_Optimizer *optimizer);
 int32_t CKKS_SampleUniform(void *libCtx, BN_BigNum **coeffs, uint32_t N, const BN_BigNum *Q);
 int32_t CKKS_SampleTernary(void *libCtx, BN_BigNum **coeffs, uint32_t N);
-int32_t CKKS_PolyAdd(BN_BigNum **result, BN_BigNum **a, BN_BigNum **b, uint32_t N,
-    const BN_BigNum *Q, BN_Optimizer *optimizer);
-int32_t CKKS_PolySub(BN_BigNum **result, BN_BigNum **a, BN_BigNum **b, uint32_t N,
-    const BN_BigNum *Q, BN_Optimizer *optimizer);
-int32_t CKKS_PolyMult(BN_BigNum **result, BN_BigNum **a, BN_BigNum **b, uint32_t N,
-    const BN_BigNum *Q, BN_Optimizer *optimizer);
+int32_t CKKS_PolyAdd(BN_BigNum **result, BN_BigNum **a, BN_BigNum **b, uint32_t N, const BN_BigNum *Q,
+                     BN_Optimizer *optimizer);
+int32_t CKKS_PolySub(BN_BigNum **result, BN_BigNum **a, BN_BigNum **b, uint32_t N, const BN_BigNum *Q,
+                     BN_Optimizer *optimizer);
+int32_t CKKS_PolyMult(BN_BigNum **result, BN_BigNum **a, BN_BigNum **b, uint32_t N, const BN_BigNum *Q,
+                      BN_Optimizer *optimizer);
 int32_t CKKS_PolyToBytes(BN_BigNum **coeffs, uint32_t N, uint8_t *out, uint32_t *outLen);
 int32_t CKKS_BytesToPoly(const uint8_t *data, uint32_t dataLen, BN_BigNum **coeffs, uint32_t N);
 
 int32_t CKKS_InitFFTParams(CRYPT_CKKS_Para *para);
-int32_t CKKS_Encode(const CRYPT_CKKS_Ctx *ctx, const double complex *input, uint32_t slots,
-    CRYPT_CKKS_Poly *pt);
-int32_t CKKS_Decode(const CRYPT_CKKS_Ctx *ctx, const CRYPT_CKKS_Poly *pt,
-    double complex *out, uint32_t *slots);
+int32_t CKKS_Encode(const CRYPT_CKKS_Ctx *ctx, const double complex *input, uint32_t slots, CRYPT_CKKS_Poly *pt);
+int32_t CKKS_Decode(const CRYPT_CKKS_Ctx *ctx, const CRYPT_CKKS_Poly *pt, double complex *out, uint32_t *slots);
 
 #endif

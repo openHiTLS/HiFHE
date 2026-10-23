@@ -42,21 +42,18 @@
  *   ciphertext   ciphertextSize(4) correctionFactor(8) seed[4](8)
  *                | polyDegree(4) rnsSize(4) dtype(4)
  *                | rnsBase[rnsSize](8) | data[ciphertextSize * rnsSize * polyDegree](8) */
-#define WIRE_HDR          12u
-#define WIRE_PT_FIXED     20u
-#define WIRE_CT_FIXED     56u
-#define WIRE_CT_SZ_OFF    (WIRE_HDR)          /* ciphertextSize field */
-#define WIRE_CT_RNS_OFF   (WIRE_HDR + 48u)
-#define WIRE_PT_RNS_OFF   (WIRE_HDR + 12u)
+#define WIRE_HDR        12u
+#define WIRE_PT_FIXED   20u
+#define WIRE_CT_FIXED   56u
+#define WIRE_CT_SZ_OFF  (WIRE_HDR) /* ciphertextSize field */
+#define WIRE_CT_RNS_OFF (WIRE_HDR + 48u)
+#define WIRE_PT_RNS_OFF (WIRE_HDR + 12u)
 
-static const uint8_t SEC_SEED_A[HIFHE_BGV_SEED_LEN] = {
-    1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4,
-    5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 8
-};
-static const uint8_t SEC_SEED_B[HIFHE_BGV_SEED_LEN] = {
-    0x9f, 0x2e, 0x77, 0x10, 0xab, 0xcd, 0xef, 0x01, 55, 44, 33, 22, 11, 66, 77, 88,
-    99, 12, 34, 56, 78, 90, 21, 43, 65, 87, 9, 8, 7, 6, 5, 4
-};
+static const uint8_t SEC_SEED_A[HIFHE_BGV_SEED_LEN] = {1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4,
+                                                       5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 8, 8, 8, 8};
+static const uint8_t SEC_SEED_B[HIFHE_BGV_SEED_LEN] = {0x9f, 0x2e, 0x77, 0x10, 0xab, 0xcd, 0xef, 0x01, 55, 44, 33,
+                                                       22,   11,   66,   77,   88,   99,   12,   34,   56, 78, 90,
+                                                       21,   43,   65,   87,   9,    8,    7,    6,    5,  4};
 
 static uint32_t SecRdU32(const uint8_t *p)
 {
@@ -90,16 +87,17 @@ static const uint8_t *SecPtData(const uint8_t *b)
 
 static CRYPT_EAL_PkeyCtx *SecNewCtx(int32_t preset, const uint8_t *seed, int gen)
 {
-    CRYPT_EAL_PkeyCtx *ctx = CRYPT_EAL_ProviderPkeyNewCtx(
-        NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
-    if (ctx == NULL) return NULL;
+    CRYPT_EAL_PkeyCtx *ctx =
+        CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
+    if (ctx == NULL) {
+        return NULL;
+    }
     if (CRYPT_EAL_PkeyCtrl(ctx, CRYPT_CTRL_SET_PARA_BY_ID, &preset, sizeof(preset)) != HIFHE_SUCCESS) {
         CRYPT_EAL_PkeyFreeCtx(ctx);
         return NULL;
     }
-    if (seed != NULL &&
-        CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_SET_SEED, (void *)(uintptr_t)seed,
-                           HIFHE_BGV_SEED_LEN) != HIFHE_SUCCESS) {
+    if (seed != NULL && CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_SET_SEED, (void *)(uintptr_t)seed, HIFHE_BGV_SEED_LEN) !=
+                            HIFHE_SUCCESS) {
         CRYPT_EAL_PkeyFreeCtx(ctx);
         return NULL;
     }
@@ -131,28 +129,26 @@ static int SecDimsGet(CRYPT_EAL_PkeyCtx *ctx, SecDims *d)
     return 0;
 }
 
-static int SecEncode(CRYPT_EAL_PkeyCtx *ctx, const uint64_t *msg, uint32_t msgLen,
-                     uint8_t *pt, uint32_t cap, uint32_t *ptLen)
+static int SecEncode(CRYPT_EAL_PkeyCtx *ctx, const uint64_t *msg, uint32_t msgLen, uint8_t *pt, uint32_t cap,
+                     uint32_t *ptLen)
 {
-    BSL_Param in[] = {
-        {HIFHE_PARAM_BGV_MSG, BSL_PARAM_TYPE_OCTETS, (void *)(uintptr_t)msg, msgLen, 0},
-        BSL_PARAM_END
-    };
+    BSL_Param in[] = {{HIFHE_PARAM_BGV_MSG, BSL_PARAM_TYPE_OCTETS, (void *)(uintptr_t)msg, msgLen, 0}, BSL_PARAM_END};
     uint32_t out = cap;
-    if (CRYPT_EAL_PkeyHEMsgEncode(ctx, in, pt, &out) != HIFHE_SUCCESS) return -1;
+    if (CRYPT_EAL_PkeyHEMsgEncode(ctx, in, pt, &out) != HIFHE_SUCCESS) {
+        return -1;
+    }
     *ptLen = out;
     return 0;
 }
 
-static int SecDecode(CRYPT_EAL_PkeyCtx *ctx, const uint8_t *pt, uint32_t ptLen,
-                     uint64_t *msg, uint32_t msgLen)
+static int SecDecode(CRYPT_EAL_PkeyCtx *ctx, const uint8_t *pt, uint32_t ptLen, uint64_t *msg, uint32_t msgLen)
 {
-    BSL_Param in[] = {
-        {HIFHE_PARAM_BGV_PLAINTEXT, BSL_PARAM_TYPE_OCTETS, (void *)(uintptr_t)pt, ptLen, 0},
-        BSL_PARAM_END
-    };
+    BSL_Param in[] = {{HIFHE_PARAM_BGV_PLAINTEXT, BSL_PARAM_TYPE_OCTETS, (void *)(uintptr_t)pt, ptLen, 0},
+                      BSL_PARAM_END};
     uint32_t out = msgLen;
-    if (CRYPT_EAL_PkeyHEMsgDecode(ctx, in, (uint8_t *)msg, &out) != HIFHE_SUCCESS) return -1;
+    if (CRYPT_EAL_PkeyHEMsgDecode(ctx, in, (uint8_t *)msg, &out) != HIFHE_SUCCESS) {
+        return -1;
+    }
     return 0;
 }
 
@@ -172,33 +168,50 @@ static int SecNoKeyLeakProbe(int32_t preset, int *ctDiffer, int *decSame, int *d
 
     a = SecNewCtx(preset, SEC_SEED_A, 1);
     b = SecNewCtx(preset, SEC_SEED_B, 1);
-    if (a == NULL || b == NULL) goto DONE;
-    if (SecDimsGet(a, &d) != 0) goto DONE;
+    if (a == NULL || b == NULL) {
+        goto DONE;
+    }
+    if (SecDimsGet(a, &d) != 0) {
+        goto DONE;
+    }
 
     msg = (uint64_t *)BSL_SAL_Malloc(d.msgLen);
     ptA = (uint8_t *)BSL_SAL_Malloc(d.ptLen);
     ptB = (uint8_t *)BSL_SAL_Malloc(d.ptLen);
     ctA = (uint8_t *)BSL_SAL_Malloc(d.ctLen);
     ctB = (uint8_t *)BSL_SAL_Malloc(d.ctLen);
-    dA  = (uint8_t *)BSL_SAL_Malloc(d.ptLen);
-    dB  = (uint8_t *)BSL_SAL_Malloc(d.ptLen);
-    if (msg == NULL || ptA == NULL || ptB == NULL || ctA == NULL || ctB == NULL ||
-        dA == NULL || dB == NULL) {
+    dA = (uint8_t *)BSL_SAL_Malloc(d.ptLen);
+    dB = (uint8_t *)BSL_SAL_Malloc(d.ptLen);
+    if (msg == NULL || ptA == NULL || ptB == NULL || ctA == NULL || ctB == NULL || dA == NULL || dB == NULL) {
         goto DONE;
     }
-    for (uint32_t i = 0; i < d.n; ++i) msg[i] = (i * 13u + 5u) % d.t;
+    for (uint32_t i = 0; i < d.n; ++i) {
+        msg[i] = (i * 13u + 5u) % d.t;
+    }
 
     uint32_t ptALen = 0u, ptBLen = 0u;
-    if (SecEncode(a, msg, d.msgLen, ptA, d.ptLen, &ptALen) != 0) goto DONE;
-    if (SecEncode(b, msg, d.msgLen, ptB, d.ptLen, &ptBLen) != 0) goto DONE;
+    if (SecEncode(a, msg, d.msgLen, ptA, d.ptLen, &ptALen) != 0) {
+        goto DONE;
+    }
+    if (SecEncode(b, msg, d.msgLen, ptB, d.ptLen, &ptBLen) != 0) {
+        goto DONE;
+    }
 
     uint32_t ctALen = d.ctLen, ctBLen = d.ctLen;
-    if (CRYPT_EAL_PkeyEncrypt(a, ptA, ptALen, ctA, &ctALen) != HIFHE_SUCCESS) goto DONE;
-    if (CRYPT_EAL_PkeyEncrypt(b, ptB, ptBLen, ctB, &ctBLen) != HIFHE_SUCCESS) goto DONE;
+    if (CRYPT_EAL_PkeyEncrypt(a, ptA, ptALen, ctA, &ctALen) != HIFHE_SUCCESS) {
+        goto DONE;
+    }
+    if (CRYPT_EAL_PkeyEncrypt(b, ptB, ptBLen, ctB, &ctBLen) != HIFHE_SUCCESS) {
+        goto DONE;
+    }
 
     uint32_t dALen = d.ptLen, dBLen = d.ptLen;
-    if (CRYPT_EAL_PkeyDecrypt(a, ctA, ctALen, dA, &dALen) != HIFHE_SUCCESS) goto DONE;
-    if (CRYPT_EAL_PkeyDecrypt(b, ctB, ctBLen, dB, &dBLen) != HIFHE_SUCCESS) goto DONE;
+    if (CRYPT_EAL_PkeyDecrypt(a, ctA, ctALen, dA, &dALen) != HIFHE_SUCCESS) {
+        goto DONE;
+    }
+    if (CRYPT_EAL_PkeyDecrypt(b, ctB, ctBLen, dB, &dBLen) != HIFHE_SUCCESS) {
+        goto DONE;
+    }
 
     /* The two keys must really be distinct, or the comparison below proves
      * nothing. */
@@ -209,9 +222,12 @@ static int SecNoKeyLeakProbe(int32_t preset, int *ctDiffer, int *decSame, int *d
 
 DONE:
     BSL_SAL_Free(msg);
-    BSL_SAL_Free(ptA); BSL_SAL_Free(ptB);
-    BSL_SAL_Free(ctA); BSL_SAL_Free(ctB);
-    BSL_SAL_Free(dA);  BSL_SAL_Free(dB);
+    BSL_SAL_Free(ptA);
+    BSL_SAL_Free(ptB);
+    BSL_SAL_Free(ctA);
+    BSL_SAL_Free(ctB);
+    BSL_SAL_Free(dA);
+    BSL_SAL_Free(dB);
     CRYPT_EAL_PkeyFreeCtx(a);
     CRYPT_EAL_PkeyFreeCtx(b);
     return rc;
@@ -235,8 +251,7 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_DECRYPT_NO_KEY_LEAK_TC001(void)
     ASSERT_EQ(ctDiffer, 1);
     ASSERT_EQ(decSame, 1);
     ASSERT_EQ(decIsEncoded, 1);
-EXIT:
-    ;
+EXIT:;
 }
 /* END_CASE */
 
@@ -258,8 +273,7 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_DECRYPT_NO_KEY_LEAK_TC002(void)
     ASSERT_EQ(ctDiffer, 1);
     ASSERT_EQ(decSame, 1);
     ASSERT_EQ(decIsEncoded, 1);
-EXIT:
-    ;
+EXIT:;
 }
 /* END_CASE */
 
@@ -329,25 +343,24 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_PHASE_NOT_RECOVERABLE_TC001(void)
     x = (uint64_t *)BSL_SAL_Malloc((uint32_t)(lc * d.n * sizeof(uint64_t)));
     ASSERT_TRUE(x != NULL);
 
-    memcpy(pred, dec1, dec1Len);           /* reuse the header and shape */
+    memcpy(pred, dec1, dec1Len); /* reuse the header and shape */
     uint32_t wordMatches = 0u;
     for (uint32_t i = 0; i < lc; ++i) {
         Modulus q = SecRdU64(ct1 + WIRE_HDR + WIRE_CT_FIXED + 8u * i);
         for (uint32_t j = 0; j < d.n; ++j) {
             uint64_t c0 = SecRdU64(d1 + ((size_t)(0u * lc + i) * d.n + j) * 8u) % q;
             uint64_t c1 = SecRdU64(d1 + ((size_t)(1u * lc + i) * d.n + j) * 8u) % q;
-            uint64_t p  = SecRdU64(f1 + ((size_t)i * d.n + j) * 8u) % q;
-            x[(size_t)i * d.n + j] = (c1 == 0u)
-                ? 0u
-                : Kernel_MulMod((p + q - c0) % q, Kernel_ModInv(c1, q), q);
+            uint64_t p = SecRdU64(f1 + ((size_t)i * d.n + j) * 8u) % q;
+            x[(size_t)i * d.n + j] = (c1 == 0u) ? 0u : Kernel_MulMod((p + q - c0) % q, Kernel_ModInv(c1, q), q);
 
             uint64_t e0 = SecRdU64(d2 + ((size_t)(0u * lc + i) * d.n + j) * 8u) % q;
             uint64_t e1 = SecRdU64(d2 + ((size_t)(1u * lc + i) * d.n + j) * 8u) % q;
             uint64_t want = SecRdU64(f2 + ((size_t)i * d.n + j) * 8u) % q;
             uint64_t guessWord = (e0 + Kernel_MulMod(e1, x[(size_t)i * d.n + j], q)) % q;
-            if (guessWord == want) wordMatches++;
-            memcpy((uint8_t *)SecPtData(pred) + ((size_t)i * d.n + j) * 8u, &guessWord,
-                   sizeof(guessWord));
+            if (guessWord == want) {
+                wordMatches++;
+            }
+            memcpy((uint8_t *)SecPtData(pred) + ((size_t)i * d.n + j) * 8u, &guessWord, sizeof(guessWord));
         }
     }
     /* Not one predicted word may match the real decrypt output. */
@@ -359,7 +372,9 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_PHASE_NOT_RECOVERABLE_TC001(void)
     if (SecDecode(attacker, pred, dec1Len, guess, d.msgLen) == 0) {
         uint32_t slotMatches = 0u;
         for (uint32_t j = 0; j < d.n; ++j) {
-            if (guess[j] == m2[j]) slotMatches++;
+            if (guess[j] == m2[j]) {
+                slotMatches++;
+            }
         }
         /* Unrelated slots collide with probability 1/t, so anything near a
          * recovery is far above this bound. */
@@ -367,10 +382,17 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_PHASE_NOT_RECOVERABLE_TC001(void)
     }
 
 EXIT:
-    BSL_SAL_Free(m1); BSL_SAL_Free(m2); BSL_SAL_Free(guess); BSL_SAL_Free(x);
-    BSL_SAL_Free(pt1); BSL_SAL_Free(pt2);
-    BSL_SAL_Free(ct1); BSL_SAL_Free(ct2);
-    BSL_SAL_Free(dec1); BSL_SAL_Free(dec2); BSL_SAL_Free(pred);
+    BSL_SAL_Free(m1);
+    BSL_SAL_Free(m2);
+    BSL_SAL_Free(guess);
+    BSL_SAL_Free(x);
+    BSL_SAL_Free(pt1);
+    BSL_SAL_Free(pt2);
+    BSL_SAL_Free(ct1);
+    BSL_SAL_Free(ct2);
+    BSL_SAL_Free(dec1);
+    BSL_SAL_Free(dec2);
+    BSL_SAL_Free(pred);
     CRYPT_EAL_PkeyFreeCtx(victim);
     CRYPT_EAL_PkeyFreeCtx(attacker);
 }
@@ -403,7 +425,9 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_CT_DEGREE_BOUND_TC001(void)
     ct = (uint8_t *)BSL_SAL_Malloc(d.ctLen);
     out = (uint8_t *)BSL_SAL_Malloc(d.ptLen);
     ASSERT_TRUE(msg && pt && ct && out);
-    for (uint32_t i = 0; i < d.n; ++i) msg[i] = i % 97u;
+    for (uint32_t i = 0; i < d.n; ++i) {
+        msg[i] = i % 97u;
+    }
 
     uint32_t ptLen = 0u;
     ASSERT_EQ(SecEncode(ctx, msg, d.msgLen, pt, d.ptLen, &ptLen), 0);
@@ -431,7 +455,10 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_CT_DEGREE_BOUND_TC001(void)
     ASSERT_EQ(CRYPT_EAL_PkeyDecrypt(ctx, ct, ctLen, out, &outLen), HIFHE_SUCCESS);
 
 EXIT:
-    BSL_SAL_Free(msg); BSL_SAL_Free(pt); BSL_SAL_Free(ct); BSL_SAL_Free(out);
+    BSL_SAL_Free(msg);
+    BSL_SAL_Free(pt);
+    BSL_SAL_Free(ct);
+    BSL_SAL_Free(out);
     CRYPT_EAL_PkeyFreeCtx(ctx);
 }
 /* END_CASE */
@@ -460,10 +487,8 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_GALOIS_STEP_COUNT_TC001(void)
 
     /* control: a single step is accepted */
     int32_t one = 1;
-    BSL_Param ok[] = {
-        {HIFHE_PARAM_BGV_ROTATE_STEPS, BSL_PARAM_TYPE_OCTETS, &one, (uint32_t)sizeof(one), 0},
-        BSL_PARAM_END
-    };
+    BSL_Param ok[] = {{HIFHE_PARAM_BGV_ROTATE_STEPS, BSL_PARAM_TYPE_OCTETS, &one, (uint32_t)sizeof(one), 0},
+                      BSL_PARAM_END};
     ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GEN_GALOIS_KEYS, ok, 0u), HIFHE_SUCCESS);
 
     /* There are only n distinct odd Galois elements mod 2n, so n+1 steps are
@@ -473,22 +498,17 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_GALOIS_STEP_COUNT_TC001(void)
     steps = (int32_t *)BSL_SAL_Calloc(tooMany, (uint32_t)sizeof(int32_t));
     ASSERT_TRUE(steps != NULL);
     BSL_Param wide[] = {
-        {HIFHE_PARAM_BGV_ROTATE_STEPS, BSL_PARAM_TYPE_OCTETS, steps,
-         (uint32_t)(tooMany * sizeof(int32_t)), 0},
-        BSL_PARAM_END
-    };
+        {HIFHE_PARAM_BGV_ROTATE_STEPS, BSL_PARAM_TYPE_OCTETS, steps, (uint32_t)(tooMany * sizeof(int32_t)), 0},
+        BSL_PARAM_END};
     ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GEN_GALOIS_KEYS, wide, 0u), HIFHE_PARAM_INVALID);
 
     /* the same bound applies when the elements are named directly */
     elts = (uint64_t *)BSL_SAL_Calloc(tooMany, (uint32_t)sizeof(uint64_t));
     ASSERT_TRUE(elts != NULL);
     BSL_Param wideElts[] = {
-        {HIFHE_PARAM_BGV_GALOIS_ELTS, BSL_PARAM_TYPE_OCTETS, elts,
-         (uint32_t)(tooMany * sizeof(uint64_t)), 0},
-        BSL_PARAM_END
-    };
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GEN_GALOIS_KEYS, wideElts, 0u),
-              HIFHE_PARAM_INVALID);
+        {HIFHE_PARAM_BGV_GALOIS_ELTS, BSL_PARAM_TYPE_OCTETS, elts, (uint32_t)(tooMany * sizeof(uint64_t)), 0},
+        BSL_PARAM_END};
+    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GEN_GALOIS_KEYS, wideElts, 0u), HIFHE_PARAM_INVALID);
 
 EXIT:
     BSL_SAL_Free(steps);
@@ -499,7 +519,7 @@ EXIT:
 
 /* @
 * @test  SDV_CRYPTO_HIFHE_BGV_SEC_ENCODE_MISALIGNED_MSG_TC001
-* @title  Encoding a misaligned message buffer matches the aligned result and leaves the caller buffer owned by the caller.
+* @title  Encoding a misaligned message buffer matches the aligned result and leaves the caller buffer untouched.
 * @auto  TRUE
 @ */
 /* BEGIN_CASE */
@@ -524,7 +544,9 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_ENCODE_MISALIGNED_MSG_TC001(void)
     refOut = (uint8_t *)BSL_SAL_Malloc(d.ptLen);
     misOut = (uint8_t *)BSL_SAL_Malloc(d.ptLen);
     ASSERT_TRUE(aligned && slab && refOut && misOut);
-    for (uint32_t i = 0; i < d.n; ++i) aligned[i] = (i * 17u + 3u) % d.t;
+    for (uint32_t i = 0; i < d.n; ++i) {
+        aligned[i] = (i * 17u + 3u) % d.t;
+    }
     ASSERT_EQ((uintptr_t)aligned % sizeof(uint64_t), 0u);
 
     uint32_t refLen = 0u;
@@ -536,7 +558,9 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_ENCODE_MISALIGNED_MSG_TC001(void)
      * releases it. */
     for (uint32_t off = 1u; off < 8u; ++off) {
         uint8_t *mis = slab + off;
-        if (((uintptr_t)mis % sizeof(uint64_t)) == 0u) continue;
+        if (((uintptr_t)mis % sizeof(uint64_t)) == 0u) {
+            continue;
+        }
         memcpy(mis, aligned, d.msgLen);
         uint32_t misLen = 0u;
         ASSERT_EQ(SecEncode(ctx, (const uint64_t *)mis, d.msgLen, misOut, d.ptLen, &misLen), 0);
@@ -563,19 +587,19 @@ EXIT:
 #define SEC_ALLOC_SLOTS 4096u
 
 typedef struct {
-    void    *ptr;
+    void *ptr;
     uint32_t size;
 } SecBlock;
 
-static SecBlock       g_secBlocks[SEC_ALLOC_SLOTS];
-static uint32_t       g_secLive;
-static uint32_t       g_secSeen;
-static uint32_t       g_secFailAt;      /* 0: fail nothing */
-static int            g_secArmed;
-static int            g_secOverflow;
-static const uint8_t *g_secNeedle;      /* compared against every tracked block */
-static uint32_t       g_secNeedleLen;
-static int            g_secNeedleSeen;
+static SecBlock g_secBlocks[SEC_ALLOC_SLOTS];
+static uint32_t g_secLive;
+static uint32_t g_secSeen;
+static uint32_t g_secFailAt; /* 0: fail nothing */
+static int g_secArmed;
+static int g_secOverflow;
+static const uint8_t *g_secNeedle; /* compared against every tracked block */
+static uint32_t g_secNeedleLen;
+static int g_secNeedleSeen;
 
 static void SecBlockAdd(void *p, uint32_t size)
 {
@@ -607,19 +631,27 @@ static uint32_t SecBlockTake(void *p)
 
 static void *SecMallocHook(uint32_t size)
 {
-    if (size == 0u) return NULL;
+    if (size == 0u) {
+        return NULL;
+    }
     if (g_secArmed) {
         g_secSeen++;
-        if (g_secFailAt != 0u && g_secSeen == g_secFailAt) return NULL;
+        if (g_secFailAt != 0u && g_secSeen == g_secFailAt) {
+            return NULL;
+        }
     }
     void *p = malloc(size);
-    if (p != NULL && g_secArmed) SecBlockAdd(p, size);
+    if (p != NULL && g_secArmed) {
+        SecBlockAdd(p, size);
+    }
     return p;
 }
 
 static void SecFreeHook(void *p)
 {
-    if (p == NULL) return;
+    if (p == NULL) {
+        return;
+    }
     uint32_t size = SecBlockTake(p);
     if (g_secNeedle != NULL && size >= g_secNeedleLen && g_secNeedleLen > 0u &&
         memcmp(p, g_secNeedle, g_secNeedleLen) == 0) {
@@ -644,8 +676,12 @@ static void SecAllocReset(void)
 static int SecAllocHookInstall(void)
 {
     SecAllocReset();
-    if (BSL_SAL_CallBack_Ctrl(BSL_SAL_MEM_MALLOC, SecMallocHook) != BSL_SUCCESS) return -1;
-    if (BSL_SAL_CallBack_Ctrl(BSL_SAL_MEM_FREE, SecFreeHook) != BSL_SUCCESS) return -1;
+    if (BSL_SAL_CallBack_Ctrl(BSL_SAL_MEM_MALLOC, SecMallocHook) != BSL_SUCCESS) {
+        return -1;
+    }
+    if (BSL_SAL_CallBack_Ctrl(BSL_SAL_MEM_FREE, SecFreeHook) != BSL_SUCCESS) {
+        return -1;
+    }
     return 0;
 }
 
@@ -684,7 +720,9 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_ENCODE_ALLOC_FAILURE_TC001(void)
     msg = (uint64_t *)BSL_SAL_Malloc(d.msgLen);
     pt = (uint8_t *)BSL_SAL_Malloc(d.ptLen);
     ASSERT_TRUE(msg != NULL && pt != NULL);
-    for (uint32_t i = 0; i < d.n; ++i) msg[i] = (i * 7u + 1u) % d.t;
+    for (uint32_t i = 0; i < d.n; ++i) {
+        msg[i] = (i * 7u + 1u) % d.t;
+    }
 
     /* One unmeasured encode first: the lazy plaintext NTT tables it builds
      * belong to the context, not to the call under test. */
@@ -697,10 +735,7 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_ENCODE_ALLOC_FAILURE_TC001(void)
     /* Fail the k-th allocation of the call for every k the call reaches.
      * Whatever it returns, nothing it allocated may still be held. */
     for (uint32_t k = 1u; k <= 64u; ++k) {
-        BSL_Param in[] = {
-            {HIFHE_PARAM_BGV_MSG, BSL_PARAM_TYPE_OCTETS, msg, d.msgLen, 0},
-            BSL_PARAM_END
-        };
+        BSL_Param in[] = {{HIFHE_PARAM_BGV_MSG, BSL_PARAM_TYPE_OCTETS, msg, d.msgLen, 0}, BSL_PARAM_END};
         uint32_t outLen = d.ptLen;
         SecAllocReset();
         g_secFailAt = k;
@@ -713,15 +748,21 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_ENCODE_ALLOC_FAILURE_TC001(void)
         tried = k;
         ASSERT_EQ(overflow, 0);
         ASSERT_EQ(live, 0u);
-        if (r != HIFHE_SUCCESS) errors++;
-        if (seen < k) break;   /* past the last allocation the call makes */
+        if (r != HIFHE_SUCCESS) {
+            errors++;
+        }
+        if (seen < k) {
+            break; /* past the last allocation the call makes */
+        }
     }
     /* A sweep that never injected anything would pass vacuously. */
     ASSERT_TRUE(tried > 1u);
     ASSERT_TRUE(errors > 0u);
 
 EXIT:
-    if (installed) SecAllocHookRemove();
+    if (installed) {
+        SecAllocHookRemove();
+    }
     BSL_SAL_Free(msg);
     BSL_SAL_Free(pt);
     CRYPT_EAL_PkeyFreeCtx(ctx);
@@ -752,8 +793,7 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_GALOIS_SECRET_WIPED_TC001(void)
     ctx = SecNewCtx(HIFHE_BGV_2048_48_17BIT, SEC_SEED_A, 1);
     ASSERT_TRUE(ctx != NULL);
     ASSERT_EQ(SecDimsGet(ctx, &d), 0);
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_INNER_CTX, &inner,
-                                 (uint32_t)sizeof(inner)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_INNER_CTX, &inner, (uint32_t)sizeof(inner)), HIFHE_SUCCESS);
     ASSERT_TRUE(inner != NULL);
     ASSERT_TRUE(inner->bgv.keygen.sk != NULL);
 
@@ -772,10 +812,8 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_GALOIS_SECRET_WIPED_TC001(void)
     g_secNeedleLen = needleLen;
     g_secArmed = 1;
     uint64_t elt = 1u;
-    BSL_Param p[] = {
-        {HIFHE_PARAM_BGV_GALOIS_ELTS, BSL_PARAM_TYPE_OCTETS, &elt, (uint32_t)sizeof(elt), 0},
-        BSL_PARAM_END
-    };
+    BSL_Param p[] = {{HIFHE_PARAM_BGV_GALOIS_ELTS, BSL_PARAM_TYPE_OCTETS, &elt, (uint32_t)sizeof(elt), 0},
+                     BSL_PARAM_END};
     int32_t r = CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GEN_GALOIS_KEYS, p, 0u);
     int seen = g_secNeedleSeen;
     int overflow = g_secOverflow;
@@ -794,7 +832,9 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_GALOIS_SECRET_WIPED_TC001(void)
     ct = (uint8_t *)BSL_SAL_Malloc(d.ctLen);
     back = (uint8_t *)BSL_SAL_Malloc(d.ptLen);
     ASSERT_TRUE(msg && pt && ct && back);
-    for (uint32_t i = 0; i < d.n; ++i) msg[i] = (i * 11u + 2u) % d.t;
+    for (uint32_t i = 0; i < d.n; ++i) {
+        msg[i] = (i * 11u + 2u) % d.t;
+    }
     uint32_t ptLen = 0u;
     ASSERT_EQ(SecEncode(ctx, msg, d.msgLen, pt, d.ptLen, &ptLen), 0);
     uint32_t ctLen = d.ctLen;
@@ -805,7 +845,9 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_GALOIS_SECRET_WIPED_TC001(void)
     ASSERT_EQ(memcmp(back, pt, ptLen), 0);
 
 EXIT:
-    if (installed) SecAllocHookRemove();
+    if (installed) {
+        SecAllocHookRemove();
+    }
     free(needle);
     BSL_SAL_Free(msg);
     BSL_SAL_Free(pt);
@@ -837,23 +879,31 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_REDUCTION_FIXED_CORRECTION_TC001(void)
     for (uint32_t b = 0; b < sizeof(bits) / sizeof(bits[0]); ++b) {
         for (uint32_t rep = 0; rep < 24u; ++rep) {
             /* xorshift64: the same moduli and inputs on every run. */
-            state ^= state << 13; state ^= state >> 7; state ^= state << 17;
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
             uint64_t q = (state & ((1ull << bits[b]) - 1u)) | (1ull << (bits[b] - 1u)) | 1u;
-            if (rep == 0u) q = (1ull << bits[b]) - 1u;
-            if (rep == 1u) q = (1ull << (bits[b] - 1u)) + 1u;
+            if (rep == 0u) {
+                q = (1ull << bits[b]) - 1u;
+            }
+            if (rep == 1u) {
+                q = (1ull << (bits[b] - 1u)) + 1u;
+            }
 
             BarrettConst bc;
             ASSERT_EQ(Kernel_BarrettConst_Init(&bc, q), HIFHE_SUCCESS);
 
             /* 64-bit reduction: the boundaries first, then random words. */
-            uint64_t edge[] = {0u, 1u, q - 1u, q, q + 1u, 2u * q, 3u * q,
-                               UINT64_MAX, UINT64_MAX - q, UINT64_MAX / q * q};
+            uint64_t edge[] = {
+                0u, 1u, q - 1u, q, q + 1u, 2u * q, 3u * q, UINT64_MAX, UINT64_MAX - q, UINT64_MAX / q * q};
             for (uint32_t i = 0; i < sizeof(edge) / sizeof(edge[0]); ++i) {
                 ASSERT_EQ(Kernel_BarrettReduce64Inl(edge[i], &bc), edge[i] % q);
                 checked++;
             }
             for (uint32_t i = 0; i < 128u; ++i) {
-                state ^= state << 13; state ^= state >> 7; state ^= state << 17;
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
                 ASSERT_EQ(Kernel_BarrettReduce64Inl(state, &bc), state % q);
                 checked++;
             }
@@ -865,8 +915,7 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_REDUCTION_FIXED_CORRECTION_TC001(void)
                 for (uint32_t j = 0; j < sizeof(pair) / sizeof(pair[0]); ++j) {
                     ModulusWide prod = (ModulusWide)pair[i] * (ModulusWide)pair[j];
                     uint64_t want = (uint64_t)(prod % (ModulusWide)q);
-                    ASSERT_EQ(Kernel_BarrettReduce128Inl((uint64_t)(prod >> 64),
-                                                         (uint64_t)prod, &bc), want);
+                    ASSERT_EQ(Kernel_BarrettReduce128Inl((uint64_t)(prod >> 64), (uint64_t)prod, &bc), want);
                     ASSERT_EQ(Kernel_BarrettMulModInl(pair[i], pair[j], &bc), want);
                     ShoupConst sc;
                     ASSERT_EQ(Kernel_ShoupConst_Init(&sc, pair[j], q), HIFHE_SUCCESS);
@@ -875,9 +924,13 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_REDUCTION_FIXED_CORRECTION_TC001(void)
                 }
             }
             for (uint32_t i = 0; i < 128u; ++i) {
-                state ^= state << 13; state ^= state >> 7; state ^= state << 17;
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
                 uint64_t a = state % q;
-                state ^= state << 13; state ^= state >> 7; state ^= state << 17;
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
                 uint64_t m = state % q;
                 ModulusWide prod = (ModulusWide)a * (ModulusWide)m;
                 uint64_t want = (uint64_t)(prod % (ModulusWide)q);
