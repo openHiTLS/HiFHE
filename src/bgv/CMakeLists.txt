@@ -16,8 +16,13 @@ file(GLOB HIFHE_BGV_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/bgv/*.c"
 )
 
+if(NOT HITLS_PROVIDER)
+    list(FILTER HIFHE_BGV_SOURCES EXCLUDE REGEX "/bgv_adapter_ctrl\\.c$")
+endif()
+
 hifhe_add_object_library(hifhe_bgv_objects ${HIFHE_BGV_SOURCES})
 target_include_directories(hifhe_bgv_objects PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/include
     ${HITLS_ROOT_PATH}/config/macro_config
@@ -31,7 +36,6 @@ target_include_directories(hifhe_bgv_objects PRIVATE
 )
 target_compile_definitions(hifhe_bgv_objects PRIVATE
     HITLS_BSL_ERR
-    HITLS_BSL_PARAMS
     HITLS_BSL_SAL
     HITLS_BSL_SAL_MEM
     HITLS_CRYPTO_BGV
@@ -45,7 +49,6 @@ target_compile_definitions(hifhe_bgv_objects PRIVATE
     HITLS_CRYPTO_MD
     HITLS_CRYPTO_PKEY
     HITLS_CRYPTO_PKEY_CRYPT
-    HITLS_CRYPTO_PROVIDER
     HITLS_NO_CONFIG_CHECK
     HITLS_SIXTY_FOUR_BITS
 )

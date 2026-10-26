@@ -16,7 +16,9 @@ shape it assumes:
 
 ## Building
 
-Needs `build/libhifhe_provider.so`, so run `build_hifhe.sh` first.
+Links implementation objects directly; no test Provider or extra shared library.
+Kernel runs independently. The Bgv adapter module requires HITLS_PROVIDER.
+These measurements do not measure the native public API.
 
 ```sh
 bash testcode/script/build_benchmark.sh          # build
@@ -26,8 +28,7 @@ bash testcode/script/build_benchmark.sh clean
 bash testcode/script/build_benchmark.sh --disable bgv   # trim a module set out
 ```
 
-This configures `testcode/benchmark` standalone and takes a couple of seconds,
-which is what you want between edits. The binary lands in `testcode/output/`.
+The script configures the root build and builds only the benchmark target. The binary lands in `testcode/output/`.
 
 Each module belongs to an algorithm and calls it directly, so it is built only
 when that algorithm is in the provider. The switches follow
@@ -61,10 +62,9 @@ cd testcode/output
 ./hifhe_benchmark -h
 ```
 
-The benchmark modules call `CRYPT_BGV_*` directly rather than through the EAL
-dispatch, so no provider registration is needed. `-P <dir>` (or
-`HIFHE_PROVIDER_PATH`, default `../../build`) is still honoured for the
-footprint report, which does go through the EAL.
+The `Kernel` module works without `HITLS_PROVIDER`. The `Bgv` module and footprint
+report (`-m`) require `HITLS_PROVIDER=ON`. All call the implementation directly;
+no runtime Provider registration or plugin path is needed.
 
 ## Modules
 

@@ -234,7 +234,7 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
             return HIFHE_PARAM_INVALID;
         }
 
-        case HIFHE_CTRL_BGV_HE_RERANDOMIZE:
+        case HIFHE_CTRL_BGV_RERANDOMIZE:
             return Bgv_HERerand(ctx, (BSL_Param *)val);
         case HIFHE_CTRL_BGV_HE_MODSWITCH:
             return Bgv_HEModSwitch(ctx, (BSL_Param *)val);

@@ -28,7 +28,7 @@
  * t is prime and both operands are below t, so a slot is 0 exactly when the
  * two fields were equal.
  *
- * The two parties hold unrelated seeds. The server runs HEAdd, HEMul and
+ * The server runs HEAdd, HEMul and
  * Rerandomize, none of which take a key, so it never generates one.
  */
 
@@ -54,10 +54,13 @@
 #include "crypt_types.h"
 
 #include "hifhe_err.h"
-#include "hifhe_provider.h"
+#include "hifhe.h"
+#include "crypt_params_key.h"
 #include "hifhe_types.h"
 
-#define PRESET          HIFHE_BGV_2048_48_17BIT
+#define PRESET          HIFHE_BGV_4096_44x2_17BIT
+#define SLOTS           4096u
+#define PLAIN_MODULUS   65537u
 #define SLOTS_PER_ENTRY 4u
 #define DIGEST_LEN      32u
 
@@ -71,16 +74,6 @@ static const char *g_bucket[] = {
     "iloveyou", "admin",    "welcome", "login",   "starwars", "trustno1", "whatever", "shadow",
 };
 #define BUCKET_COUNT (uint32_t)(sizeof(g_bucket) / sizeof(g_bucket[0]))
-
-static const uint8_t g_clientSeed[HIFHE_BGV_SEED_LEN] = {
-    0x63, 0x6C, 0x69, 0x65, 0x6E, 0x74, 0x2D, 0x73, 0x65, 0x65, 0x64, 0x11, 0x22, 0x33, 0x44, 0x55,
-    0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x0F, 0x1E, 0x2D, 0x3C, 0x4B,
-};
-
-static const uint8_t g_serverSeed[HIFHE_BGV_SEED_LEN] = {
-    0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x2D, 0x73, 0x65, 0x65, 0x64, 0xA0, 0xB1, 0xC2, 0xD3, 0xE4,
-    0xF5, 0x06, 0x17, 0x28, 0x39, 0x4A, 0x5B, 0x6C, 0x7D, 0x8E, 0x9F, 0xB0, 0xC1, 0xD2, 0xE3, 0xF4,
-};
 
 /* One party. Buffers are allocated once and reused by every query.
  * ct2 is the server's second ciphertext buffer, NULL on the client. */
@@ -144,63 +137,62 @@ static void PartyFree(Party *p)
     memset(p, 0, sizeof(*p));
 }
 
-/* keygen gives the party a secret key, twoCt a second ciphertext buffer.
- * Call order is fixed: preset, then seed, then Gen. */
-static int PartyInit(Party *p, const uint8_t *seed, bool keygen, bool twoCt)
+/* The server uses the ciphertext capacity obtained by the client. */
+static int PartyInit(Party *p, bool keygen, uint32_t ctCapacity)
 {
     memset(p, 0, sizeof(*p));
-    p->ctx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
+    p->ctx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
     if (p->ctx == NULL) {
-        fprintf(stderr, "ProviderPkeyNewCtx failed\n");
         return -1;
     }
-    int32_t preset = PRESET;
-    int32_t r = CRYPT_EAL_PkeyCtrl(p->ctx, CRYPT_CTRL_SET_PARA_BY_ID, &preset, sizeof(preset));
-    if (r == HIFHE_SUCCESS) {
-        r = CRYPT_EAL_PkeyCtrl(p->ctx, HIFHE_CTRL_BGV_SET_SEED, (void *)(uintptr_t)seed, HIFHE_BGV_SEED_LEN);
-    }
+    int32_t r = CRYPT_EAL_PkeySetParaById(p->ctx, (CRYPT_PKEY_ParaId)PRESET);
     if (r == HIFHE_SUCCESS && keygen) {
         r = CRYPT_EAL_PkeyGen(p->ctx);
-    }
-    if (r == HIFHE_SUCCESS) {
-        r = CRYPT_EAL_PkeyCtrl(p->ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &p->n, sizeof(p->n));
-    }
-    if (r == HIFHE_SUCCESS) {
-        r = CRYPT_EAL_PkeyCtrl(p->ctx, HIFHE_CTRL_BGV_GET_PLAINTEXT_LEN, &p->ptLen, sizeof(p->ptLen));
-    }
-    if (r == HIFHE_SUCCESS) {
-        r = CRYPT_EAL_PkeyCtrl(p->ctx, HIFHE_CTRL_BGV_GET_CIPHERTEXT_LEN, &p->ctLen, sizeof(p->ctLen));
-    }
-    if (r == HIFHE_SUCCESS) {
-        r = CRYPT_EAL_PkeyCtrl(p->ctx, HIFHE_CTRL_BGV_GET_MSG_LEN, &p->msgLen, sizeof(p->msgLen));
-    }
-    if (r == HIFHE_SUCCESS) {
-        r = CRYPT_EAL_PkeyCtrl(p->ctx, HIFHE_CTRL_BGV_GET_PLAIN_MOD, &p->t, sizeof(p->t));
     }
     if (r != HIFHE_SUCCESS) {
         fprintf(stderr, "context setup failed: 0x%08x\n", (unsigned)r);
         PartyFree(p);
         return -1;
     }
-
-    p->msg = (uint64_t *)BSL_SAL_Malloc(p->msgLen);
-    p->pt = (uint8_t *)BSL_SAL_Malloc(p->ptLen);
-    p->ct = (uint8_t *)BSL_SAL_Malloc(p->ctLen);
-    p->ct2 = twoCt ? (uint8_t *)BSL_SAL_Malloc(p->ctLen) : NULL;
-    if (p->msg == NULL || p->pt == NULL || p->ct == NULL || (twoCt && p->ct2 == NULL)) {
-        fprintf(stderr, "out of memory\n");
+    p->n = SLOTS;
+    p->t = PLAIN_MODULUS;
+    p->msgLen = p->n * sizeof(*p->msg);
+    p->msg = BSL_SAL_Calloc(p->n, sizeof(*p->msg));
+    if (p->msg == NULL) {
+        PartyFree(p);
+        return -1;
+    }
+    BSL_Param input[] = {{HIFHE_PARAM_BGV_MSG, BSL_PARAM_TYPE_OCTETS, p->msg, p->msgLen, 0}, BSL_PARAM_END};
+    r = CRYPT_EAL_PkeyHEMsgEncode(p->ctx, input, NULL, &p->ptLen);
+    if (r != HIFHE_BUFFER_TOO_SMALL) {
+        PartyFree(p);
+        return -1;
+    }
+    p->pt = BSL_SAL_Malloc(p->ptLen);
+    if (p->pt == NULL) {
+        PartyFree(p);
+        return -1;
+    }
+    r = CRYPT_EAL_PkeyHEMsgEncode(p->ctx, input, p->pt, &p->ptLen);
+    if (r != HIFHE_SUCCESS) {
+        PartyFree(p);
+        return -1;
+    }
+    p->ctLen = ctCapacity;
+    if (keygen) {
+        r = CRYPT_EAL_PkeyEncrypt(p->ctx, p->pt, p->ptLen, NULL, &p->ctLen);
+        if (r != HIFHE_BUFFER_TOO_SMALL) {
+            PartyFree(p);
+            return -1;
+        }
+    }
+    p->ct = BSL_SAL_Malloc(p->ctLen);
+    p->ct2 = keygen ? NULL : BSL_SAL_Malloc(p->ctLen);
+    if (p->ct == NULL || (!keygen && p->ct2 == NULL)) {
         PartyFree(p);
         return -1;
     }
     return 0;
-}
-
-/* True when the context holds no secret key, as the getter reports it. */
-static bool NoPrivateKey(CRYPT_EAL_PkeyCtx *ctx)
-{
-    uint8_t stub = 0u;
-    BSL_Param get[] = {{HIFHE_PARAM_BGV_PRVKEY, BSL_PARAM_TYPE_OCTETS, &stub, 0u, 0}, BSL_PARAM_END};
-    return CRYPT_EAL_PkeyGetPrvEx(ctx, get) == HIFHE_KEY_NOT_SET;
 }
 
 /* p->msg into p->pt. */
@@ -323,29 +315,24 @@ static int ServerBucket(Party *server, uint32_t *ptLen)
 static int ServerAnswer(Party *server, uint32_t bucketId, const uint8_t *ctQ, uint32_t ctQLen, uint32_t *respLen)
 {
     (void)bucketId;
+    uint32_t privateLength = 0;
+    if (CRYPT_EAL_PkeyDecrypt(server->ctx, ctQ, ctQLen, NULL, &privateLength) != HIFHE_KEY_NOT_SET) {
+        fprintf(stderr, "server must not hold a private key\n");
+        return -1;
+    }
 
     uint32_t ptLen = 0u;
     if (ServerBucket(server, &ptLen) != 0) {
         return -1;
     }
 
-    /* NEGATE and PLAINTEXT in one HEAdd drop the plaintext, so negate first. */
     uint8_t negate = 1u;
-    BSL_Param neg[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, (void *)(uintptr_t)ctQ, ctQLen, 0},
-                       {HIFHE_PARAM_BGV_NEGATE, BSL_PARAM_TYPE_OCTETS, &negate, 1u, 0},
-                       BSL_PARAM_END};
-    uint32_t negLen = server->ctLen;
-    int32_t r = CRYPT_EAL_PkeyHEAdd(server->ctx, neg, server->ct, &negLen);
-    if (r != HIFHE_SUCCESS) {
-        fprintf(stderr, "HEAdd negate failed: 0x%08x\n", (unsigned)r);
-        return -1;
-    }
-
-    BSL_Param diff[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, server->ct, negLen, 0},
+    BSL_Param diff[] = {{CRYPT_PARAM_PKEY_HE_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, (void *)(uintptr_t)ctQ, ctQLen, 0},
                         {HIFHE_PARAM_BGV_PLAINTEXT, BSL_PARAM_TYPE_OCTETS, server->pt, ptLen, 0},
+                        {HIFHE_PARAM_BGV_NEGATE, BSL_PARAM_TYPE_OCTETS, &negate, 1u, 0},
                         BSL_PARAM_END};
     uint32_t diffLen = server->ctLen;
-    r = CRYPT_EAL_PkeyHEAdd(server->ctx, diff, server->ct2, &diffLen);
+    int32_t r = CRYPT_EAL_PkeyHEAdd(server->ctx, diff, server->ct2, &diffLen);
     if (r != HIFHE_SUCCESS) {
         fprintf(stderr, "HEAdd plaintext failed: 0x%08x\n", (unsigned)r);
         return -1;
@@ -356,7 +343,7 @@ static int ServerAnswer(Party *server, uint32_t bucketId, const uint8_t *ctQ, ui
     if (ServerMask(server, &maskLen) != 0) {
         return -1;
     }
-    BSL_Param blind[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, server->ct2, diffLen, 0},
+    BSL_Param blind[] = {{CRYPT_PARAM_PKEY_HE_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, server->ct2, diffLen, 0},
                          {HIFHE_PARAM_BGV_PLAINTEXT, BSL_PARAM_TYPE_OCTETS, server->pt, maskLen, 0},
                          BSL_PARAM_END};
     uint32_t blindLen = server->ctLen;
@@ -366,10 +353,10 @@ static int ServerAnswer(Party *server, uint32_t bucketId, const uint8_t *ctQ, ui
         return -1;
     }
 
-    BSL_Param rerand[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, server->ct, blindLen, 0},
-                          {HIFHE_PARAM_BGV_CIPHERTEXT2, BSL_PARAM_TYPE_OCTETS, server->ct2, server->ctLen, 0},
+    BSL_Param rerand[] = {{CRYPT_PARAM_PKEY_HE_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, server->ct, blindLen, 0},
+                          {CRYPT_PARAM_PKEY_HE_CIPHERTEXT2, BSL_PARAM_TYPE_OCTETS, server->ct2, server->ctLen, 0},
                           BSL_PARAM_END};
-    r = CRYPT_EAL_PkeyCtrl(server->ctx, HIFHE_CTRL_BGV_HE_RERANDOMIZE, rerand, 0u);
+    r = CRYPT_EAL_PkeyCtrl(server->ctx, HIFHE_CTRL_BGV_RERANDOMIZE, rerand, 0u);
     if (r != HIFHE_SUCCESS) {
         fprintf(stderr, "Rerandomize failed: 0x%08x\n", (unsigned)r);
         return -1;
@@ -453,10 +440,10 @@ static int ProviderLoad(void)
     }
     int32_t r = CRYPT_EAL_ProviderSetLoadPath(NULL, path);
     if (r == CRYPT_SUCCESS) {
-        r = CRYPT_EAL_ProviderLoad(NULL, BSL_SAL_LIB_FMT_LIBSO, "hifhe_provider", NULL, NULL);
+        r = CRYPT_EAL_ProviderLoad(NULL, BSL_SAL_LIB_FMT_LIBSO, "hifhe", NULL, NULL);
     }
     if (r != CRYPT_SUCCESS) {
-        fprintf(stderr, "hifhe_provider load from %s failed: 0x%08x\n", path, (unsigned)r);
+        fprintf(stderr, "hifhe load from %s failed: 0x%08x\n", path, (unsigned)r);
         return -1;
     }
     return 0;
@@ -481,10 +468,10 @@ int main(void)
 
     /* The client holds the key. The server runs key-free operations and gets
      * a second ciphertext buffer to ping-pong the four of them across. */
-    if (PartyInit(&client, g_clientSeed, true, false) != 0) {
+    if (PartyInit(&client, true, 0) != 0) {
         return 1;
     }
-    if (PartyInit(&server, g_serverSeed, false, true) != 0) {
+    if (PartyInit(&server, false, client.ctLen) != 0) {
         PartyFree(&client);
         return 1;
     }
@@ -492,8 +479,8 @@ int main(void)
     printf("=== HiFHE leaked-string detection, client and server ===\n");
     printf("ring   : N=%u t=%" PRIu64 " slots/entry=%u\n", client.n, client.t, SLOTS_PER_ENTRY);
     printf("bucket : id %u, %u entries\n", BUCKET_ID, BUCKET_COUNT);
-    printf("client : %s\n", NoPrivateKey(client.ctx) ? "no key" : "secret key from its own seed");
-    printf("server : %s\n", NoPrivateKey(server.ctx) ? "no key, GetPrv reports KEY_NOT_SET" : "secret key present");
+    puts("client : owns the key pair");
+    puts("server : no keys");
 
     if (RunQuery(&client, &server, g_bucket[MATCH_INDEX]) != 0) {
         goto out;
@@ -506,6 +493,6 @@ int main(void)
 out:
     PartyFree(&server);
     PartyFree(&client);
-    (void)CRYPT_EAL_ProviderUnload(NULL, BSL_SAL_LIB_FMT_LIBSO, "hifhe_provider");
+    (void)CRYPT_EAL_ProviderUnload(NULL, BSL_SAL_LIB_FMT_LIBSO, "hifhe");
     return rc;
 }

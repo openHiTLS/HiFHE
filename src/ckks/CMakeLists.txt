@@ -14,6 +14,7 @@ file(GLOB HIFHE_CKKS_SOURCES CONFIGURE_DEPENDS
 
 hifhe_add_object_library(hifhe_ckks_objects ${HIFHE_CKKS_SOURCES})
 target_include_directories(hifhe_ckks_objects PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${HITLS_ROOT_PATH}/config/macro_config
     ${HITLS_ROOT_PATH}/conf/macro_config
@@ -25,7 +26,6 @@ target_include_directories(hifhe_ckks_objects PRIVATE
 )
 target_compile_definitions(hifhe_ckks_objects PRIVATE
     HITLS_BSL_ERR
-    HITLS_BSL_PARAMS
     HITLS_BSL_SAL
     HITLS_BSL_SAL_MEM
     HITLS_CRYPTO_BN
@@ -36,7 +36,6 @@ target_compile_definitions(hifhe_ckks_objects PRIVATE
     HITLS_CRYPTO_EAL
     HITLS_CRYPTO_PKEY
     HITLS_CRYPTO_PKEY_CRYPT
-    HITLS_CRYPTO_PROVIDER
     HITLS_NO_CONFIG_CHECK
     HITLS_SIXTY_FOUR_BITS
 )

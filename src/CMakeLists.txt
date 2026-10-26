@@ -8,10 +8,21 @@
 # MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 # See the Mulan PSL v2 for more details.
 
-add_subdirectory(provider)
+if(HITLS_PROVIDER)
+    add_subdirectory(provider)
+endif()
 if(HIFHE_CKKS)
     add_subdirectory(ckks)
 endif()
 if(HIFHE_BGV)
     add_subdirectory(bgv)
 endif()
+hifhe_add_object_library(hifhe_api_objects api/hifhe_api.c)
+target_include_directories(hifhe_api_objects PRIVATE
+    ${PROJECT_SOURCE_DIR}/src/common
+    ${HITLS_ROOT_PATH}/config/macro_config
+    ${HITLS_ROOT_PATH}/crypto/include
+    ${HITLS_ROOT_PATH}/bsl/sal/include)
+target_compile_definitions(hifhe_api_objects PRIVATE HITLS_CRYPTO_EAL HITLS_CRYPTO_MD
+    HITLS_BSL_SAL HITLS_BSL_SAL_MEM
+    HITLS_SIXTY_FOUR_BITS HITLS_NO_CONFIG_CHECK)

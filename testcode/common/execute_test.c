@@ -124,9 +124,6 @@ static int ProcessCases(FILE *logFile, bool showDetail, int targetFuncId)
     volatile int tryNum;
     time_t beginTime = time(NULL);
     struct timespec start, end;
-    if (TestHifheProviderLoad() != 0) {
-        return -1;
-    }
     for (volatile int i = 0; i < g_executeCount; i++) {
         int funcId = strtoul(g_executeCases[i]->arg[0], NULL, 10); // 10
         if (funcId < 0 || funcId > ((int)(sizeof(test_funcs) / sizeof(TestWrapper)))) {
@@ -186,9 +183,6 @@ static int ProcessCases(FILE *logFile, bool showDetail, int targetFuncId)
         if (isSubProc != 0) {
             break;
         }
-    }
-    if (TestHifheProviderUnload() != 0) {
-        return -1;
     }
     return PrintCaseNameResult(logFile, vectorCount, skipCount, passCount, beginTime);
 }

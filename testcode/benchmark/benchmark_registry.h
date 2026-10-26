@@ -26,15 +26,19 @@ typedef struct BenchCtx_ BenchCtx;
  * A module calls its algorithm directly, so one built out of the provider
  * must not be named here either: the reference would not link. Both lists
  * below collapse to nothing when their algorithm is off. */
-#ifdef HIFHE_BGV
+#ifdef HIFHE_ENABLE_BGV
+#ifdef HITLS_PROVIDER
 #define BENCHMARK_LIST_BGV(X) \
     X(Kernel)                 \
     X(Bgv)
 #else
+#define BENCHMARK_LIST_BGV(X) X(Kernel)
+#endif
+#else
 #define BENCHMARK_LIST_BGV(X)
 #endif
 
-#ifdef HIFHE_CKKS
+#ifdef HIFHE_ENABLE_CKKS
 /* No CKKS module yet; add X(Ckks) here with ckks_bench.c. */
 #define BENCHMARK_LIST_CKKS(X)
 #else

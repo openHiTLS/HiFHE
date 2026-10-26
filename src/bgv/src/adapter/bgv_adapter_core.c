@@ -104,11 +104,18 @@ HIFHE_ERROR Bgv_DupState(BgvState *dst, const BgvState *src)
     }
     dst->haveParams = 1u;
 
-    r = BGV_BGVContext_Create(&dst->context, &dst->params);
+    uint64_t *const *tables = src->context.rlweContext.ownsTableBuf != 0 ? NULL : src->context.rlweContext.tableBuf;
+    r = BGV_BGVContext_CreateWithTables(&dst->context, &dst->params, tables);
     if (r != HIFHE_SUCCESS) {
         goto fail;
     }
     dst->haveContext = 1u;
+    if (src->context.ptNttReady != 0 && src->context.ownsPtTableBuf == 0) {
+        r = BGV_BGVContext_EnsurePlainNttWith(&dst->context, src->context.ptTableBuf);
+        if (r != HIFHE_SUCCESS) {
+            goto fail;
+        }
+    }
     dst->context.useSlotMap = src->context.useSlotMap;
     /* Context creation zeroes the seed store. Without this the duplicate
      * falls back to the DRBG, and the same seed stops giving the same keys. */
@@ -405,6 +412,7 @@ HIFHE_ERROR Bgv_GenGaloisKeys(CRYPT_BGV_Ctx *ctx, const uint64_t *elts, uint32_t
 
 /* ---------------- key marshaling ---------------- */
 
+#ifdef HITLS_PROVIDER
 static const BSL_Param *FindParamAny(const BSL_Param *arr, int32_t a, int32_t b)
 {
     const BSL_Param *p = BSL_PARAM_FindConstParam(arr, a);
@@ -1080,3 +1088,4 @@ HIFHE_ERROR Bgv_HERotateElt(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
     uint64_t elt = *(const uint64_t *)pElt->value;
     return RunCtOp(ctx, param, OpRotate, &elt, NULL, &ctx->bgv.galoisKeys);
 }
+#endif

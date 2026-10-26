@@ -23,10 +23,6 @@ extern "C" {
 
 void TestMemInit(void);
 
-int32_t TestHifheProviderLoad(void);
-
-int32_t TestHifheProviderUnload(void);
-
 int TestRandInit(void);
 
 int TestRandInitEx(void *libCtx);

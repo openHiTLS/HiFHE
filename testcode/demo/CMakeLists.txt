@@ -9,8 +9,7 @@
 # See the Mulan PSL v2 for more details.
 
 # One executable per demo/*.c, named after the file and prefixed hifhe_.
-# Builds two ways: as a subdirectory of testcode (-DBUILD_DEMO=ON), or
-# standalone, which skips the test-suite generation the SDV build needs.
+# Builds with the root tests or standalone.
 
 cmake_minimum_required(VERSION 3.16)
 
@@ -20,6 +19,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(DEMO_STANDALONE ON)
     set(CMAKE_C_STANDARD 11)
     set(CMAKE_C_STANDARD_REQUIRED ON)
+    enable_testing()
 
     set(HIFHE_ROOT "${PROJECT_SOURCE_DIR}/../..")
     if(NOT HITLS_ROOT_DIR)
@@ -33,18 +33,36 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     if(NOT HIFHE_PROVIDER_DIR)
         set(HIFHE_PROVIDER_DIR "${HIFHE_ROOT}/build")
     endif()
-    set(HIFHE_DEPENDENCY_DIRS ${HITLS_ROOT_DIR}/build ${HIFHE_ROOT}/build)
+    set(HIFHE_DEPENDENCY_DIRS ${HITLS_ROOT_DIR}/build ${HIFHE_PROVIDER_DIR})
 
     find_library(HITLS_CRYPTO_LIB hitls_crypto PATHS ${HIFHE_DEPENDENCY_DIRS} NO_DEFAULT_PATH)
     find_library(HITLS_BSL_LIB hitls_bsl PATHS ${HIFHE_DEPENDENCY_DIRS} NO_DEFAULT_PATH)
-    find_library(HIFHE_PROVIDER_LIB hifhe_provider PATHS ${HIFHE_DEPENDENCY_DIRS} NO_DEFAULT_PATH)
-    foreach(LIB IN ITEMS HITLS_CRYPTO_LIB HITLS_BSL_LIB HIFHE_PROVIDER_LIB)
+    foreach(LIB IN ITEMS HITLS_CRYPTO_LIB HITLS_BSL_LIB)
         if(NOT ${LIB})
             message(FATAL_ERROR "Required library ${LIB} not found in: ${HIFHE_DEPENDENCY_DIRS}")
         endif()
     endforeach()
 
     add_compile_options(-Wall -Wextra -Werror)
+endif()
+
+if(DEMO_STANDALONE)
+    find_library(HIFHE_DEMO_LIB hifhe PATHS "${HIFHE_PROVIDER_DIR}" NO_DEFAULT_PATH)
+    if(NOT HIFHE_DEMO_LIB)
+        message(FATAL_ERROR "libhifhe not found in ${HIFHE_PROVIDER_DIR}")
+    endif()
+    file(STRINGS "${HIFHE_PROVIDER_DIR}/include/hifhe_config.h" HIFHE_DEMO_PROVIDER
+        REGEX "^#define HITLS_PROVIDER 1$")
+    if(NOT EXISTS "${HIFHE_PROVIDER_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}hifhe${CMAKE_SHARED_LIBRARY_SUFFIX}")
+        set(HIFHE_DEMO_PROVIDER OFF)
+    endif()
+else()
+    set(HIFHE_PROVIDER_DIR "${CMAKE_BINARY_DIR}")
+    set(HIFHE_DEMO_LIB hifhe_provider)
+    set(HIFHE_DEMO_PROVIDER OFF)
+    if(HITLS_PROVIDER AND HIFHE_BUILD_SHARED)
+        set(HIFHE_DEMO_PROVIDER ON)
+    endif()
 endif()
 
 # openHiTLS headers read the same macro set the libraries were built with.
@@ -67,7 +85,7 @@ include_directories(
     ${HIFHE_PROVIDER_DIR}/include
 )
 
-set(DEMO_OUTPUT_DIR "${HIFHE_ROOT}/testcode/output/demo")
+set(DEMO_OUTPUT_DIR "${HIFHE_ROOT}/testcode/output/demo" CACHE PATH "Demo binary directory")
 file(MAKE_DIRECTORY "${DEMO_OUTPUT_DIR}")
 
 file(GLOB DEMO_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
@@ -77,21 +95,39 @@ endif()
 
 foreach(DEMO_FILE ${DEMO_FILES})
     get_filename_component(DEMO_STEM ${DEMO_FILE} NAME_WE)
+    if(DEMO_STEM STREQUAL "leakstr_demo" AND NOT HIFHE_DEMO_PROVIDER)
+        file(REMOVE "${DEMO_OUTPUT_DIR}/hifhe_${DEMO_STEM}")
+        continue()
+    endif()
     set(DEMO_NAME "hifhe_${DEMO_STEM}")
     add_executable(${DEMO_NAME} ${DEMO_FILE})
     set_target_properties(${DEMO_NAME} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${DEMO_OUTPUT_DIR}"
         BUILD_RPATH "${HITLS_ROOT_DIR}/build;${HIFHE_PROVIDER_DIR}"
     )
-    target_compile_options(${DEMO_NAME} PRIVATE -O2 -g)
+    target_compile_options(${DEMO_NAME} PRIVATE "$<$<NOT:$<CONFIG:Debug>>:-O2>" -g)
+    if(NOT DEMO_STEM STREQUAL "leakstr_demo")
+        target_link_libraries(${DEMO_NAME} ${HIFHE_DEMO_LIB})
+    endif()
     target_link_libraries(${DEMO_NAME}
+        -Wl,--no-as-needed
         ${HITLS_CRYPTO_LIB}
         ${HITLS_BSL_LIB}
-        ${HIFHE_PROVIDER_LIB}
-        -Wl,--no-as-needed
         -lpthread
         -lm
         -Wl,--as-needed
     )
+    add_test(NAME ${DEMO_NAME} COMMAND ${DEMO_NAME})
+    if(DEMO_STEM STREQUAL "leakstr_demo")
+        target_compile_definitions(${DEMO_NAME} PRIVATE HITLS_PROVIDER)
+        if(NOT DEMO_STANDALONE)
+            add_dependencies(${DEMO_NAME} hifhe_provider)
+        endif()
+        set_tests_properties(${DEMO_NAME} PROPERTIES
+            ENVIRONMENT "HIFHE_PROVIDER_PATH=${HIFHE_PROVIDER_DIR};ASAN_OPTIONS=detect_leaks=1")
+    else()
+        set_tests_properties(${DEMO_NAME} PROPERTIES
+            ENVIRONMENT "HIFHE_PROVIDER_PATH=/nonexistent;ASAN_OPTIONS=detect_leaks=1")
+    endif()
     message(STATUS "[demo] ${DEMO_NAME} from ${DEMO_STEM}.c")
 endforeach()

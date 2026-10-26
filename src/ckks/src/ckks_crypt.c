@@ -35,7 +35,7 @@ static int32_t CKKS_SampleBinary(void *libCtx, BN_BigNum **poly, uint32_t N)
     return ret;
 }
 
-static int32_t CKKS_PubEnc(const CRYPT_CKKS_Ctx *ctx, const CRYPT_CKKS_Poly *plaintext, CRYPT_CKKS_Poly *c0,
+int32_t CKKS_PubEnc(const CRYPT_CKKS_Ctx *ctx, const CRYPT_CKKS_Poly *plaintext, CRYPT_CKKS_Poly *c0,
                            CRYPT_CKKS_Poly *c1)
 {
     if (ctx == NULL || ctx->para == NULL || ctx->pubKey == NULL || plaintext == NULL || c0 == NULL || c1 == NULL) {
@@ -74,7 +74,7 @@ EXIT:
     return ret;
 }
 
-static int32_t CKKS_PrvDec(const CRYPT_CKKS_Ctx *ctx, const CRYPT_CKKS_Poly *c0, const CRYPT_CKKS_Poly *c1,
+int32_t CKKS_PrvDec(const CRYPT_CKKS_Ctx *ctx, const CRYPT_CKKS_Poly *c0, const CRYPT_CKKS_Poly *c1,
                            CRYPT_CKKS_Poly *plaintext)
 {
     if (ctx == NULL || ctx->para == NULL || ctx->prvKey == NULL || c0 == NULL || c1 == NULL || plaintext == NULL) {

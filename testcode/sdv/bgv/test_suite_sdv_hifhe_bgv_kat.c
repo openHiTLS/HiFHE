@@ -11,16 +11,20 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "hifhe.h"
+#include "crypt_eal_init.h"
+#ifdef HITLS_PROVIDER
 #include "crypt_errno.h"
 #include "bsl_sal.h"
 #include "bsl_params.h"
 #include "crypt_algid.h"
 #include "crypt_eal_md.h"
-#include "crypt_eal_pkey.h"
+#include "crypt_bgv.h"
 #include "crypt_eal_provider.h"
 #include "crypt_types.h"
 
-#include "hifhe_provider.h"
+#include "bgv_adapter_types.h"
+#endif
 #include "hifhe_types.h"
 #include "hifhe_err.h"
 #include "crypto_test_util.h"
@@ -28,17 +32,9 @@
 /* END_HEADER */
 
 /*
- * Known-answer tests for the BGV provider. Every input is fixed: keys come
- * from HIFHE_CTRL_BGV_SET_SEED, ciphertext and plaintext bodies from a
- * seeded SplitMix64 stream, messages likewise. Each case runs one operation
- * through the EAL surface and compares the SHA-256 of the serialised output
- * with the expected digest in the .data file.
- *
- * Only public EAL calls are used, so the suite builds against any release
- * of the provider. Vectors marked "baseline" were produced by the provider
- * before the BGV optimisation work (66378e2) and still hold; those marked
- * "post-optimisation" cover decryption output and seeded relinearisation
- * and Galois keys, which that work deliberately changed.
+ * BGV KATs compare fixed-input output digests through CRYPT_BGV_*.
+ * Baselines come from 66378e2 or the later optimisation work, as marked in .data.
+ * Native arithmetic vectors check decoded slots against modular arithmetic.
  */
 
 #define KAT_SK        0
@@ -57,8 +53,9 @@
 
 #define KAT_DIGEST_LEN 32u
 
+#ifdef HITLS_PROVIDER
 typedef struct {
-    CRYPT_EAL_PkeyCtx *ctx;
+    CRYPT_BGV_Ctx *ctx;
     uint32_t n;
     uint32_t level;
     uint64_t t;
@@ -93,7 +90,7 @@ static void KatStoreU64(uint8_t *p, uint64_t v)
 
 static void KatEnvFree(KatEnv *e)
 {
-    CRYPT_EAL_PkeyFreeCtx(e->ctx);
+    CRYPT_BGV_FreeCtx(e->ctx);
     e->ctx = NULL;
 }
 
@@ -101,7 +98,7 @@ static void KatEnvFree(KatEnv *e)
 static int KatEnvInit(KatEnv *e, int32_t preset)
 {
     memset(e, 0, sizeof(*e));
-    e->ctx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
+    e->ctx = CRYPT_BGV_NewCtx(HIFHE_BGV);
     if (e->ctx == NULL) {
         return -1;
     }
@@ -109,15 +106,15 @@ static int KatEnvInit(KatEnv *e, int32_t preset)
     for (uint32_t i = 0; i < HIFHE_BGV_SEED_LEN; ++i) {
         seed[i] = (uint8_t)(0xa5u ^ (i * 7u));
     }
-    if (CRYPT_EAL_PkeyCtrl(e->ctx, CRYPT_CTRL_SET_PARA_BY_ID, &preset, sizeof(preset)) != HIFHE_SUCCESS ||
-        CRYPT_EAL_PkeyCtrl(e->ctx, HIFHE_CTRL_BGV_SET_SEED, seed, sizeof(seed)) != HIFHE_SUCCESS ||
-        CRYPT_EAL_PkeyGen(e->ctx) != HIFHE_SUCCESS ||
-        CRYPT_EAL_PkeyCtrl(e->ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &e->n, sizeof(e->n)) != HIFHE_SUCCESS ||
-        CRYPT_EAL_PkeyCtrl(e->ctx, HIFHE_CTRL_BGV_GET_LEVEL, &e->level, sizeof(e->level)) != HIFHE_SUCCESS ||
-        CRYPT_EAL_PkeyCtrl(e->ctx, HIFHE_CTRL_BGV_GET_PLAIN_MOD, &e->t, sizeof(e->t)) != HIFHE_SUCCESS ||
-        CRYPT_EAL_PkeyCtrl(e->ctx, HIFHE_CTRL_BGV_GET_PLAINTEXT_LEN, &e->ptLen, sizeof(e->ptLen)) != HIFHE_SUCCESS ||
-        CRYPT_EAL_PkeyCtrl(e->ctx, HIFHE_CTRL_BGV_GET_CIPHERTEXT_LEN, &e->ctLen, sizeof(e->ctLen)) != HIFHE_SUCCESS ||
-        CRYPT_EAL_PkeyCtrl(e->ctx, HIFHE_CTRL_BGV_GET_MSG_LEN, &e->msgLen, sizeof(e->msgLen)) != HIFHE_SUCCESS) {
+    if (CRYPT_BGV_Ctrl(e->ctx, CRYPT_CTRL_SET_PARA_BY_ID, &preset, sizeof(preset)) != HIFHE_SUCCESS ||
+        CRYPT_BGV_Ctrl(e->ctx, HIFHE_CTRL_BGV_SET_SEED, seed, sizeof(seed)) != HIFHE_SUCCESS ||
+        CRYPT_BGV_Gen(e->ctx) != HIFHE_SUCCESS ||
+        CRYPT_BGV_Ctrl(e->ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &e->n, sizeof(e->n)) != HIFHE_SUCCESS ||
+        CRYPT_BGV_Ctrl(e->ctx, HIFHE_CTRL_BGV_GET_LEVEL, &e->level, sizeof(e->level)) != HIFHE_SUCCESS ||
+        CRYPT_BGV_Ctrl(e->ctx, HIFHE_CTRL_BGV_GET_PLAIN_MOD, &e->t, sizeof(e->t)) != HIFHE_SUCCESS ||
+        CRYPT_BGV_Ctrl(e->ctx, HIFHE_CTRL_BGV_GET_PLAINTEXT_LEN, &e->ptLen, sizeof(e->ptLen)) != HIFHE_SUCCESS ||
+        CRYPT_BGV_Ctrl(e->ctx, HIFHE_CTRL_BGV_GET_CIPHERTEXT_LEN, &e->ctLen, sizeof(e->ctLen)) != HIFHE_SUCCESS ||
+        CRYPT_BGV_Ctrl(e->ctx, HIFHE_CTRL_BGV_GET_MSG_LEN, &e->msgLen, sizeof(e->msgLen)) != HIFHE_SUCCESS) {
         KatEnvFree(e);
         return -1;
     }
@@ -136,7 +133,7 @@ static int KatEncode(KatEnv *e, uint64_t s, uint8_t *pt, uint32_t *ptLen)
     }
     BSL_Param in[] = {{HIFHE_PARAM_BGV_MSG, BSL_PARAM_TYPE_OCTETS, msg, e->msgLen, 0}, BSL_PARAM_END};
     uint32_t out = e->ptLen;
-    int32_t rc = CRYPT_EAL_PkeyHEMsgEncode(e->ctx, in, pt, &out);
+    int32_t rc = CRYPT_BGV_HEMsgEncode(e->ctx, in, pt, &out);
     BSL_SAL_Free(msg);
     if (rc != HIFHE_SUCCESS) {
         return -1;
@@ -176,7 +173,7 @@ static int KatCiphertext(KatEnv *e, uint64_t s, uint8_t *ct, uint32_t *ctLen)
     uint32_t ptL = 0u;
     int rc = KatEncode(e, s, pt, &ptL);
     uint32_t out = e->ctLen;
-    if (rc == 0 && CRYPT_EAL_PkeyEncrypt(e->ctx, pt, ptL, ct, &out) != HIFHE_SUCCESS) {
+    if (rc == 0 && CRYPT_BGV_Encrypt(e->ctx, pt, ptL, ct, &out) != HIFHE_SUCCESS) {
         rc = -1;
     }
     BSL_SAL_Free(pt);
@@ -197,7 +194,7 @@ static int KatGenRotateKey(KatEnv *e)
     int32_t step = 1;
     BSL_Param gk[] = {{HIFHE_PARAM_BGV_ROTATE_STEPS, BSL_PARAM_TYPE_OCTETS, &step, (uint32_t)sizeof(step), 0},
                       BSL_PARAM_END};
-    return (CRYPT_EAL_PkeyCtrl(e->ctx, HIFHE_CTRL_BGV_GEN_GALOIS_KEYS, gk, 0u) == HIFHE_SUCCESS) ? 0 : -1;
+    return (CRYPT_BGV_Ctrl(e->ctx, HIFHE_CTRL_BGV_GEN_GALOIS_KEYS, gk, 0u) == HIFHE_SUCCESS) ? 0 : -1;
 }
 
 /* Run `op` on fixed inputs and leave its serialised result in `out`. */
@@ -221,7 +218,7 @@ static int KatRun(KatEnv *e, int op, uint8_t *out, uint32_t cap, uint32_t *outLe
     switch (op) {
         case KAT_SK: {
             BSL_Param g[] = {{HIFHE_PARAM_BGV_PRVKEY, BSL_PARAM_TYPE_OCTETS, out, cap, 0}, BSL_PARAM_END};
-            if (CRYPT_EAL_PkeyGetPrvEx(e->ctx, g) != HIFHE_SUCCESS) {
+            if (CRYPT_BGV_GetPrvKeyEx(e->ctx, g) != HIFHE_SUCCESS) {
                 goto EXIT;
             }
             len = g[0].useLen;
@@ -229,7 +226,7 @@ static int KatRun(KatEnv *e, int op, uint8_t *out, uint32_t cap, uint32_t *outLe
         }
         case KAT_PK: {
             BSL_Param g[] = {{HIFHE_PARAM_BGV_PUBKEY, BSL_PARAM_TYPE_OCTETS, out, cap, 0}, BSL_PARAM_END};
-            if (CRYPT_EAL_PkeyGetPubEx(e->ctx, g) != HIFHE_SUCCESS) {
+            if (CRYPT_BGV_GetPubKeyEx(e->ctx, g) != HIFHE_SUCCESS) {
                 goto EXIT;
             }
             len = g[0].useLen;
@@ -246,7 +243,7 @@ static int KatRun(KatEnv *e, int op, uint8_t *out, uint32_t cap, uint32_t *outLe
             KatFillBody(e, pt, ptL, 1u, 0x4444ull);
             BSL_Param in[] = {{HIFHE_PARAM_BGV_PLAINTEXT, BSL_PARAM_TYPE_OCTETS, pt, ptL, 0}, BSL_PARAM_END};
             len = e->msgLen;
-            if (len > cap || CRYPT_EAL_PkeyHEMsgDecode(e->ctx, in, out, &len) != HIFHE_SUCCESS) {
+            if (len > cap || CRYPT_BGV_HEMsgDecode(e->ctx, in, out, &len) != HIFHE_SUCCESS) {
                 goto EXIT;
             }
             break;
@@ -255,14 +252,14 @@ static int KatRun(KatEnv *e, int op, uint8_t *out, uint32_t cap, uint32_t *outLe
         case KAT_MUL_CTCT:
         case KAT_RELIN: {
             if (op == KAT_RELIN &&
-                CRYPT_EAL_PkeyCtrl(e->ctx, HIFHE_CTRL_BGV_GEN_RELIN_KEY, NULL, 0u) != HIFHE_SUCCESS) {
+                CRYPT_BGV_Ctrl(e->ctx, HIFHE_CTRL_BGV_GEN_RELIN_KEY, NULL, 0u) != HIFHE_SUCCESS) {
                 goto EXIT;
             }
             BSL_Param in[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
                               {HIFHE_PARAM_BGV_CIPHERTEXT2, BSL_PARAM_TYPE_OCTETS, ct2, ct2L, 0},
                               BSL_PARAM_END};
-            int32_t r = (op == KAT_ADD_CTCT) ? CRYPT_EAL_PkeyHEAdd(e->ctx, in, out, &len) :
-                                               CRYPT_EAL_PkeyHEMul(e->ctx, in, out, &len);
+            int32_t r = (op == KAT_ADD_CTCT) ? CRYPT_BGV_HEAdd(e->ctx, in, out, &len) :
+                                               CRYPT_BGV_HEMul(e->ctx, in, out, &len);
             if (r != HIFHE_SUCCESS) {
                 goto EXIT;
             }
@@ -273,8 +270,8 @@ static int KatRun(KatEnv *e, int op, uint8_t *out, uint32_t cap, uint32_t *outLe
             BSL_Param in[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
                               {HIFHE_PARAM_BGV_PLAINTEXT, BSL_PARAM_TYPE_OCTETS, pt, ptL, 0},
                               BSL_PARAM_END};
-            int32_t r = (op == KAT_ADD_CTPT) ? CRYPT_EAL_PkeyHEAdd(e->ctx, in, out, &len) :
-                                               CRYPT_EAL_PkeyHEMul(e->ctx, in, out, &len);
+            int32_t r = (op == KAT_ADD_CTPT) ? CRYPT_BGV_HEAdd(e->ctx, in, out, &len) :
+                                               CRYPT_BGV_HEMul(e->ctx, in, out, &len);
             if (r != HIFHE_SUCCESS) {
                 goto EXIT;
             }
@@ -285,7 +282,7 @@ static int KatRun(KatEnv *e, int op, uint8_t *out, uint32_t cap, uint32_t *outLe
             BSL_Param in[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
                               {HIFHE_PARAM_BGV_NEGATE, BSL_PARAM_TYPE_OCTETS, &marker, 1u, 0},
                               BSL_PARAM_END};
-            if (CRYPT_EAL_PkeyHEAdd(e->ctx, in, out, &len) != HIFHE_SUCCESS) {
+            if (CRYPT_BGV_HEAdd(e->ctx, in, out, &len) != HIFHE_SUCCESS) {
                 goto EXIT;
             }
             break;
@@ -294,14 +291,14 @@ static int KatRun(KatEnv *e, int op, uint8_t *out, uint32_t cap, uint32_t *outLe
             BSL_Param in[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
                               {HIFHE_PARAM_BGV_CIPHERTEXT2, BSL_PARAM_TYPE_OCTETS, out, cap, 0},
                               BSL_PARAM_END};
-            if (CRYPT_EAL_PkeyCtrl(e->ctx, HIFHE_CTRL_BGV_HE_MODSWITCH, in, 0u) != HIFHE_SUCCESS) {
+            if (CRYPT_BGV_Ctrl(e->ctx, HIFHE_CTRL_BGV_HE_MODSWITCH, in, 0u) != HIFHE_SUCCESS) {
                 goto EXIT;
             }
             len = in[1].useLen;
             break;
         }
         case KAT_DECRYPT:
-            if (CRYPT_EAL_PkeyDecrypt(e->ctx, ct1, ct1L, out, &len) != HIFHE_SUCCESS) {
+            if (CRYPT_BGV_Decrypt(e->ctx, ct1, ct1L, out, &len) != HIFHE_SUCCESS) {
                 goto EXIT;
             }
             break;
@@ -314,7 +311,7 @@ static int KatRun(KatEnv *e, int op, uint8_t *out, uint32_t cap, uint32_t *outLe
                               {HIFHE_PARAM_BGV_ROTATE_STEPS, BSL_PARAM_TYPE_INT32, &step, (uint32_t)sizeof(step), 0},
                               {HIFHE_PARAM_BGV_CIPHERTEXT2, BSL_PARAM_TYPE_OCTETS, out, cap, 0},
                               BSL_PARAM_END};
-            if (CRYPT_EAL_PkeyCtrl(e->ctx, HIFHE_CTRL_BGV_HE_ROTATE_STEP, in, 0u) != HIFHE_SUCCESS) {
+            if (CRYPT_BGV_Ctrl(e->ctx, HIFHE_CTRL_BGV_HE_ROTATE_STEP, in, 0u) != HIFHE_SUCCESS) {
                 goto EXIT;
             }
             len = in[2].useLen;
@@ -340,18 +337,17 @@ static void KatPrintDigest(int32_t preset, int op, const uint8_t *d)
     }
     Print("KAT preset=%d op=%d digest=%s\n", (int)preset, op, hex);
 }
+#endif
 
 /* @
 * @test  SDV_CRYPTO_HIFHE_BGV_KAT_TC001
-* @title  An EAL operation on fixed keys and inputs serialises to the expected SHA-256.
+* @title  A BGV operation on fixed keys and inputs produces the expected SHA-256.
 * @auto  TRUE
 @ */
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_KAT_TC001(int preset, int op, Hex *digest)
 {
-    if ((HIFHE_GetFeatures() & HIFHE_FEATURE_BGV) == 0) {
-        SKIP_TEST();
-    }
+#ifdef HITLS_PROVIDER
     KatEnv e = {0};
     uint8_t *out = NULL;
     uint8_t md[KAT_DIGEST_LEN];
@@ -375,5 +371,117 @@ void SDV_CRYPTO_HIFHE_BGV_KAT_TC001(int preset, int op, Hex *digest)
 EXIT:
     BSL_SAL_Free(out);
     KatEnvFree(&e);
+    TestRandDeInit();
+#else
+    (void)preset;
+    (void)op;
+    (void)digest;
+    SKIP_TEST();
+#endif
+}
+/* END_CASE */
+
+static uint32_t VectorNext(uint32_t *s)
+{
+    *s ^= *s << 13;
+    *s ^= *s >> 17;
+    *s ^= *s << 5;
+    return *s;
+}
+
+static bool CheckVectorResult(HIFHE_Ctx *ctx, HIFHE_HEText *ct, const uint32_t *a, const uint32_t *b, uint32_t n, bool mul)
+{
+    bool valid = false;
+    HIFHE_HEText *pt = NULL;
+    uint32_t *out = NULL;
+    if (HIFHE_Decrypt(ctx, ct, &pt) != HIFHE_SUCCESS) {
+        goto EXIT;
+    }
+    out = calloc(n, sizeof(*out));
+    if (out == NULL) {
+        goto EXIT;
+    }
+    uint32_t count = n;
+    if (HIFHE_Decode(ctx, pt, out, &count) != HIFHE_SUCCESS || count != n) {
+        goto EXIT;
+    }
+    for (uint32_t i = 0; i < n; i++) {
+        uint64_t expected = mul ? (uint64_t)a[i] * b[i] : (uint64_t)a[i] + b[i];
+        if (out[i] != expected % 65537) {
+            goto EXIT;
+        }
+    }
+    valid = true;
+EXIT:
+    HIFHE_HETextFree(pt);
+    free(out);
+    return valid;
+}
+
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_VECTOR_API_TC001(int id, int slots, int pattern)
+{
+    HIFHE_Ctx *a = NULL, *b = NULL;
+    HIFHE_HEText *xp = NULL, *yp = NULL, *xc = NULL, *yc = NULL, *sum = NULL, *product = NULL, *bad = NULL;
+    uint32_t *x = NULL, *y = NULL;
+    uint32_t n = (uint32_t)slots;
+
+    ASSERT_EQ(CRYPT_EAL_Init(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND), HIFHE_SUCCESS);
+    a = HIFHE_New(HIFHE_BGV);
+    b = HIFHE_New(HIFHE_BGV);
+    ASSERT_TRUE(a != NULL && b != NULL);
+    ASSERT_EQ(HIFHE_SetParaById(a, (uint32_t)id), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_SetParaById(b, (uint32_t)id), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_KeyGen(a), HIFHE_SUCCESS);
+    x = calloc(n, sizeof(*x));
+    y = calloc(n, sizeof(*y));
+    ASSERT_TRUE(x != NULL && y != NULL);
+    uint32_t state = 0x12345678;
+    for (uint32_t i = 0; i < n; i++) {
+        if (pattern == 0) {
+            x[i] = y[i] = 0;
+        }
+        if (pattern == 1) {
+            x[i] = y[i] = 1;
+        }
+        if (pattern == 2) {
+            x[i] = y[i] = 65536;
+        }
+        if (pattern == 3) {
+            x[i] = (i == 0 || i == n / 2 || i == n - 1) ? 17 : 0;
+            y[i] = i == 0 ? 29 : 0;
+        }
+        if (pattern == 4) {
+            x[i] = i % 65537;
+            y[i] = (i * 7 + 3) % 65537;
+        }
+        if (pattern == 5) {
+            x[i] = VectorNext(&state) % 65537;
+            y[i] = VectorNext(&state) % 65537;
+        }
+    }
+    ASSERT_EQ(HIFHE_Encode(a, x, n, &xp), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Encode(a, y, n, &yp), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Encrypt(a, xp, &xc), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Encrypt(a, yp, &yc), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Add(b, xc, yc, &sum), HIFHE_SUCCESS);
+    ASSERT_TRUE(CheckVectorResult(a, sum, x, y, n, false));
+    ASSERT_EQ(HIFHE_Mul(b, xc, yp, &product), HIFHE_SUCCESS);
+    ASSERT_TRUE(CheckVectorResult(a, product, x, y, n, true));
+    ASSERT_TRUE(HIFHE_Mul(b, xc, yc, &bad) == HIFHE_NOT_SUPPORTED);
+    ASSERT_TRUE(bad == NULL);
+EXIT:
+    HIFHE_HETextFree(bad);
+    HIFHE_HETextFree(xp);
+    HIFHE_HETextFree(yp);
+    HIFHE_HETextFree(xc);
+    HIFHE_HETextFree(yc);
+    HIFHE_HETextFree(sum);
+    HIFHE_HETextFree(product);
+    HIFHE_Free(a);
+    HIFHE_Free(b);
+    free(x);
+    free(y);
+    CRYPT_EAL_Cleanup(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND);
 }
 /* END_CASE */

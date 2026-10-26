@@ -23,7 +23,7 @@
 
 void *CRYPT_BGV_NewCtx(int32_t algId)
 {
-    if (algId != HIFHE_PKEY_BGV) {
+    if (algId != HIFHE_BGV) {
         return NULL;
     }
     CRYPT_BGV_Ctx *ctx = (CRYPT_BGV_Ctx *)BSL_SAL_Calloc(1u, sizeof(CRYPT_BGV_Ctx));
@@ -104,6 +104,7 @@ CRYPT_BGV_Ctx *CRYPT_BGV_DupCtx(CRYPT_BGV_Ctx *src)
     return dst;
 }
 
+#ifdef HITLS_PROVIDER
 int32_t CRYPT_BGV_SetParaEx(CRYPT_BGV_Ctx *ctx, const BSL_Param *param)
 {
     if (ctx == NULL || param == NULL) {
@@ -176,3 +177,4 @@ int32_t CRYPT_BGV_HEMsgDecode(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, 
 {
     return Bgv_HEMsgDecode(ctx, input, out, outLen);
 }
+#endif

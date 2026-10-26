@@ -17,7 +17,9 @@
 #define CRYPT_HIFHE_H
 
 #include <stdint.h>
+#ifdef HITLS_PROVIDER
 #include "bsl_params.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -50,6 +52,7 @@ void CRYPT_BGV_FreeCache(BgvUserPara *cache);
 void CRYPT_BGV_FreeCtx(CRYPT_BGV_Ctx *ctx);
 CRYPT_BGV_Ctx *CRYPT_BGV_DupCtx(CRYPT_BGV_Ctx *src);
 
+#ifdef HITLS_PROVIDER
 /* ----- configuration -------------------------------------------------- */
 
 int32_t CRYPT_BGV_SetParaEx(CRYPT_BGV_Ctx *ctx, const BSL_Param *param);
@@ -78,6 +81,7 @@ int32_t CRYPT_BGV_HEMul(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, uint8_
 
 int32_t CRYPT_BGV_HEMsgEncode(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, uint8_t *out, uint32_t *outLen);
 int32_t CRYPT_BGV_HEMsgDecode(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, uint8_t *out, uint32_t *outLen);
+#endif
 
 #ifdef __cplusplus
 }

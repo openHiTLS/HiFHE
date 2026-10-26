@@ -199,6 +199,7 @@ HIFHE_ERROR BgvUserPara_Copy(BgvUserPara *dst, const BgvUserPara *src)
     return Uint64Vector_Create(&dst->cipherMod, src->cipherMod.data, src->cipherMod.size);
 }
 
+#ifdef HITLS_PROVIDER
 HIFHE_ERROR BgvUserPara_ParseFromBSL(BgvUserPara *p, const BSL_Param *param)
 {
     if (p == NULL || param == NULL) {
@@ -262,6 +263,8 @@ HIFHE_ERROR BgvUserPara_ParseFromBSL(BgvUserPara *p, const BSL_Param *param)
     p->set = 1u;
     return HIFHE_SUCCESS;
 }
+
+#endif
 
 HIFHE_ERROR BgvUserPara_LoadPreset(BgvUserPara *p, int32_t presetId)
 {
