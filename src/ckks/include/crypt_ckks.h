@@ -16,7 +16,9 @@
 #include <complex.h>
 #include <stdint.h>
 
+#ifdef HITLS_PROVIDER
 #include "bsl_params.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -48,14 +50,20 @@ void CRYPT_CKKS_FreeCtx(CRYPT_CKKS_Ctx *ctx);
 CRYPT_CKKS_Para *CRYPT_CKKS_NewPara(const CRYPT_CkksPara *para);
 void CRYPT_CKKS_FreePara(CRYPT_CKKS_Para *para);
 int32_t CRYPT_CKKS_SetPara(CRYPT_CKKS_Ctx *ctx, const CRYPT_CkksPara *para);
+#ifdef HITLS_PROVIDER
 int32_t CRYPT_CKKS_SetParaEx(CRYPT_CKKS_Ctx *ctx, const BSL_Param *para);
+#endif
 uint32_t CRYPT_CKKS_GetBits(const CRYPT_CKKS_Ctx *ctx);
 
 int32_t CRYPT_CKKS_Gen(CRYPT_CKKS_Ctx *ctx);
+#ifdef HITLS_PROVIDER
+#define HIFHE_PARAM_CKKS_PUBKEY (HIFHE_PARAM_BASE + 6)
+#define HIFHE_PARAM_CKKS_PRVKEY (HIFHE_PARAM_BASE + 7)
 int32_t CRYPT_CKKS_SetPrvKeyEx(CRYPT_CKKS_Ctx *ctx, const BSL_Param *param);
 int32_t CRYPT_CKKS_SetPubKeyEx(CRYPT_CKKS_Ctx *ctx, const BSL_Param *param);
 int32_t CRYPT_CKKS_GetPrvKeyEx(const CRYPT_CKKS_Ctx *ctx, BSL_Param *param);
 int32_t CRYPT_CKKS_GetPubKeyEx(const CRYPT_CKKS_Ctx *ctx, BSL_Param *param);
+#endif
 
 int32_t CRYPT_CKKS_Encrypt(CRYPT_CKKS_Ctx *ctx, const uint8_t *data, uint32_t dataLen, uint8_t *out, uint32_t *outLen);
 int32_t CRYPT_CKKS_Decrypt(CRYPT_CKKS_Ctx *ctx, const uint8_t *data, uint32_t dataLen, uint8_t *out, uint32_t *outLen);

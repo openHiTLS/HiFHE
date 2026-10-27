@@ -22,7 +22,8 @@
 #include <string.h>
 
 #include "hifhe_types.h"
-#include "hifhe_provider.h"
+#include "crypt_bgv.h"
+#include "hifhe.h"
 #include "hifhe_err.h"
 #include "kernel/ntt.h"
 
@@ -36,8 +37,9 @@
 #include "benchmark.h"
 #include "benchmark_registry.h"
 
-/* Defined in bgv_bench.c. Releases the shared table handle at shutdown. */
+#ifdef HITLS_PROVIDER
 void BgvBenchReleaseCache(void);
+#endif
 
 enum {
     BENCHMARK_COUNT =
@@ -93,7 +95,6 @@ static int32_t PresetStr2Id(const char *str)
 
 typedef struct {
     const char *algorithm;
-    const char *providerPath;
     uint32_t times;
     uint32_t seconds;
     int32_t presetId;
@@ -109,8 +110,6 @@ static void PrintUsage(void)
     printf("  -t <times>     Iterations per measurement (overrides the module default)\n");
     printf("  -s <seconds>   Run each measurement for this long instead of a fixed count\n");
     printf("  -p <preset>    Parameter set to run. Default: every preset the module lists.\n");
-    printf("  -P <path>      Directory holding libhifhe_provider.so (default ../../build,\n");
-    printf("                 or $HIFHE_PROVIDER_PATH)\n");
     printf("  -m             Print the memory footprint report and exit\n");
     printf("  -h             This message\n");
     printf("\nPresets:");
@@ -123,7 +122,7 @@ static void PrintUsage(void)
 static void ParseOptions(int argc, char **argv, BenchOptions *opts)
 {
     int c;
-    while ((c = getopt(argc, argv, "a:t:s:p:P:mh")) != -1) {
+    while ((c = getopt(argc, argv, "a:t:s:p:mh")) != -1) {
         switch (c) {
             case 'a':
                 opts->algorithm = optarg;
@@ -140,9 +139,6 @@ static void ParseOptions(int argc, char **argv, BenchOptions *opts)
                     printf("Unknown preset: %s\n", optarg);
                     exit(1);
                 }
-                break;
-            case 'P':
-                opts->providerPath = optarg;
                 break;
             case 'm':
                 opts->footprint = true;
@@ -232,28 +228,29 @@ static void RunBenchCase(const CtxOps *ctxOps, const Operation *op, const BenchE
 
 /* ---------------- memory footprint ---------------- */
 
+#ifdef HITLS_PROVIDER
 static void FootprintOne(int32_t presetId)
 {
-    CRYPT_EAL_PkeyCtx *ctx =
-        CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
+    CRYPT_BGV_Ctx *ctx =
+        CRYPT_BGV_NewCtx(HIFHE_BGV);
     if (ctx == NULL) {
         printf("%-22s  <context creation failed>\n", BenchPresetName(presetId));
         return;
     }
     int32_t id = presetId;
     uint32_t n = 0u, level = 0u, pkLen = 0u, skLen = 0u, ctLen = 0u, ptLen = 0u;
-    if (CRYPT_EAL_PkeyCtrl(ctx, CRYPT_CTRL_SET_PARA_BY_ID, &id, sizeof(id)) != HIFHE_SUCCESS ||
-        CRYPT_EAL_PkeyGen(ctx) != HIFHE_SUCCESS) {
+    if (CRYPT_BGV_Ctrl(ctx, CRYPT_CTRL_SET_PARA_BY_ID, &id, sizeof(id)) != HIFHE_SUCCESS ||
+        CRYPT_BGV_Gen(ctx) != HIFHE_SUCCESS) {
         printf("%-22s  <keygen failed>\n", BenchPresetName(presetId));
-        CRYPT_EAL_PkeyFreeCtx(ctx);
+        CRYPT_BGV_FreeCtx(ctx);
         return;
     }
-    (void)CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &n, sizeof(n));
-    (void)CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_LEVEL, &level, sizeof(level));
-    (void)CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_PUBKEY_LEN, &pkLen, sizeof(pkLen));
-    (void)CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_PRVKEY_LEN, &skLen, sizeof(skLen));
-    (void)CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_CIPHERTEXT_LEN, &ctLen, sizeof(ctLen));
-    (void)CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_PLAINTEXT_LEN, &ptLen, sizeof(ptLen));
+    (void)CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &n, sizeof(n));
+    (void)CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GET_LEVEL, &level, sizeof(level));
+    (void)CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GET_PUBKEY_LEN, &pkLen, sizeof(pkLen));
+    (void)CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GET_PRVKEY_LEN, &skLen, sizeof(skLen));
+    (void)CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GET_CIPHERTEXT_LEN, &ctLen, sizeof(ctLen));
+    (void)CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GET_PLAINTEXT_LEN, &ptLen, sizeof(ptLen));
 
     /* Twiddle tables are the context's dominant allocation. One block per
      * ciphertext modulus plus one for plainMod, each
@@ -268,7 +265,7 @@ static void FootprintOne(int32_t presetId)
     printf("%-22s %6u %6u %10" PRIu64 " %10" PRIu64 " %8" PRIu64 " %10" PRIu64 " %9u %9u %9u\n",
            BenchPresetName(presetId), n, level, cipherTbl, plainTbl, slotMap, cipherTbl + plainTbl + slotMap, ptLen,
            ctLen, pkLen);
-    CRYPT_EAL_PkeyFreeCtx(ctx);
+    CRYPT_BGV_FreeCtx(ctx);
 }
 
 static void FootprintReport(int32_t only)
@@ -288,35 +285,23 @@ static void FootprintReport(int32_t only)
     }
 }
 
+#endif
+
 /* ---------------- main ---------------- */
 
-static int32_t BenchmarkInit(const char *providerPath)
+static int32_t BenchmarkInit(void)
 {
-    int32_t ret = CRYPT_EAL_Init(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_PROVIDER);
+    int32_t ret = CRYPT_EAL_Init(CRYPT_EAL_INIT_CPU);
     if (ret != CRYPT_SUCCESS) {
         return ret;
     }
-    ret = CRYPT_EAL_RandInit(CRYPT_RAND_SHA256, NULL, NULL, NULL, 0);
-    if (ret != CRYPT_SUCCESS) {
-        return ret;
-    }
-    ret = CRYPT_EAL_ProviderSetLoadPath(NULL, providerPath);
-    if (ret != CRYPT_SUCCESS) {
-        printf("Failed to set provider path '%s': %08x\n", providerPath, ret);
-        return ret;
-    }
-    ret = CRYPT_EAL_ProviderLoad(NULL, BSL_SAL_LIB_FMT_LIBSO, "hifhe_provider", NULL, NULL);
-    if (ret != CRYPT_SUCCESS) {
-        printf("Failed to load hifhe_provider from '%s': %08x\n", providerPath, ret);
-    }
-    return ret;
+    return CRYPT_EAL_RandInit(CRYPT_RAND_SHA256, NULL, NULL, NULL, 0);
 }
 
 int main(int argc, char **argv)
 {
     BenchOptions opts = {
         .algorithm = NULL,
-        .providerPath = NULL,
         .times = 0u,
         .seconds = 0u,
         .presetId = -1,
@@ -324,17 +309,18 @@ int main(int argc, char **argv)
     };
     ParseOptions(argc, argv, &opts);
 
-    if (opts.providerPath == NULL) {
-        const char *env = getenv("HIFHE_PROVIDER_PATH");
-        opts.providerPath = (env != NULL) ? env : "../../build";
-    }
-    if (BenchmarkInit(opts.providerPath) != CRYPT_SUCCESS) {
+    if (BenchmarkInit() != CRYPT_SUCCESS) {
         return 1;
     }
-
     if (opts.footprint) {
+#ifdef HITLS_PROVIDER
         FootprintReport(opts.presetId);
-        CRYPT_EAL_RandDeinitEx(NULL);
+#else
+        fprintf(stderr, "Footprint queries require HITLS_PROVIDER\n");
+        CRYPT_EAL_RandDeinit();
+        return 1;
+#endif
+        CRYPT_EAL_RandDeinit();
         return 0;
     }
 
@@ -377,8 +363,10 @@ int main(int argc, char **argv)
         }
     }
 
+#ifdef HITLS_PROVIDER
     BgvBenchReleaseCache();
-    CRYPT_EAL_RandDeinitEx(NULL);
+#endif
+    CRYPT_EAL_RandDeinit();
     if (!hasMatch) {
         printf("No benchmark matched: %s\n", (opts.algorithm != NULL) ? opts.algorithm : "*");
         return 1;

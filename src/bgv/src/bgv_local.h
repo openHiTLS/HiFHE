@@ -17,10 +17,12 @@
 #define BGV_LOCAL_H
 
 #include <stdint.h>
+#ifdef HITLS_PROVIDER
 #include "bsl_params.h"
-#include "hifhe_types.h"
+#endif
+#include "bgv_adapter_types.h"
 #include "hifhe_err.h"
-#include "hifhe_provider.h"
+#include "hifhe_types.h"
 
 #include "crypt_bgv.h"
 #include "bgv/bgv.h"
@@ -93,12 +95,11 @@ typedef struct {
 } BgvState;
 
 struct BGV_Ctx {
-    int32_t algId; /* HIFHE_PKEY_BGV */
+    int32_t algId; /* HIFHE_BGV */
     BgvRole role;
     BgvUserPara para;
-    /* Source of this context's NTT tables. NULL means it computes its own.
-     * Otherwise a caller-owned handle shared with every context created from
-     * it. Not freed here. See CRYPT_BGV_NewCtxWithCache. */
+    /* NULL builds private tables; &para owns cached tables cleared with ctx.
+     * Any other cache is borrowed and must outlive this context. */
     BgvUserPara *lutCache;
     BgvState bgv;
 };
@@ -107,7 +108,9 @@ struct BGV_Ctx {
 void BgvUserPara_Init(BgvUserPara *p);
 void BgvUserPara_Clear(BgvUserPara *p);
 HIFHE_ERROR BgvUserPara_Copy(BgvUserPara *dst, const BgvUserPara *src);
+#ifdef HITLS_PROVIDER
 HIFHE_ERROR BgvUserPara_ParseFromBSL(BgvUserPara *p, const BSL_Param *param);
+#endif
 HIFHE_ERROR BgvUserPara_LoadPreset(BgvUserPara *p, int32_t presetId);
 /* Find or build NTT tables for the moduli param resolved to, in the cache
  * headed by p, and report the node holding them in *holder. Idempotent: a
@@ -123,15 +126,15 @@ uint64_t *BgvUserPara_PlainLut(const BgvUserPara *p);
 
 /* ----- BGV state helpers (hifhe_bgv_adapter.c) ----- */
 void Bgv_FreeState(BgvState *st);
-/* Deep-copy every built object in `src` into `dst` (`dst` must be zeroed).
- * Will rebuild the context (including NTT tables), and re-point every copied
- * key and ciphertext at the new context.  */
+/* Copy state into zeroed dst, reusing borrowed NTT tables. The table owner
+ * must outlive both contexts. Keys are copied and rebound to dst. */
 HIFHE_ERROR Bgv_DupState(BgvState *dst, const BgvState *src);
 HIFHE_ERROR Bgv_BuildContext(CRYPT_BGV_Ctx *ctx);
 HIFHE_ERROR Bgv_Gen(CRYPT_BGV_Ctx *ctx);
 HIFHE_ERROR Bgv_GenRelinKey(CRYPT_BGV_Ctx *ctx);
 HIFHE_ERROR Bgv_GenGaloisKeys(CRYPT_BGV_Ctx *ctx, const uint64_t *elts, uint32_t count);
 
+#ifdef HITLS_PROVIDER
 HIFHE_ERROR Bgv_GetPub(CRYPT_BGV_Ctx *ctx, BSL_Param *param);
 HIFHE_ERROR Bgv_GetPrv(CRYPT_BGV_Ctx *ctx, BSL_Param *param);
 HIFHE_ERROR Bgv_SetPub(CRYPT_BGV_Ctx *ctx, BSL_Param *param);
@@ -156,6 +159,8 @@ HIFHE_ERROR Bgv_GetPrvKeyLen(CRYPT_BGV_Ctx *ctx, uint32_t *outLen);
 HIFHE_ERROR Bgv_GetCiphertextLen(CRYPT_BGV_Ctx *ctx, uint32_t *outLen);
 HIFHE_ERROR Bgv_GetPlaintextLen(CRYPT_BGV_Ctx *ctx, uint32_t *outLen);
 HIFHE_ERROR Bgv_GetMsgLen(CRYPT_BGV_Ctx *ctx, uint32_t *outLen);
+
+#endif
 
 /* ----- SerDes prototypes (hifhe_serdes.c) ----- */
 int32_t BgvSerDes_DumpPlaintext(const Plaintext *pt, uint8_t *buf, uint32_t *bufLen, int32_t algId);

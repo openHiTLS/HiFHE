@@ -84,4 +84,7 @@ int32_t CKKS_InitFFTParams(CRYPT_CKKS_Para *para);
 int32_t CKKS_Encode(const CRYPT_CKKS_Ctx *ctx, const double complex *input, uint32_t slots, CRYPT_CKKS_Poly *pt);
 int32_t CKKS_Decode(const CRYPT_CKKS_Ctx *ctx, const CRYPT_CKKS_Poly *pt, double complex *out, uint32_t *slots);
 
+int32_t CKKS_PubEnc(const CRYPT_CKKS_Ctx *ctx, const CRYPT_CKKS_Poly *pt, CRYPT_CKKS_Poly *c0, CRYPT_CKKS_Poly *c1);
+int32_t CKKS_PrvDec(const CRYPT_CKKS_Ctx *ctx, const CRYPT_CKKS_Poly *c0, const CRYPT_CKKS_Poly *c1, CRYPT_CKKS_Poly *pt);
+
 #endif

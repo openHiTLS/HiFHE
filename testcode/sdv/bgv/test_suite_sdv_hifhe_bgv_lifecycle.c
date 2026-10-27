@@ -23,34 +23,37 @@
 #include "bsl_sal.h"
 #include "bsl_params.h"
 #include "crypt_algid.h"
-#include "crypt_eal_pkey.h"
+#include "crypt_bgv.h"
 #include "crypt_eal_provider.h"
 #include "crypt_eal_init.h"
 #include "crypt_types.h"
 
-#include "hifhe_provider.h"
+#include "hifhe.h"
+#include "hifhe_local.h"
+#include "bgv_local.h"
+#include "bgv_adapter_types.h"
 #include "hifhe_types.h"
 #include "hifhe_err.h"
 #include "crypto_test_util.h"
 #include "test.h"
 /* END_HEADER */
 
-/* Context lifecycle through the provider surface: creation, parameter
+/* Kernel context lifecycle: creation, parameter
  * loading, key generation, duplication and release. Encryption, the HE
  * operations, key marshalling and serdes are covered by
  * test_suite_sdv_hifhe_bgv_ops. */
 
-static CRYPT_EAL_PkeyCtx *BgvNewCtx(int withPreset)
+static CRYPT_BGV_Ctx *BgvNewCtx(int withPreset)
 {
-    CRYPT_EAL_PkeyCtx *ctx =
-        CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
+    CRYPT_BGV_Ctx *ctx =
+        CRYPT_BGV_NewCtx(HIFHE_BGV);
     if (ctx == NULL) {
         return NULL;
     }
     if (withPreset) {
         int32_t presetId = HIFHE_BGV_DEFAULT;
-        if (CRYPT_EAL_PkeyCtrl(ctx, CRYPT_CTRL_SET_PARA_BY_ID, &presetId, sizeof(presetId)) != HIFHE_SUCCESS) {
-            CRYPT_EAL_PkeyFreeCtx(ctx);
+        if (CRYPT_BGV_Ctrl(ctx, CRYPT_CTRL_SET_PARA_BY_ID, &presetId, sizeof(presetId)) != HIFHE_SUCCESS) {
+            CRYPT_BGV_FreeCtx(ctx);
             return NULL;
         }
     }
@@ -59,28 +62,95 @@ static CRYPT_EAL_PkeyCtx *BgvNewCtx(int withPreset)
 
 /* @
 * @test  SDV_CRYPTO_HIFHE_BGV_NEWCTX_TC001
-* @title  Provider-mediated CRYPT_BGV_NewCtx + CRYPT_BGV_FreeCtx round trip.
-* @brief  Confirms the BGV alg-ID is discoverable through
-*         CRYPT_EAL_ProviderPkeyNewCtx and that FreeCtx tolerates a fresh
+* @title  Kernel context allocation and release.
+* @brief  Confirms CRYPT_BGV_NewCtx accepts the BGV alg-ID and that FreeCtx tolerates a fresh
 *         (unparameterised) ctx.
 * @auto  TRUE
 @ */
 /* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_PUBLIC_CACHE_SEED_TC001(void)
+{
+    HIFHE_Ctx *a = NULL, *b = NULL, *c = NULL, *dup = NULL;
+    HIFHE_HEText *pt = NULL;
+    uint8_t seed[32] = {1};
+    uint32_t on = 1, message = 7, output[4096], count = 4096;
+
+    ASSERT_EQ(TestRandInit(), HIFHE_SUCCESS);
+    a = HIFHE_New(HIFHE_BGV);
+    b = HIFHE_New(HIFHE_BGV);
+    c = HIFHE_New(HIFHE_BGV);
+    ASSERT_TRUE(a != NULL && b != NULL && c != NULL);
+    ASSERT_EQ(HIFHE_Ctrl(a, HIFHE_CTRL_BGV_SET_LUT_CACHE, NULL, &on, sizeof(on)), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_SET_LUT_CACHE, NULL, &on, sizeof(on)), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_SetParaById(a, -1), HIFHE_PARAM_INVALID);
+    ASSERT_EQ(HIFHE_SetParaById(a, HIFHE_BGV_4096_44x2_17BIT), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_SetParaById(b, HIFHE_BGV_4096_44x2_17BIT), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_SetParaById(c, HIFHE_BGV_4096_44x2_17BIT), HIFHE_SUCCESS);
+    CRYPT_BGV_Ctx *am = a->params->math, *bm = b->params->math, *cm = c->params->math;
+    ASSERT_TRUE(am->lutCache != NULL && bm->lutCache != NULL && am->lutCache != bm->lutCache);
+    ASSERT_TRUE(cm->lutCache == NULL);
+    ASSERT_TRUE(am->bgv.context.rlweContext.tableBuf[0] != bm->bgv.context.rlweContext.tableBuf[0]);
+    ASSERT_TRUE(am->bgv.context.ptTableBuf != bm->bgv.context.ptTableBuf);
+    ASSERT_TRUE(am->bgv.context.ptTableBuf != cm->bgv.context.ptTableBuf);
+    ASSERT_EQ(am->bgv.context.ownsPtTableBuf, 0);
+    ASSERT_EQ(cm->bgv.context.ownsPtTableBuf, 1);
+    ASSERT_EQ(HIFHE_Ctrl(a, HIFHE_CTRL_BGV_SET_SEED, NULL, seed, sizeof(seed)), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_SET_SEED, NULL, seed, sizeof(seed)), HIFHE_SUCCESS);
+    seed[0] = 2;
+    ASSERT_EQ(HIFHE_Ctrl(c, HIFHE_CTRL_BGV_SET_SEED, NULL, seed, sizeof(seed)), HIFHE_SUCCESS);
+    dup = Hifhe_CtxDup(b);
+    ASSERT_TRUE(dup != NULL);
+    HIFHE_Free(b);
+    b = dup;
+    dup = NULL;
+    ASSERT_EQ(HIFHE_KeyGen(a), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_KeyGen(b), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_KeyGen(c), HIFHE_SUCCESS);
+    CRYPT_BGV_Ctx *ar = a->data, *br = b->data, *cr = c->data;
+    ASSERT_TRUE(ar->bgv.context.ptTableBuf == am->bgv.context.ptTableBuf);
+    ASSERT_TRUE(br->bgv.context.rlweContext.tableBuf[0] == bm->bgv.context.rlweContext.tableBuf[0]);
+    ASSERT_EQ(ar->bgv.keygen.sk->dataSize, br->bgv.keygen.sk->dataSize);
+    uint32_t bytes = ar->bgv.keygen.sk->dataSize * sizeof(uint64_t);
+    ASSERT_EQ(memcmp(ar->bgv.keygen.sk->data, br->bgv.keygen.sk->data, bytes), 0);
+    ASSERT_TRUE(memcmp(ar->bgv.keygen.sk->data, cr->bgv.keygen.sk->data, bytes) != 0);
+    ASSERT_EQ(ar->bgv.pk.dataSize, br->bgv.pk.dataSize);
+    ASSERT_EQ(memcmp(ar->bgv.pk.data, br->bgv.pk.data, ar->bgv.pk.dataSize * sizeof(uint64_t)), 0);
+    ASSERT_EQ(HIFHE_Encode(a, &message, 1, &pt), HIFHE_SUCCESS);
+    ASSERT_EQ(atomic_load(&a->params->references), 1);
+    HIFHE_Free(a);
+    a = NULL;
+    HIFHE_Free(b);
+    b = NULL;
+    b = HIFHE_New(HIFHE_BGV);
+    ASSERT_TRUE(b != NULL);
+    ASSERT_EQ(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_SET_LUT_CACHE, NULL, &on, sizeof(on)), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_SetParaById(b, HIFHE_BGV_4096_44x2_17BIT), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Decode(b, pt, output, &count), HIFHE_SUCCESS);
+    ASSERT_EQ(output[0], message);
+    HIFHE_Free(b);
+    b = NULL;
+EXIT:
+    HIFHE_HETextFree(pt);
+    HIFHE_Free(a);
+    HIFHE_Free(b);
+    HIFHE_Free(c);
+    HIFHE_Free(dup);
+}
+/* END_CASE */
+
+/* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_NEWCTX_TC001(void)
 {
-    if ((HIFHE_GetFeatures() & HIFHE_FEATURE_BGV) == 0) {
-        SKIP_TEST();
-    }
-    CRYPT_EAL_PkeyCtx *ctx = NULL;
+    CRYPT_BGV_Ctx *ctx = NULL;
 
     TestMemInit();
     TestRandInit();
 
-    ctx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
+    ctx = CRYPT_BGV_NewCtx(HIFHE_BGV);
     ASSERT_TRUE(ctx != NULL);
 
 EXIT:
-    CRYPT_EAL_PkeyFreeCtx(ctx);
+    CRYPT_BGV_FreeCtx(ctx);
 }
 /* END_CASE */
 
@@ -95,10 +165,7 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_CTRL_PRESET_TC001(void)
 {
-    if ((HIFHE_GetFeatures() & HIFHE_FEATURE_BGV) == 0) {
-        SKIP_TEST();
-    }
-    CRYPT_EAL_PkeyCtx *ctx = NULL;
+    CRYPT_BGV_Ctx *ctx = NULL;
     uint32_t polyDegree = 0u;
     uint64_t plainMod = 0ull;
 
@@ -108,7 +175,7 @@ void SDV_CRYPTO_HIFHE_BGV_CTRL_PRESET_TC001(void)
     ctx = BgvNewCtx(1);
     ASSERT_TRUE(ctx != NULL);
 
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &polyDegree, sizeof(polyDegree)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &polyDegree, sizeof(polyDegree)), HIFHE_SUCCESS);
     ASSERT_EQ(polyDegree, 2048u);
 
     /* The default preset leaves plainMod to the Proth search; the ctrl
@@ -116,11 +183,11 @@ void SDV_CRYPTO_HIFHE_BGV_CTRL_PRESET_TC001(void)
      * walks k downward from 2^(17 - 11 - 1) - 1 = 31, so it lands on
      * k = 28 and plainMod = 28 * 4096 + 1 = 114689. Callers that need exactly
      * 65537 use HIFHE_BGV_2048_48_17BIT, which pins it. */
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_PLAIN_MOD, &plainMod, sizeof(plainMod)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GET_PLAIN_MOD, &plainMod, sizeof(plainMod)), HIFHE_SUCCESS);
     ASSERT_EQ(plainMod, 114689ull);
 
 EXIT:
-    CRYPT_EAL_PkeyFreeCtx(ctx);
+    CRYPT_BGV_FreeCtx(ctx);
 }
 /* END_CASE */
 
@@ -135,25 +202,22 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_CTRL_17BIT_PLAINMOD_TC001(void)
 {
-    if ((HIFHE_GetFeatures() & HIFHE_FEATURE_BGV) == 0) {
-        SKIP_TEST();
-    }
-    CRYPT_EAL_PkeyCtx *ctx = NULL;
+    CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t plainMod = 0ull;
     int32_t presetId = HIFHE_BGV_2048_48_17BIT;
 
     TestMemInit();
     TestRandInit();
 
-    ctx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
+    ctx = CRYPT_BGV_NewCtx(HIFHE_BGV);
     ASSERT_TRUE(ctx != NULL);
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, CRYPT_CTRL_SET_PARA_BY_ID, &presetId, sizeof(presetId)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_BGV_Ctrl(ctx, CRYPT_CTRL_SET_PARA_BY_ID, &presetId, sizeof(presetId)), HIFHE_SUCCESS);
 
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_PLAIN_MOD, &plainMod, sizeof(plainMod)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GET_PLAIN_MOD, &plainMod, sizeof(plainMod)), HIFHE_SUCCESS);
     ASSERT_EQ(plainMod, 65537ull);
 
 EXIT:
-    CRYPT_EAL_PkeyFreeCtx(ctx);
+    CRYPT_BGV_FreeCtx(ctx);
 }
 /* END_CASE */
 
@@ -168,10 +232,7 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_SETPARA_BSL_TC001(void)
 {
-    if ((HIFHE_GetFeatures() & HIFHE_FEATURE_BGV) == 0) {
-        SKIP_TEST();
-    }
-    CRYPT_EAL_PkeyCtx *ctx = NULL;
+    CRYPT_BGV_Ctx *ctx = NULL;
     uint32_t polyDegreeIn = 4096u;
     uint32_t plainModBit = 17u;
     uint32_t relinDnum = 1u;
@@ -188,17 +249,17 @@ void SDV_CRYPTO_HIFHE_BGV_SETPARA_BSL_TC001(void)
     TestMemInit();
     TestRandInit();
 
-    ctx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
+    ctx = CRYPT_BGV_NewCtx(HIFHE_BGV);
     ASSERT_TRUE(ctx != NULL);
 
-    ASSERT_EQ(CRYPT_EAL_PkeySetParaEx(ctx, params), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_BGV_SetParaEx(ctx, params), HIFHE_SUCCESS);
 
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &polyDegreeOut, sizeof(polyDegreeOut)),
+    ASSERT_EQ(CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &polyDegreeOut, sizeof(polyDegreeOut)),
               HIFHE_SUCCESS);
     ASSERT_EQ(polyDegreeOut, polyDegreeIn);
 
 EXIT:
-    CRYPT_EAL_PkeyFreeCtx(ctx);
+    CRYPT_BGV_FreeCtx(ctx);
 }
 /* END_CASE */
 
@@ -213,10 +274,7 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_GEN_STUB_TC001(void)
 {
-    if ((HIFHE_GetFeatures() & HIFHE_FEATURE_BGV) == 0) {
-        SKIP_TEST();
-    }
-    CRYPT_EAL_PkeyCtx *ctx = NULL;
+    CRYPT_BGV_Ctx *ctx = NULL;
 
     TestMemInit();
     TestRandInit();
@@ -224,10 +282,10 @@ void SDV_CRYPTO_HIFHE_BGV_GEN_STUB_TC001(void)
     ctx = BgvNewCtx(1);
     ASSERT_TRUE(ctx != NULL);
 
-    ASSERT_EQ(CRYPT_EAL_PkeyGen(ctx), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_BGV_Gen(ctx), HIFHE_SUCCESS);
 
 EXIT:
-    CRYPT_EAL_PkeyFreeCtx(ctx);
+    CRYPT_BGV_FreeCtx(ctx);
 }
 /* END_CASE */
 
@@ -241,11 +299,8 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_DUPCTX_PARA_TC001(void)
 {
-    if ((HIFHE_GetFeatures() & HIFHE_FEATURE_BGV) == 0) {
-        SKIP_TEST();
-    }
-    CRYPT_EAL_PkeyCtx *src = NULL;
-    CRYPT_EAL_PkeyCtx *dst = NULL;
+    CRYPT_BGV_Ctx *src = NULL;
+    CRYPT_BGV_Ctx *dst = NULL;
     uint32_t srcDeg = 0u, dstDeg = 0u;
 
     TestMemInit();
@@ -253,17 +308,17 @@ void SDV_CRYPTO_HIFHE_BGV_DUPCTX_PARA_TC001(void)
 
     src = BgvNewCtx(1);
     ASSERT_TRUE(src != NULL);
-    dst = CRYPT_EAL_PkeyDupCtx(src);
+    dst = CRYPT_BGV_DupCtx(src);
     ASSERT_TRUE(dst != NULL);
 
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(src, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &srcDeg, sizeof(srcDeg)), HIFHE_SUCCESS);
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(dst, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &dstDeg, sizeof(dstDeg)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_BGV_Ctrl(src, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &srcDeg, sizeof(srcDeg)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_BGV_Ctrl(dst, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &dstDeg, sizeof(dstDeg)), HIFHE_SUCCESS);
     ASSERT_EQ(srcDeg, dstDeg);
     ASSERT_EQ(srcDeg, 2048u);
 
 EXIT:
-    CRYPT_EAL_PkeyFreeCtx(dst);
-    CRYPT_EAL_PkeyFreeCtx(src);
+    CRYPT_BGV_FreeCtx(dst);
+    CRYPT_BGV_FreeCtx(src);
 }
 /* END_CASE */
 
@@ -280,10 +335,7 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_INHERITED_PRIMES_TC001(void)
 {
-    if ((HIFHE_GetFeatures() & HIFHE_FEATURE_BGV) == 0) {
-        SKIP_TEST();
-    }
-    CRYPT_EAL_PkeyCtx *ctx = NULL;
+    CRYPT_BGV_Ctx *ctx = NULL;
     uint32_t polyDegree = 0u, level = 0u;
     uint64_t plainMod = 0ull;
 
@@ -293,27 +345,27 @@ void SDV_CRYPTO_HIFHE_BGV_INHERITED_PRIMES_TC001(void)
     /* 2048 / single 48-bit modulus, plainModBit 17. */
     ctx = BgvNewCtx(1);
     ASSERT_TRUE(ctx != NULL);
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &polyDegree, sizeof(polyDegree)), HIFHE_SUCCESS);
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_PLAIN_MOD, &plainMod, sizeof(plainMod)), HIFHE_SUCCESS);
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_LEVEL, &level, sizeof(level)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &polyDegree, sizeof(polyDegree)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GET_PLAIN_MOD, &plainMod, sizeof(plainMod)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GET_LEVEL, &level, sizeof(level)), HIFHE_SUCCESS);
     ASSERT_EQ(polyDegree, 2048u);
     ASSERT_EQ(plainMod, 114689ull);
     ASSERT_EQ(level, 1u);
-    CRYPT_EAL_PkeyFreeCtx(ctx);
+    CRYPT_BGV_FreeCtx(ctx);
     ctx = NULL;
 
     /* 8192 / 43,43,44,44 chain, plainModBit 20. */
-    ctx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_PKEY_BGV, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
+    ctx = CRYPT_BGV_NewCtx(HIFHE_BGV);
     ASSERT_TRUE(ctx != NULL);
     int32_t preset = HIFHE_BGV_8192_44x4;
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, CRYPT_CTRL_SET_PARA_BY_ID, &preset, sizeof(preset)), HIFHE_SUCCESS);
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &polyDegree, sizeof(polyDegree)), HIFHE_SUCCESS);
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_PLAIN_MOD, &plainMod, sizeof(plainMod)), HIFHE_SUCCESS);
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, HIFHE_CTRL_BGV_GET_LEVEL, &level, sizeof(level)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_BGV_Ctrl(ctx, CRYPT_CTRL_SET_PARA_BY_ID, &preset, sizeof(preset)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &polyDegree, sizeof(polyDegree)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GET_PLAIN_MOD, &plainMod, sizeof(plainMod)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GET_LEVEL, &level, sizeof(level)), HIFHE_SUCCESS);
     ASSERT_EQ(polyDegree, 8192u);
     ASSERT_EQ(plainMod, 1032193ull);
     ASSERT_EQ(level, 4u);
 EXIT:
-    CRYPT_EAL_PkeyFreeCtx(ctx);
+    CRYPT_BGV_FreeCtx(ctx);
 }
 /* END_CASE */

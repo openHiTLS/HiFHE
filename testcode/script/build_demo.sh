@@ -11,7 +11,7 @@
 # See the Mulan PSL v2 for more details.
 
 # Builds testcode/demo standalone: no test-suite generation. Needs
-# build/libhifhe_provider.so, i.e. build_hifhe.sh has already run.
+# build/libhifhe.so, i.e. build_hifhe.sh has already run.
 
 set -euo pipefail
 
@@ -27,7 +27,8 @@ Binaries land in testcode/output/demo, one per testcode/demo/*.c, each named
 hifhe_<file stem>. They carry an rpath to the provider and openHiTLS build
 directories, so they run without LD_LIBRARY_PATH:
 
-  testcode/output/demo/hifhe_leakstr_demo --help
+  testcode/output/demo/hifhe_leakstr_demo
+  testcode/output/demo/hifhe_leakstr_native_demo
 USAGE
 }
 
@@ -58,8 +59,8 @@ while [[ $# -gt 0 ]]; do
     shift
 done
 
-if [[ ! -f "${HIFHE_PROVIDER_DIR}/libhifhe_provider.so" ]]; then
-    echo "[ERROR] ${HIFHE_PROVIDER_DIR}/libhifhe_provider.so not found. Run build_hifhe.sh first." >&2
+if [[ ! -f "${HIFHE_PROVIDER_DIR}/libhifhe.so" ]]; then
+    echo "[ERROR] ${HIFHE_PROVIDER_DIR}/libhifhe.so not found. Run build_hifhe.sh first." >&2
     exit 1
 fi
 

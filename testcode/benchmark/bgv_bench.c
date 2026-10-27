@@ -37,7 +37,7 @@
 #include <string.h>
 
 #include "hifhe_types.h"
-#include "hifhe_provider.h"
+#include "hifhe.h"
 #include "hifhe_err.h"
 #include "crypt_bgv.h"
 #include "crypt_types.h"
@@ -309,6 +309,7 @@ DEFINE_HIFHE_OPS(Kernel, DEFINE_OPER(HIFHE_BENCH_NTT, KernelNttForward),
 
 DEFINE_BENCH_CTX_TIMES(Kernel, g_benchPresets, SIZEOF(g_benchPresets), 2000u);
 
+#ifdef HITLS_PROVIDER
 /* ================ Bgv: the CRYPT_BGV_* surface ========================= */
 
 int32_t BgvBenchBuildAndDrop(int32_t presetId);
@@ -378,7 +379,7 @@ static int32_t BgvSetUp(void **ctx, int32_t presetId)
     }
     st->presetId = presetId;
 
-    st->hifhe = (CRYPT_BGV_Ctx *)CRYPT_BGV_NewCtxWithCache(HIFHE_PKEY_BGV, &g_lutCache);
+    st->hifhe = (CRYPT_BGV_Ctx *)CRYPT_BGV_NewCtxWithCache(HIFHE_BGV, &g_lutCache);
     if (st->hifhe == NULL) {
         BgvTearDown(st);
         return HIFHE_MEMORY_ERROR;
@@ -633,7 +634,7 @@ static int32_t BgvRerandomize(void *ctx, const BenchExecOptions *opts)
                       {HIFHE_PARAM_BGV_CIPHERTEXT2, BSL_PARAM_TYPE_OCTETS, st->out, st->ctCap, 0},
                       BSL_PARAM_END};
     int32_t rc = HIFHE_SUCCESS;
-    BENCH_RUN_VA(CRYPT_BGV_Ctrl(st->hifhe, HIFHE_CTRL_BGV_HE_RERANDOMIZE, in, 0u), rc, HIFHE_SUCCESS, st->n, opts,
+    BENCH_RUN_VA(CRYPT_BGV_Ctrl(st->hifhe, HIFHE_CTRL_BGV_RERANDOMIZE, in, 0u), rc, HIFHE_SUCCESS, st->n, opts,
                  "%s Rerandomize", BenchPresetName(opts->presetId));
     return rc;
 }
@@ -652,7 +653,7 @@ static int32_t BgvCtxBuild(void *ctx, const BenchExecOptions *opts)
 
 int32_t BgvBenchBuildAndDrop(int32_t presetId)
 {
-    CRYPT_BGV_Ctx *c = (CRYPT_BGV_Ctx *)CRYPT_BGV_NewCtxWithCache(HIFHE_PKEY_BGV, &g_lutCache);
+    CRYPT_BGV_Ctx *c = (CRYPT_BGV_Ctx *)CRYPT_BGV_NewCtxWithCache(HIFHE_BGV, &g_lutCache);
     if (c == NULL) {
         return HIFHE_MEMORY_ERROR;
     }
@@ -678,3 +679,5 @@ DEFINE_HIFHE_OPS(Bgv, DEFINE_OPER(HIFHE_BENCH_CTXBUILD, BgvCtxBuild), DEFINE_OPE
                  DEFINE_OPER(HIFHE_BENCH_MODSWITCH, BgvModSwitch), DEFINE_OPER(HIFHE_BENCH_RERAND, BgvRerandomize));
 
 DEFINE_BENCH_CTX_TIMES(Bgv, g_benchPresets, SIZEOF(g_benchPresets), 200u);
+
+#endif

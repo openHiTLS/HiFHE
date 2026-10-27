@@ -10,9 +10,7 @@
 # MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 # See the Mulan PSL v2 for more details.
 
-# Builds testcode/benchmark standalone: no test-suite generation, so it is
-# quick enough to run between edits. Needs build/libhifhe_provider.so, i.e.
-# build_hifhe.sh has already run.
+# Builds the benchmark from the library implementation objects.
 
 set -euo pipefail
 
@@ -23,15 +21,13 @@ Usage: build_benchmark.sh [asan] [clean] [run]
                           [--enable ckks|bgv] [--disable ckks|bgv]
 
   asan       build with AddressSanitizer
-  clean      remove the benchmark build and binary, then exit
+  clean      remove the benchmark binary, then exit
   run        build, then run every benchmark
   --enable   force an algorithm's modules on  (-DHIFHE_<ALG>=ON)
   --disable  force an algorithm's modules off (-DHIFHE_<ALG>=OFF)
 
-Without --enable/--disable each algorithm follows the provider: the modules
-built are the ones whose algorithm is in build/include/hifhe_config.h. A
-module calls its algorithm directly, so asking for one the provider was built
-without will not link.
+Without --enable/--disable, reuse the library build configuration.
+The Bgv module requires HITLS_PROVIDER; Kernel runs without it.
 
 The binary lands in testcode/output/hifhe_benchmark. For finer control run it
 directly, or use execute_benchmark.sh:
@@ -41,8 +37,6 @@ USAGE
 }
 
 HIFHE_ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-BENCH_SRC_DIR="${HIFHE_ROOT_DIR}/testcode/benchmark"
-BENCH_BUILD_DIR="${BENCH_SRC_DIR}/build"
 HIFHE_PROVIDER_DIR=${HIFHE_PROVIDER_DIR:-"${HIFHE_ROOT_DIR}/build"}
 
 HITLS_ROOT_DIR=${HITLS_ROOT_DIR:-}
@@ -53,7 +47,7 @@ HITLS_ROOT_DIR=${HITLS_ROOT_DIR:-"${HIFHE_ROOT_DIR}/platform/openhitls"}
 
 ENABLE_ASAN=OFF
 DO_RUN="no"
-# Empty means "follow the provider"; CMake reads hifhe_config.h for the default.
+# Empty means reuse the library build configuration.
 HIFHE_CKKS=""
 HIFHE_BGV=""
 
@@ -62,7 +56,7 @@ while [[ $# -gt 0 ]]; do
         asan) ENABLE_ASAN=ON ;;
         run)  DO_RUN="yes" ;;
         clean)
-            rm -rf "${BENCH_BUILD_DIR}" "${HIFHE_ROOT_DIR}/testcode/output/hifhe_benchmark"
+            rm -f "${HIFHE_ROOT_DIR}/testcode/output/hifhe_benchmark"
             echo "Benchmark build cleaned."
             exit 0
             ;;
@@ -85,32 +79,13 @@ CMAKE_FEATURE_ARGS=()
 [[ -n "${HIFHE_CKKS}" ]] && CMAKE_FEATURE_ARGS+=("-DHIFHE_CKKS=${HIFHE_CKKS}")
 [[ -n "${HIFHE_BGV}"  ]] && CMAKE_FEATURE_ARGS+=("-DHIFHE_BGV=${HIFHE_BGV}")
 
-if [[ ! -f "${HIFHE_PROVIDER_DIR}/libhifhe_provider.so" ]]; then
-    echo "[ERROR] ${HIFHE_PROVIDER_DIR}/libhifhe_provider.so not found. Run build_hifhe.sh first." >&2
-    exit 1
-fi
 
-# The provider headers are compiled against the same macro set the library was.
-MACROS=""
-if [[ -f "${HITLS_ROOT_DIR}/build/macro.txt" ]]; then
-    MACROS="$(tr '\n' ' ' < "${HITLS_ROOT_DIR}/build/macro.txt")"
-fi
-
-CFLAGS="${MACROS}"
-if [[ "${ENABLE_ASAN}" == "ON" ]]; then
-    CFLAGS="${CFLAGS} -fsanitize=address -fno-omit-frame-pointer"
-fi
-
-mkdir -p "${BENCH_BUILD_DIR}"
-cmake -S "${BENCH_SRC_DIR}" -B "${BENCH_BUILD_DIR}" \
-    -DHITLS_ROOT_DIR="${HITLS_ROOT_DIR}" \
-    -DHIFHE_PROVIDER_DIR="${HIFHE_PROVIDER_DIR}" \
-    "${CMAKE_FEATURE_ARGS[@]}" \
-    -DCMAKE_C_FLAGS="${CFLAGS}" \
-    -DCMAKE_EXE_LINKER_FLAGS="$([[ "${ENABLE_ASAN}" == "ON" ]] && echo -fsanitize=address)"
-cmake --build "${BENCH_BUILD_DIR}" --parallel "$(nproc)"
-
-echo "Built: ${HIFHE_ROOT_DIR}/testcode/output/hifhe_benchmark"
+CMAKE_FEATURE_ARGS+=("-DHITLS_ROOT_PATH=${HITLS_ROOT_DIR}")
+cmake -S "${HIFHE_ROOT_DIR}" -B "${HIFHE_PROVIDER_DIR}" \
+    -DBUILD_BENCHMARK=ON \
+    -DHIFHE_ENABLE_ASAN="${ENABLE_ASAN}" \
+    "${CMAKE_FEATURE_ARGS[@]}"
+cmake --build "${HIFHE_PROVIDER_DIR}" --target hifhe_benchmark --parallel "$(nproc)"
 
 if [[ "${DO_RUN}" == "yes" ]]; then
     bash "${HIFHE_ROOT_DIR}/testcode/script/execute_benchmark.sh"

@@ -241,6 +241,7 @@ int32_t CRYPT_CKKS_SetPara(CRYPT_CKKS_Ctx *ctx, const CRYPT_CkksPara *para)
     return CRYPT_SUCCESS;
 }
 
+#ifdef HITLS_PROVIDER
 static int32_t CKKS_GetUint32(const BSL_Param *params, int32_t key, uint32_t *value)
 {
     const BSL_Param *param = BSL_PARAM_FindConstParam(params, key);
@@ -268,6 +269,8 @@ int32_t CRYPT_CKKS_SetParaEx(CRYPT_CKKS_Ctx *ctx, const BSL_Param *params)
     para.sigma = (double)sigmaMilli / 1000.0;
     return CRYPT_CKKS_SetPara(ctx, &para);
 }
+
+#endif
 
 uint32_t CRYPT_CKKS_GetBits(const CRYPT_CKKS_Ctx *ctx)
 {
@@ -391,6 +394,7 @@ EXIT:
     return ret;
 }
 
+#ifdef HITLS_PROVIDER
 static int32_t CKKS_GetConstOctets(const BSL_Param *params, int32_t key, const uint8_t **data, uint32_t *len)
 {
     const BSL_Param *param = BSL_PARAM_FindConstParam(params, key);
@@ -515,3 +519,4 @@ int32_t CRYPT_CKKS_SetPubKeyEx(CRYPT_CKKS_Ctx *ctx, const BSL_Param *params)
     ctx->pubKey = key;
     return CRYPT_SUCCESS;
 }
+#endif
