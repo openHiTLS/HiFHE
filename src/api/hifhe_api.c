@@ -262,7 +262,7 @@ static int32_t CheckOut(HIFHE_HEText **out)
     return out == NULL ? HIFHE_NULL_INPUT : *out != NULL ? HIFHE_BAD_STATE : 0;
 }
 
-int32_t HIFHE_Encode(const HIFHE_Ctx *ctx, const uint32_t *values, uint32_t count, HIFHE_HEText **out)
+int32_t HIFHE_Encode(const HIFHE_Ctx *ctx, const uint64_t *values, uint32_t count, HIFHE_HEText **out)
 {
     int32_t ret = CheckOut(out);
     if (ret == HIFHE_SUCCESS) {
@@ -285,7 +285,7 @@ int32_t HIFHE_Encode(const HIFHE_Ctx *ctx, const uint32_t *values, uint32_t coun
     return ret != HIFHE_SUCCESS ? ret : Hifhe_HETextNew(ctx, data, out);
 }
 
-int32_t HIFHE_Decode(const HIFHE_Ctx *ctx, const HIFHE_HEText *text, uint32_t *values, uint32_t *count)
+int32_t HIFHE_Decode(const HIFHE_Ctx *ctx, const HIFHE_HEText *text, uint64_t *values, uint32_t *count)
 {
     if (count == NULL) {
         return HIFHE_NULL_INPUT;
@@ -306,19 +306,19 @@ int32_t HIFHE_Decode(const HIFHE_Ctx *ctx, const HIFHE_HEText *text, uint32_t *v
         *count = need;
         return HIFHE_BUFFER_TOO_SMALL;
     }
-    if (Overlap(values, (size_t)need * 4, count, sizeof(*count))) {
+    if (Overlap(values, (size_t)need * sizeof(*values), count, sizeof(*count))) {
         return HIFHE_PARAM_INVALID;
     }
-    uint32_t *fresh = BSL_SAL_Calloc(need, 4);
+    uint64_t *fresh = BSL_SAL_Calloc(need, sizeof(*fresh));
     if (fresh == NULL) {
         return HIFHE_MEMORY_ERROR;
     }
     ret = ctx->method->decode(ctx, text->data, fresh, &need);
     if (ret == HIFHE_SUCCESS) {
-        memcpy(values, fresh, (size_t)need * 4);
+        memcpy(values, fresh, (size_t)need * sizeof(*values));
         *count = need;
     }
-    BSL_SAL_CleanseData(fresh, need * 4);
+    BSL_SAL_CleanseData(fresh, need * sizeof(*fresh));
     BSL_SAL_Free(fresh);
     return ret;
 }

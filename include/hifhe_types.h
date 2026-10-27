@@ -18,9 +18,12 @@
 extern "C" {
 #endif
 
+/** Opaque algorithm context owning its parameters and keys; release with HIFHE_Free. */
 typedef struct HIFHE_Ctx HIFHE_Ctx;
+/** Opaque plaintext/ciphertext owning its data; release with HIFHE_HETextFree, even after its context is freed. */
 typedef struct HIFHE_HEText HIFHE_HEText;
 
+/** Algorithm identifiers for HIFHE_New and CRYPT_EAL_ProviderPkeyNewCtx. */
 typedef enum {
     HIFHE_BGV = (int32_t)0x89000002u,
     HIFHE_CKKS = (int32_t)0x89000001u,
@@ -30,23 +33,40 @@ typedef enum {
 /* Provider attribute, passed to CRYPT_EAL_ProviderPkeyNewCtx. */
 #define HIFHE_PROVIDER_ATTR "provider=hifhe"
 
+/**
+ * CKKS parameters for CRYPT_EAL_PkeySetParaEx: all five keys are required.
+ * Each uses BSL_PARAM_TYPE_UINT32 with valueLen = sizeof(uint32_t).
+ * End the parameter array with BSL_PARAM_END.
+ */
 #define HIFHE_PARAM_BASE             100000
+/** Ring degree N: a power of two from 8 to 16384. */
 #define HIFHE_PARAM_CKKS_N           (HIFHE_PARAM_BASE + 1)
+/** Ciphertext modulus exponent: Q = 2^qBits; qBits is from 30 to 60. */
 #define HIFHE_PARAM_CKKS_Q_BITS      (HIFHE_PARAM_BASE + 2)
+/** Encoding scale exponent: scale = 2^pBits; 0 < pBits < qBits. */
 #define HIFHE_PARAM_CKKS_P_BITS      (HIFHE_PARAM_BASE + 3)
+/** Error-sampling standard deviation multiplied by 1000; must be positive. */
 #define HIFHE_PARAM_CKKS_SIGMA_MILLI (HIFHE_PARAM_BASE + 4)
+/** Slot count: a positive power of two no greater than N / 2. */
 #define HIFHE_PARAM_CKKS_SLOTS       (HIFHE_PARAM_BASE + 5)
 
 #define HIFHE_PARAM_BGV_BASE      (HIFHE_PARAM_BASE + 100)
+/**
+ * HE message encoding input: BSL_PARAM_TYPE_OCTETS with count host-order uint64_t slots.
+ * valueLen = count * sizeof(uint64_t); 1 <= count <= N; each value is below the plaintext modulus.
+ */
 #define HIFHE_PARAM_BGV_MSG       (HIFHE_PARAM_BGV_BASE + 8)
+/** HEAdd only: BSL_PARAM_TYPE_OCTETS containing one uint8_t equal to 1; negate the first ciphertext. */
 #define HIFHE_PARAM_BGV_NEGATE    (HIFHE_PARAM_BGV_BASE + 9)
+/** BSL_PARAM_TYPE_OCTETS containing a serialized plaintext for message decoding or HEAdd/HEMul. */
 #define HIFHE_PARAM_BGV_PLAINTEXT (HIFHE_PARAM_BGV_BASE + 11)
 #endif
 
 #define HIFHE_PRESET_BGV_BASE 100000
 
+/** BGV preset identifiers for HIFHE_SetParaById; these are not algorithm identifiers. */
 typedef enum {
-    HIFHE_BGV_DEFAULT = HIFHE_PRESET_BGV_BASE + 0, /* = HIFHE_BGV_2048_48 */
+    HIFHE_BGV_DEFAULT = HIFHE_PRESET_BGV_BASE + 0, /* Same parameters as HIFHE_BGV_2048_48. */
     HIFHE_BGV_2048_48 = HIFHE_PRESET_BGV_BASE + 1,
     HIFHE_BGV_8192_44x4 = HIFHE_PRESET_BGV_BASE + 2,
     /* 2048, 48-bit cipher, plainMod 65537. */
@@ -57,13 +77,52 @@ typedef enum {
     HIFHE_BGV_8192_44x4_17BIT = HIFHE_PRESET_BGV_BASE + 5,
 } HIFHE_BGV_PRESET;
 
+/**
+ * Native HIFHE_Ctrl commands. Argument sizes below are in bytes.
+ * Length queries describe objects at the configured preset level; use
+ * HIFHE_Serialize(ctx, object, NULL, &len) for an existing object's exact size.
+ * Provider PkeyCtrl forwards the LUT, seed, degree, and length commands with
+ * args = value and len = valueLen. RERANDOMIZE has a separate Provider layout below.
+ * Provider negation uses HIFHE_PARAM_BGV_NEGATE in HEAdd, not a SET_NEGATE ctrl call.
+ */
 typedef enum {
+    /**
+     * Add noise to a ciphertext, creating a new object; no key is required.
+     * text: input ciphertext without a negate flag; value: HIFHE_HEText ** with *value == NULL;
+     * valueLen: sizeof(HIFHE_HEText *). Free the result with HIFHE_HETextFree.
+     * This does not bootstrap the ciphertext or reset its noise budget.
+     * Provider: args is a BSL_Param array containing CRYPT_PARAM_PKEY_HE_CIPHERTEXT1
+     * (input bytes) and CRYPT_PARAM_PKEY_HE_CIPHERTEXT2 (output buffer), both OCTETS,
+     * followed by BSL_PARAM_END; pass len = 0. Output useLen receives the actual/required size.
+     */
     HIFHE_CTRL_BGV_RERANDOMIZE = 100001,
+    /**
+     * Mark text, a ciphertext, for negation when passed as para1 to HIFHE_Add.
+     * value: NULL; valueLen: 0. This sets a flag, not a toggle or immediate arithmetic operation.
+     * The input stays marked; the Add result is unmarked.
+     * Decrypt, Mul, Serialize, and RERANDOMIZE reject marked inputs.
+     */
     HIFHE_CTRL_BGV_SET_NEGATE = 100002,
+    /**
+     * Set the context's precomputed-table cache before HIFHE_SetParaById.
+     * text: NULL; value: uint32_t * containing 0 (disabled, default) or 1 (enabled);
+     * valueLen: sizeof(uint32_t). Returns HIFHE_BAD_STATE after parameters are configured.
+     */
     HIFHE_CTRL_BGV_SET_LUT_CACHE = 100003,
+    /**
+     * Serialized size of a fresh two-component ciphertext.
+     * text = NULL; value = uint32_t * output; valueLen = sizeof(uint32_t).
+     */
     HIFHE_CTRL_BGV_GET_CIPHERTEXT_LEN = 100004,
+    /** Serialized plaintext size: text = NULL, value = uint32_t * output, valueLen = sizeof(uint32_t). */
     HIFHE_CTRL_BGV_GET_PLAINTEXT_LEN = 100005,
+    /** Ring degree, also the BGV slot count: text = NULL, value = uint32_t * output, valueLen = sizeof(uint32_t). */
     HIFHE_CTRL_BGV_GET_POLY_DEGREE = 100006,
+    /**
+     * Set the BGV seed after parameter configuration and before key generation.
+     * text: NULL; value: 32 seed bytes, copied by the call; valueLen: 32.
+     * Returns HIFHE_BAD_STATE if keys have already been generated.
+     */
     HIFHE_CTRL_BGV_SET_SEED = 100007,
 } HIFHE_CMD;
 

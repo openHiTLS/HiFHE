@@ -8,7 +8,7 @@
 # MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 # See the Mulan PSL v2 for more details.
 
-# One executable per demo/*.c, named after the file and prefixed hifhe_.
+# One executable per demo/*.c, named after the file.
 # Builds with the root tests or standalone.
 
 cmake_minimum_required(VERSION 3.16)
@@ -95,18 +95,18 @@ endif()
 
 foreach(DEMO_FILE ${DEMO_FILES})
     get_filename_component(DEMO_STEM ${DEMO_FILE} NAME_WE)
-    if(DEMO_STEM STREQUAL "leakstr_demo" AND NOT HIFHE_DEMO_PROVIDER)
-        file(REMOVE "${DEMO_OUTPUT_DIR}/hifhe_${DEMO_STEM}")
+    if(DEMO_STEM STREQUAL "hifhe_bgv_provider_demo" AND NOT HIFHE_DEMO_PROVIDER)
+        file(REMOVE "${DEMO_OUTPUT_DIR}/${DEMO_STEM}")
         continue()
     endif()
-    set(DEMO_NAME "hifhe_${DEMO_STEM}")
+    set(DEMO_NAME "${DEMO_STEM}")
     add_executable(${DEMO_NAME} ${DEMO_FILE})
     set_target_properties(${DEMO_NAME} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${DEMO_OUTPUT_DIR}"
         BUILD_RPATH "${HITLS_ROOT_DIR}/build;${HIFHE_PROVIDER_DIR}"
     )
     target_compile_options(${DEMO_NAME} PRIVATE "$<$<NOT:$<CONFIG:Debug>>:-O2>" -g)
-    if(NOT DEMO_STEM STREQUAL "leakstr_demo")
+    if(NOT DEMO_STEM STREQUAL "hifhe_bgv_provider_demo")
         target_link_libraries(${DEMO_NAME} ${HIFHE_DEMO_LIB})
     endif()
     target_link_libraries(${DEMO_NAME}
@@ -118,7 +118,7 @@ foreach(DEMO_FILE ${DEMO_FILES})
         -Wl,--as-needed
     )
     add_test(NAME ${DEMO_NAME} COMMAND ${DEMO_NAME})
-    if(DEMO_STEM STREQUAL "leakstr_demo")
+    if(DEMO_STEM STREQUAL "hifhe_bgv_provider_demo")
         target_compile_definitions(${DEMO_NAME} PRIVATE HITLS_PROVIDER)
         if(NOT DEMO_STANDALONE)
             add_dependencies(${DEMO_NAME} hifhe_provider)

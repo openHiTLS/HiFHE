@@ -133,19 +133,11 @@ static int32_t Encode(const void *data, const BSL_Param *input, uint8_t *out, ui
     if (count > ctx->params->config.slots) {
         return HIFHE_PARAM_INVALID;
     }
-    uint32_t *values = BSL_SAL_Calloc(count, 4);
+    uint64_t *values = BSL_SAL_Calloc(count, sizeof(*values));
     if (values == NULL) {
         return HIFHE_MEMORY_ERROR;
     }
-    for (uint32_t i = 0; i < count; i++) {
-        uint64_t v;
-        memcpy(&v, (uint8_t *)p[0]->value + (size_t)i * 8, 8);
-        if (v > UINT32_MAX) {
-            BSL_SAL_Free(values);
-            return HIFHE_PARAM_INVALID;
-        }
-        values[i] = (uint32_t)v;
-    }
+    memcpy(values, p[0]->value, (size_t)count * sizeof(*values));
     ret = ctx->method->encode(ctx, values, count, NULL);
     if (ret == HIFHE_SUCCESS) {
         ret = OutputSize(ctx, 0, NULL, out, len);
@@ -158,7 +150,7 @@ static int32_t Encode(const void *data, const BSL_Param *input, uint8_t *out, ui
         ret = HIFHE_Serialize(ctx, text, out, len);
     }
     HIFHE_HETextFree(text);
-    BSL_SAL_CleanseData(values, count * 4);
+    BSL_SAL_CleanseData(values, count * sizeof(*values));
     BSL_SAL_Free(values);
     return ret;
 }
@@ -188,9 +180,9 @@ static int32_t Decode(const void *data, const BSL_Param *input, uint8_t *out, ui
         *len = need;
         ret = HIFHE_BUFFER_TOO_SMALL;
     }
-    uint32_t *values = NULL;
+    uint64_t *values = NULL;
     if (ret == HIFHE_SUCCESS) {
-        values = BSL_SAL_Calloc(count, 4);
+        values = BSL_SAL_Calloc(count, sizeof(*values));
         if (values == NULL) {
             ret = HIFHE_MEMORY_ERROR;
         }
@@ -199,14 +191,11 @@ static int32_t Decode(const void *data, const BSL_Param *input, uint8_t *out, ui
         ret = HIFHE_Decode(ctx, text, values, &count);
     }
     if (ret == HIFHE_SUCCESS) {
-        for (uint32_t i = 0; i < count; i++) {
-            uint64_t v = values[i];
-            memcpy(out + (size_t)i * 8, &v, 8);
-        }
+        memcpy(out, values, need);
         *len = need;
     }
     if (values != NULL) {
-        BSL_SAL_CleanseData(values, count * 4);
+        BSL_SAL_CleanseData(values, count * sizeof(*values));
     }
     BSL_SAL_Free(values);
     HIFHE_HETextFree(text);

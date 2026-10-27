@@ -1,24 +1,58 @@
 # HiFHE
 
-HiFHE is a homomorphic-encryption provider library for openHiTLS. It currently
-provides CKKS and BGV.
+HiFHE is a homomorphic encryption library with a BGV implementation.
+
+Fully homomorphic encryption (FHE) supports expressing general computation through
+combinations of ciphertext operations. The available operations and computation
+depth depend on the implementation and parameters. HiFHE exposes the capabilities
+listed below; its public API does not offer ciphertext/ciphertext multiplication
+or bootstrapping and cannot execute computations of arbitrary depth.
 
 ## Features
 
-- One `libhifhe.so` provides a native C API and an openHiTLS Provider.
-- Opaque `HIFHE_Ctx` and `HIFHE_HEText` types in [hifhe.h](include/hifhe.h).
-  Compute with objects; serialize for transport.
-- BGV: presets, integer encoding, key generation, encryption/decryption, addition,
-  ciphertext/plaintext multiplication, negation, and rerandomization.
-- Custom parameter objects, key import/export, and ciphertext/ciphertext
-  multiplication are omitted from the public API.
-- CKKS: existing Provider complex-vector encryption/decryption is retained;
-  native CKKS presets and complex encoding are unavailable.
-- Random and Hash/XOF operations use the built-in openHiTLS implementation.
+| Algorithm | Data and arithmetic | Current public capabilities |
+| --- | --- | --- |
+| BGV | Integer vectors; arithmetic modulo the plaintext modulus t | Presets, encoding/decoding, key generation, encryption/decryption, ciphertext/ciphertext and ciphertext/plaintext addition, ciphertext/plaintext multiplication, negation, and noise addition |
 
-Initialize openHiTLS before using HiFHE, as shown in the demos. The native demo
-initializes CPU, BSL, and RAND; the Provider demo also initializes its framework.
-Algorithm internals retain their original randomness, sampling, and encryption code.
+- **Data transport:** plaintext and ciphertext serialization/deserialization for
+  storage and transport. BGV ciphertexts interoperate between native and Provider APIs.
+- **Build options:** BGV and Provider integration can be enabled independently.
+
+HiFHE provides a native C API and an openHiTLS Provider. The C API in
+[hifhe.h](include/hifhe.h) uses opaque `HIFHE_Ctx` and `HIFHE_HEText` types for
+contexts, plaintexts, and ciphertexts. Local computation uses objects; transport
+uses serialized bytes.
+
+## Workflow and use cases
+
+For BGV, A and B select the same preset. A generates and holds the keys; B needs
+no keys for addition and ciphertext/plaintext multiplication.
+
+```mermaid
+flowchart LR
+    A["A: message → encode → encrypt"] -->|serialized ciphertext| B["B: deserialize → compute"]
+    B -->|serialized result ciphertext| C["A: deserialize → decrypt → decode"]
+```
+
+In the native API, `HIFHE_Encode` / `HIFHE_Decode` convert between numeric values
+and algorithm plaintexts. `HIFHE_Encrypt` / `HIFHE_Decrypt` convert between those
+plaintexts and ciphertexts. `HIFHE_Add` / `HIFHE_Mul` perform homomorphic computation.
+Encoding does not protect data, and serialization only converts objects to bytes:
+a serialized plaintext is still not encrypted.
+
+Current BGV operations support encrypted sums, weighted calculations with public
+coefficients, and the private-query workflow in the [demos](testcode/demo/README.md).
+In that workflow, A encrypts a query. B subtracts it from entries, multiplies by
+nonzero masks, adds noise, and returns ciphertexts for A to decrypt and check for
+matches. Applications must express their computations using supported operations;
+HiFHE does not execute arbitrary programs directly. Ciphertexts are typically
+larger than the original data, and homomorphic operations add computational cost;
+evaluate both for the chosen parameters and workload.
+
+Initialize openHiTLS before using HiFHE. See the
+[native demo](testcode/demo/hifhe_bgv_demo.c) and
+[Provider demo](testcode/demo/hifhe_bgv_provider_demo.c) for initialization, error handling,
+and resource cleanup.
 
 ## Build
 
@@ -53,7 +87,6 @@ cmake -S . -B build \
     -DHITLS_LIB_DIR=/path/to/openHiTLS/build \
     -DHIFHE_BUILD_SHARED=ON \
     -DHIFHE_BUILD_STATIC=ON \
-    -DHIFHE_CKKS=ON \
     -DHIFHE_BGV=ON \
     -DHIFHE_ENABLE_ASAN=OFF \
     -DHIFHE_ENABLE_GCOV=OFF
@@ -68,25 +101,22 @@ CMake options:
 | `HITLS_LIB_DIR` | `${HITLS_ROOT_PATH}/build` | `hitls_crypto` and `hitls_bsl` directory |
 | `HIFHE_BUILD_SHARED` | `ON` | Build `libhifhe.so` |
 | `HIFHE_BUILD_STATIC` | `ON` | Build `libhifhe.a` |
-| `HIFHE_CKKS` | `ON` | Compile CKKS into the provider |
-| `HIFHE_BGV` | `ON` | Compile BGV into the provider |
+| `HIFHE_BGV` | `ON` | Compile BGV into the HiFHE library |
 | `HITLS_PROVIDER` | `ON` | Build openHiTLS Provider integration |
 | `HIFHE_BUILD_TESTS` | `OFF` | Build native tests and internal regressions |
 | `HIFHE_ENABLE_ASAN` | `OFF` | Enable AddressSanitizer |
 | `HIFHE_ENABLE_GCOV` | `OFF` | Enable coverage |
 
-At least one library type must be enabled. CKKS and BGV can be selected
+At least one library type must be enabled. BGV and Provider integration can be selected
 independently:
 
 ```sh
-bash testcode/script/build_hifhe.sh --enable ckks
-bash testcode/script/build_hifhe.sh --disable ckks
 bash testcode/script/build_hifhe.sh --enable bgv
 bash testcode/script/build_hifhe.sh --disable bgv
 bash testcode/script/build_hifhe.sh --disable provider
 ```
 
-`HIFHE_CKKS=OFF` or `HIFHE_BGV=OFF` excludes the corresponding sources and
+`HIFHE_BGV=OFF` excludes BGV sources and
 records the result in the generated `build/include/hifhe_config.h`.
 
 Install with `cmake --install build --prefix /path/to/prefix`.
@@ -129,8 +159,8 @@ keys, byte transport, and client decryption:
 
 ```sh
 bash testcode/script/build_demo.sh
-./testcode/output/demo/hifhe_leakstr_demo         # Provider
-./testcode/output/demo/hifhe_leakstr_native_demo  # Native API
+./testcode/output/demo/hifhe_bgv_provider_demo  # Provider
+./testcode/output/demo/hifhe_bgv_demo           # Native API
 ```
 
 Random and Hash operations use the built-in openHiTLS implementation.

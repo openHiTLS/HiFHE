@@ -141,7 +141,7 @@ void SDV_CRYPTO_HIFHE_BGV_PROVIDER_TC001(void)
     CRYPT_EAL_PkeyCtx *b = NULL;
     HIFHE_HEText *pt = NULL, *ct = NULL, *r = NULL, *decoded = NULL;
     uint8_t *ctWire = NULL, *ptWire = NULL, *result = NULL;
-    uint32_t *out = NULL;
+    uint64_t *out = NULL;
     bool loaded = false;
     const char *path = getenv("HIFHE_PROVIDER_PATH");
 
@@ -168,7 +168,7 @@ void SDV_CRYPTO_HIFHE_BGV_PROVIDER_TC001(void)
     ASSERT_EQ(bits, UINT32_MAX);
     ASSERT_EQ(CRYPT_EAL_PkeyGetKeyBits(b), 0);
     ASSERT_EQ(CRYPT_EAL_PkeyGetKeyLen(b), 0);
-    uint32_t values[] = {1, 2, 3, 4};
+    uint64_t values[] = {1, 2, 3, 4};
     uint64_t bucket[] = {1, 4, 2, 6};
     ASSERT_EQ(HIFHE_Encode(a, values, 4, &pt), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_Encrypt(a, pt, &ct), HIFHE_SUCCESS);
@@ -179,6 +179,10 @@ void SDV_CRYPTO_HIFHE_BGV_PROVIDER_TC001(void)
     uint64_t invalid = 65537;
     BSL_Param bad[] = {{HIFHE_PARAM_BGV_MSG, BSL_PARAM_TYPE_OCTETS, &invalid, sizeof(invalid), 0}, BSL_PARAM_END};
     ASSERT_TRUE(CRYPT_EAL_PkeyHEMsgEncode(b, bad, NULL, &ptLen) == HIFHE_PARAM_INVALID);
+    invalid = (UINT64_C(1) << 32) + 1;
+    ASSERT_EQ(CRYPT_EAL_PkeyHEMsgEncode(b, bad, NULL, &ptLen), HIFHE_PARAM_INVALID);
+    invalid = UINT64_MAX;
+    ASSERT_EQ(CRYPT_EAL_PkeyHEMsgEncode(b, bad, NULL, &ptLen), HIFHE_PARAM_INVALID);
     ASSERT_TRUE(CRYPT_EAL_PkeyHEMsgEncode(b, encode, NULL, &ptLen) == HIFHE_BUFFER_TOO_SMALL);
     ptWire = malloc(ptLen);
     ASSERT_TRUE(ptWire != NULL);
@@ -251,7 +255,7 @@ void SDV_CRYPTO_HIFHE_BGV_PROVIDER_MUL_SIZE_TC001(int components)
     ASSERT_TRUE(b != NULL);
     ASSERT_EQ(CRYPT_EAL_PkeySetParaById(b, (CRYPT_PKEY_ParaId)HIFHE_BGV_4096_44x2_17BIT), HIFHE_SUCCESS);
 
-    uint32_t values[] = {0, 1, 7, 65536};
+    uint64_t values[] = {0, 1, 7, 65536};
     ASSERT_EQ(HIFHE_Encode(a, values, 4, &pt), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_Encrypt(a, pt, &ct), HIFHE_SUCCESS);
     uint32_t ptLen = 0, ctLen = 0;
@@ -290,11 +294,12 @@ void SDV_CRYPTO_HIFHE_BGV_PROVIDER_MUL_SIZE_TC001(int components)
 
     ASSERT_EQ(HIFHE_Deserialize(a, result, resultLen, &product), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_Decrypt(a, product, &decoded), HIFHE_SUCCESS);
-    uint32_t output[4096], count = 4096;
+    uint64_t output[4096];
+    uint32_t count = 4096;
     ASSERT_EQ(HIFHE_Decode(a, decoded, output, &count), HIFHE_SUCCESS);
     ASSERT_EQ(count, slots);
     for (uint32_t i = 0; i < count; i++) {
-        uint32_t expected = i < 4 ? (uint32_t)((uint64_t)values[i] * values[i] % 65537) : 0;
+        uint64_t expected = i < 4 ? values[i] * values[i] % 65537 : 0;
         ASSERT_EQ(output[i], expected);
     }
 EXIT:
@@ -324,7 +329,7 @@ void SDV_CRYPTO_HIFHE_BGV_NATIVE_PROVIDER_INTEROP_TC001(void)
     CRYPT_EAL_PkeyCtx *server = NULL;
     HIFHE_HEText *plain = NULL, *cipher = NULL, *reply = NULL, *answer = NULL;
     uint8_t *request = NULL, *response = NULL, *work = NULL, *plainWire = NULL;
-    uint32_t query[] = {5, 7, 11, 65536}, decoded[4096] = {0};
+    uint64_t query[] = {5, 7, 11, 65536}, decoded[4096] = {0};
     uint64_t bucket[] = {5, 2, 19, 1}, factor[] = {3, 2, 4, 5};
     uint32_t expected[] = {0, 65527, 32, 10};
     uint32_t plainCapacity = 0, cipherCapacity = 0;
@@ -424,7 +429,7 @@ void SDV_CRYPTO_HIFHE_BGV_PROVIDER_NATIVE_INTEROP_TC001(void)
     HIFHE_HEText *product = NULL, *result = NULL, *unexpected = NULL;
     uint8_t *plainWire = NULL, *request = NULL, *response = NULL;
     uint64_t query[] = {5, 7, 11, 65536}, decoded[4096] = {0};
-    uint32_t bucket[] = {5, 2, 19, 1}, factor[] = {3, 2, 4, 5};
+    uint64_t bucket[] = {5, 2, 19, 1}, factor[] = {3, 2, 4, 5};
     uint32_t expected[] = {0, 65527, 32, 10};
     uint32_t plainCapacity = 0, cipherCapacity = 0;
     bool loaded = false;
