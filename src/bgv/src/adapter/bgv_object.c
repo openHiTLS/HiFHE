@@ -173,7 +173,7 @@ static int32_t BgvEncode(const HIFHE_Ctx *ctx, const void *values, uint32_t coun
     CRYPT_BGV_Ctx *math = ctx->params->math;
     uint32_t n = math->bgv.params.rlweParameter.polyDegree;
     for (uint32_t i = 0; i < count; i++) {
-        if (((const uint32_t *)values)[i] >= math->bgv.params.plainMod) {
+        if (((const uint64_t *)values)[i] >= math->bgv.params.plainMod) {
             return HIFHE_PARAM_INVALID;
         }
     }
@@ -188,9 +188,7 @@ static int32_t BgvEncode(const HIFHE_Ctx *ctx, const void *values, uint32_t coun
         return HIFHE_MEMORY_ERROR;
     }
     t->meta.kind = HIFHE_TEXT_PLAIN;
-    for (uint32_t i = 0; i < count; i++) {
-        msg[i] = ((const uint32_t *)values)[i];
-    }
+    memcpy(msg, values, (size_t)count * sizeof(*msg));
     Encoder enc;
     BGV_Encoder_Create(&enc, &math->bgv.context);
     int32_t ret = BGV_Encoder_Encode(&t->value.plaintext, msg, n, &enc);
@@ -214,9 +212,7 @@ static int32_t BgvDecode(const HIFHE_Ctx *ctx, const void *data, void *values, u
     BGV_Encoder_Create(&enc, &math->bgv.context);
     int32_t ret = BGV_Encoder_Decode(msg, n, &view, &enc);
     if (ret == HIFHE_SUCCESS) {
-        for (uint32_t i = 0; i < ctx->params->config.slots; i++) {
-            ((uint32_t *)values)[i] = (uint32_t)msg[i];
-        }
+        memcpy(values, msg, (size_t)n * sizeof(*msg));
         *count = ctx->params->config.slots;
     }
     BSL_SAL_CleanseData(msg, n * sizeof(*msg));

@@ -6,14 +6,14 @@ library; it is omitted when Provider support is disabled.
 
 | Source | Executable | FHE calls |
 |---|---|---|
-| leakstr_demo.c | hifhe_leakstr_demo | openHiTLS EAL through the HiFHE Provider |
-| leakstr_native_demo.c | hifhe_leakstr_native_demo | Native HIFHE_* object APIs |
+| hifhe_bgv_provider_demo.c | hifhe_bgv_provider_demo | openHiTLS EAL through the HiFHE Provider |
+| hifhe_bgv_demo.c | hifhe_bgv_demo | Native HIFHE_* object APIs |
 
 ```sh
 bash testcode/script/build_hifhe.sh
 bash testcode/script/build_demo.sh
-./testcode/output/demo/hifhe_leakstr_demo
-./testcode/output/demo/hifhe_leakstr_native_demo
+./testcode/output/demo/hifhe_bgv_provider_demo
+./testcode/output/demo/hifhe_bgv_demo
 ctest --test-dir testcode/demo/build --output-on-failure
 ```
 

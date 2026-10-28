@@ -23,12 +23,12 @@ Usage: build_demo.sh [asan] [clean]
   asan    build with AddressSanitizer
   clean   remove the demo build and binaries, then exit
 
-Binaries land in testcode/output/demo, one per testcode/demo/*.c, each named
-hifhe_<file stem>. They carry an rpath to the provider and openHiTLS build
+Binaries land in testcode/output/demo, named after their source files.
+They carry an rpath to the provider and openHiTLS build
 directories, so they run without LD_LIBRARY_PATH:
 
-  testcode/output/demo/hifhe_leakstr_demo
-  testcode/output/demo/hifhe_leakstr_native_demo
+  testcode/output/demo/hifhe_bgv_provider_demo
+  testcode/output/demo/hifhe_bgv_demo
 USAGE
 }
 

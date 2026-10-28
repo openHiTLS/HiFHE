@@ -26,7 +26,7 @@ static const char *g_bucket[] = {"123456",   "password", "qwerty",   "letmein", 
                                  "football", "hunter2",  "iloveyou", "admin",   "welcome", "login",
                                  "starwars", "trustno1", "whatever", "shadow"};
 
-static int32_t Fields(const char *text, uint32_t *values)
+static int32_t Fields(const char *text, uint64_t *values)
 {
     uint8_t digest[32];
     uint32_t len = sizeof(digest);
@@ -85,13 +85,13 @@ static int32_t SendBytes(HIFHE_Ctx *sender, const HIFHE_HEText *text, HIFHE_Ctx 
 
 static int Query(HIFHE_Ctx *a, HIFHE_Ctx *b, const char *secret, uint32_t *match)
 {
-    uint32_t *query = calloc(SLOTS, 4), *bucket = calloc(SLOTS, 4), *mask = calloc(SLOTS, 4),
-             *decoded = calloc(SLOTS, 4);
+    uint64_t *query = calloc(SLOTS, sizeof(*query)), *bucket = calloc(SLOTS, sizeof(*bucket));
+    uint64_t *mask = calloc(SLOTS, sizeof(*mask)), *decoded = calloc(SLOTS, sizeof(*decoded));
     HIFHE_HEText *pt = NULL, *ct = NULL, *received = NULL, *bucketPt = NULL, *difference = NULL;
     HIFHE_HEText *maskPt = NULL, *product = NULL, *result = NULL, *reply = NULL, *answer = NULL;
     FILE *random = NULL;
     int success = 0;
-    uint32_t fields[FIELD_COUNT];
+    uint64_t fields[FIELD_COUNT];
     if (query == NULL || bucket == NULL || mask == NULL || decoded == NULL) {
         goto done;
     }
@@ -185,7 +185,7 @@ static int Query(HIFHE_Ctx *a, HIFHE_Ctx *b, const char *secret, uint32_t *match
     }
     *match = UINT32_MAX;
     for (uint32_t i = 0; i < sizeof(g_bucket) / sizeof(g_bucket[0]); i++) {
-        uint32_t value = 0;
+        uint64_t value = 0;
         for (uint32_t j = 0; j < FIELD_COUNT; j++) {
             value |= decoded[i * FIELD_COUNT + j];
         }

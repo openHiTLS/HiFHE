@@ -73,7 +73,8 @@ void SDV_CRYPTO_HIFHE_BGV_PUBLIC_CACHE_SEED_TC001(void)
     HIFHE_Ctx *a = NULL, *b = NULL, *c = NULL, *dup = NULL;
     HIFHE_HEText *pt = NULL;
     uint8_t seed[32] = {1};
-    uint32_t on = 1, message = 7, output[4096], count = 4096;
+    uint32_t on = 1, count = 4096;
+    uint64_t message = 7, output[4096];
 
     ASSERT_EQ(TestRandInit(), HIFHE_SUCCESS);
     a = HIFHE_New(HIFHE_BGV);

@@ -389,11 +389,11 @@ static uint32_t VectorNext(uint32_t *s)
     return *s;
 }
 
-static bool CheckVectorResult(HIFHE_Ctx *ctx, HIFHE_HEText *ct, const uint32_t *a, const uint32_t *b, uint32_t n, bool mul)
+static bool CheckVectorResult(HIFHE_Ctx *ctx, HIFHE_HEText *ct, const uint64_t *a, const uint64_t *b, uint32_t n, bool mul)
 {
     bool valid = false;
     HIFHE_HEText *pt = NULL;
-    uint32_t *out = NULL;
+    uint64_t *out = NULL;
     if (HIFHE_Decrypt(ctx, ct, &pt) != HIFHE_SUCCESS) {
         goto EXIT;
     }
@@ -406,7 +406,7 @@ static bool CheckVectorResult(HIFHE_Ctx *ctx, HIFHE_HEText *ct, const uint32_t *
         goto EXIT;
     }
     for (uint32_t i = 0; i < n; i++) {
-        uint64_t expected = mul ? (uint64_t)a[i] * b[i] : (uint64_t)a[i] + b[i];
+        uint64_t expected = mul ? a[i] * b[i] : a[i] + b[i];
         if (out[i] != expected % 65537) {
             goto EXIT;
         }
@@ -423,7 +423,7 @@ void SDV_CRYPTO_HIFHE_BGV_VECTOR_API_TC001(int id, int slots, int pattern)
 {
     HIFHE_Ctx *a = NULL, *b = NULL;
     HIFHE_HEText *xp = NULL, *yp = NULL, *xc = NULL, *yc = NULL, *sum = NULL, *product = NULL, *bad = NULL;
-    uint32_t *x = NULL, *y = NULL;
+    uint64_t *x = NULL, *y = NULL;
     uint32_t n = (uint32_t)slots;
 
     ASSERT_EQ(CRYPT_EAL_Init(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND), HIFHE_SUCCESS);

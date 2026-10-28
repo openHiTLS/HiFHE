@@ -62,7 +62,8 @@ void SDV_CRYPTO_HIFHE_BGV_CONTEXT_CTRL_API_TC001(int cmd)
     HIFHE_Ctx *ctx = NULL, *other = NULL;
     HIFHE_HEText *pt = NULL, *ct = NULL, *decoded = NULL;
     uint8_t seed[32] = {1};
-    uint32_t value = 1, count = 4096, output[4096];
+    uint32_t value = 1, count = 4096;
+    uint64_t output[4096];
     void *arg = cmd == HIFHE_CTRL_BGV_SET_SEED ? (void *)seed : (void *)&value;
     uint32_t argLen = cmd == HIFHE_CTRL_BGV_SET_SEED ? sizeof(seed) : sizeof(value);
 
@@ -97,7 +98,8 @@ void SDV_CRYPTO_HIFHE_BGV_CONTEXT_CTRL_API_TC001(int cmd)
     if (cmd == HIFHE_CTRL_BGV_SET_SEED) {
         ASSERT_EQ(HIFHE_Ctrl(ctx, cmd, NULL, arg, argLen), HIFHE_BAD_STATE);
     }
-    uint32_t message = 7, actual = 0;
+    uint64_t message = 7;
+    uint32_t actual = 0;
     ASSERT_EQ(HIFHE_Encode(ctx, &message, 1, &pt), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_Encrypt(ctx, pt, &ct), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_Ctrl(ctx, cmd, pt, arg, argLen), HIFHE_PARAM_INVALID);
@@ -133,7 +135,8 @@ void SDV_CRYPTO_HIFHE_BGV_WORKFLOW_API_TC001(void)
     HIFHE_HEText *p = NULL, *c = NULL, *q = NULL, *bp = NULL, *d = NULL, *mp = NULL, *m = NULL;
     HIFHE_HEText *noised = NULL, *reply = NULL, *decoded = NULL;
     uint8_t *wire = NULL;
-    uint32_t *values = NULL, len = 0;
+    uint64_t *values = NULL;
+    uint32_t len = 0;
 
     ASSERT_EQ(CRYPT_EAL_Init(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND), HIFHE_SUCCESS);
     a = Configured();
@@ -141,7 +144,7 @@ void SDV_CRYPTO_HIFHE_BGV_WORKFLOW_API_TC001(void)
     ASSERT_TRUE(a != NULL && b != NULL);
     ASSERT_TRUE(HIFHE_SetParaById(a, HIFHE_BGV_4096_44x2_17BIT) == HIFHE_BAD_STATE);
     ASSERT_EQ(HIFHE_KeyGen(a), HIFHE_SUCCESS);
-    uint32_t query[] = {1, 2, 3, 4}, bucket[] = {1, 4, 2, 6}, mask[] = {2, 3, 4, 5};
+    uint64_t query[] = {1, 2, 3, 4}, bucket[] = {1, 4, 2, 6}, mask[] = {2, 3, 4, 5};
     ASSERT_EQ(HIFHE_Encode(a, query, 4, &p), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_Encrypt(a, p, &c), HIFHE_SUCCESS);
     wire = Serialized(a, c, &len);
@@ -199,7 +202,8 @@ void SDV_CRYPTO_HIFHE_BGV_TRAILING_BYTES_API_TC001(void)
     ASSERT_EQ(CRYPT_EAL_Init(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND), HIFHE_SUCCESS);
     ctx = Configured();
     ASSERT_TRUE(ctx != NULL);
-    uint32_t value = 7, len = 0;
+    uint64_t value = 7;
+    uint32_t len = 0;
     ASSERT_EQ(HIFHE_Encode(ctx, &value, 1, &p), HIFHE_SUCCESS);
     ASSERT_TRUE(HIFHE_Serialize(ctx, p, NULL, &len) == HIFHE_BUFFER_TOO_SMALL);
     bytes = calloc(len + 1, 1);
@@ -225,12 +229,14 @@ void SDV_CRYPTO_HIFHE_BGV_OUTPUT_OVERLAP_API_TC001(void)
 {
     HIFHE_Ctx *ctx = NULL;
     uint8_t *bytes = NULL;
+    uint64_t *values = NULL;
     HIFHE_HEText *pt = NULL;
 
     ASSERT_EQ(CRYPT_EAL_Init(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND), HIFHE_SUCCESS);
     ctx = Configured();
     ASSERT_TRUE(ctx != NULL);
-    uint32_t value = 7, len = 0;
+    uint64_t value = 7;
+    uint32_t len = 0;
     ASSERT_EQ(HIFHE_Encode(ctx, &value, 1, &pt), HIFHE_SUCCESS);
     ASSERT_TRUE(HIFHE_Serialize(ctx, pt, NULL, &len) == HIFHE_BUFFER_TOO_SMALL);
     bytes = malloc(len);
@@ -238,10 +244,61 @@ void SDV_CRYPTO_HIFHE_BGV_OUTPUT_OVERLAP_API_TC001(void)
     uint32_t *outLen = (uint32_t *)bytes;
     *outLen = len;
     ASSERT_TRUE(HIFHE_Serialize(ctx, pt, bytes, outLen) == HIFHE_PARAM_INVALID);
+    values = calloc(4096, sizeof(*values));
+    ASSERT_TRUE(values != NULL);
+    uint32_t *count = (uint32_t *)(values + 4095);
+    *count = 4096;
+    ASSERT_EQ(HIFHE_Decode(ctx, pt, values, count), HIFHE_PARAM_INVALID);
+    ASSERT_EQ(*count, 4096);
 EXIT:
     HIFHE_HETextFree(pt);
     HIFHE_Free(ctx);
     free(bytes);
+    free(values);
+    CRYPT_EAL_Cleanup(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND);
+}
+/* END_CASE */
+
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_UINT64_API_TC001(void)
+{
+    HIFHE_Ctx *ctx = NULL;
+    HIFHE_HEText *pt = NULL;
+    uint64_t values[] = {0, 1, 65536, 7};
+    uint64_t invalid[] = {65537, (UINT64_C(1) << 32) + 1, UINT64_MAX};
+    uint64_t *decoded = NULL;
+    uint32_t count = 0;
+
+    ASSERT_EQ(CRYPT_EAL_Init(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND), HIFHE_SUCCESS);
+    ctx = Configured();
+    ASSERT_TRUE(ctx != NULL);
+    for (uint32_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
+        ASSERT_EQ(HIFHE_Encode(ctx, &invalid[i], 1, &pt), HIFHE_PARAM_INVALID);
+        ASSERT_TRUE(pt == NULL);
+    }
+    ASSERT_EQ(HIFHE_Encode(ctx, values, 4, &pt), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Decode(ctx, pt, NULL, &count), HIFHE_BUFFER_TOO_SMALL);
+    ASSERT_EQ(count, 4096);
+    decoded = malloc((count + 1) * sizeof(*decoded));
+    ASSERT_TRUE(decoded != NULL);
+    memset(decoded, 0xff, (count + 1) * sizeof(*decoded));
+    count--;
+    ASSERT_EQ(HIFHE_Decode(ctx, pt, decoded, &count), HIFHE_BUFFER_TOO_SMALL);
+    ASSERT_EQ(count, 4096);
+    for (uint32_t i = 0; i <= count; i++) {
+        ASSERT_TRUE(decoded[i] == UINT64_MAX);
+    }
+    count++;
+    ASSERT_EQ(HIFHE_Decode(ctx, pt, decoded, &count), HIFHE_SUCCESS);
+    ASSERT_EQ(count, 4096);
+    for (uint32_t i = 0; i < count; i++) {
+        ASSERT_EQ(decoded[i], i < 4 ? values[i] : 0);
+    }
+    ASSERT_TRUE(decoded[count] == UINT64_MAX);
+EXIT:
+    HIFHE_HETextFree(pt);
+    HIFHE_Free(ctx);
+    free(decoded);
     CRYPT_EAL_Cleanup(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND);
 }
 /* END_CASE */
@@ -262,7 +319,7 @@ void SDV_CRYPTO_HIFHE_BGV_PRESET_API_TC001(void)
     b = HIFHE_New(HIFHE_BGV);
     ASSERT_TRUE(b != NULL);
     ASSERT_EQ(HIFHE_SetParaById(b, HIFHE_BGV_8192_44x4_17BIT), HIFHE_SUCCESS);
-    uint32_t input = 8;
+    uint64_t input = 8;
     ASSERT_EQ(HIFHE_Encode(a, &input, 1, &pt), HIFHE_SUCCESS);
     uint32_t len = 0;
     ASSERT_TRUE(HIFHE_Serialize(b, pt, NULL, &len) == HIFHE_CONTEXT_MISMATCH);
@@ -286,7 +343,8 @@ void SDV_CRYPTO_HIFHE_BGV_CTRL_API_TC001(void)
     b = Configured();
     ASSERT_TRUE(a != NULL && b != NULL);
     ASSERT_EQ(HIFHE_KeyGen(a), HIFHE_SUCCESS);
-    uint32_t value = 7, len = 0, control = 0;
+    uint64_t value = 7;
+    uint32_t len = 0, control = 0;
     ASSERT_EQ(HIFHE_Encode(a, &value, 1, &pt), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_Encrypt(a, pt, &ct), HIFHE_SUCCESS);
     ASSERT_TRUE(HIFHE_Serialize(a, ct, NULL, &len) == HIFHE_BUFFER_TOO_SMALL);
@@ -336,14 +394,15 @@ void SDV_CRYPTO_HIFHE_BGV_COEFFICIENT_API_TC001(void)
 {
     HIFHE_Ctx *ctx = NULL;
     uint8_t *wire = NULL;
-    uint32_t *values = NULL;
+    uint64_t *values = NULL;
     HIFHE_HEText *pt = NULL, *coeff = NULL, *ct = NULL, *decoded = NULL;
 
     ASSERT_EQ(CRYPT_EAL_Init(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND), HIFHE_SUCCESS);
     ctx = Configured();
     ASSERT_TRUE(ctx != NULL);
     ASSERT_EQ(HIFHE_KeyGen(ctx), HIFHE_SUCCESS);
-    uint32_t one = 1, len = 0;
+    uint64_t one = 1;
+    uint32_t len = 0;
     ASSERT_EQ(HIFHE_Encode(ctx, &one, 1, &pt), HIFHE_SUCCESS);
     ASSERT_TRUE(HIFHE_Serialize(ctx, pt, NULL, &len) == HIFHE_BUFFER_TOO_SMALL);
     wire = malloc(len);
