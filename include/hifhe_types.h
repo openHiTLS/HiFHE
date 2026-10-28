@@ -23,6 +23,11 @@ typedef struct HIFHE_Ctx HIFHE_Ctx;
 /** Opaque plaintext/ciphertext owning its data; release with HIFHE_HETextFree, even after its context is freed. */
 typedef struct HIFHE_HEText HIFHE_HEText;
 
+/** Allocator installed with HIFHE_SetMemFuncs. A zero length is never requested. */
+typedef void *(*HIFHE_MallocFunc)(uint32_t len);
+/** Deallocator installed with HIFHE_SetMemFuncs. A NULL pointer is never passed. */
+typedef void (*HIFHE_FreeFunc)(void *ptr);
+
 /** Algorithm identifiers for HIFHE_New and CRYPT_EAL_ProviderPkeyNewCtx. */
 typedef enum {
     HIFHE_BGV = (int32_t)0x89000002u,

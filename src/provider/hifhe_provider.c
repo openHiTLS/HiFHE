@@ -10,7 +10,8 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include "bsl_sal.h"
+#include "hifhe_mem.h"
+#include "hifhe_err_internal.h"
 #include "crypt_eal_implprovider.h"
 #include "hifhe_err.h"
 #include "hifhe.h"
@@ -39,6 +40,7 @@ static CRYPT_EAL_AlgInfo g_hifheCipher[] = {
 static int32_t HIFHE_ProviderQuery(void *provCtx, int32_t operaId, CRYPT_EAL_AlgInfo **algInfos)
 {
     if (provCtx == NULL || algInfos == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (operaId == CRYPT_EAL_OPERAID_KEYMGMT) {
@@ -49,12 +51,13 @@ static int32_t HIFHE_ProviderQuery(void *provCtx, int32_t operaId, CRYPT_EAL_Alg
         *algInfos = g_hifheCipher;
         return HIFHE_SUCCESS;
     }
+    HIFHE_ERR_PUSH_ERROR(HIFHE_NOT_SUPPORTED);
     return HIFHE_NOT_SUPPORTED;
 }
 
 static void HIFHE_ProviderFree(void *provCtx)
 {
-    BSL_SAL_Free(provCtx);
+    HifheFree(provCtx);
 }
 
 static int32_t HIFHE_ProviderCtrl(void *provCtx, int32_t cmd, void *val, uint32_t valLen)
@@ -78,6 +81,7 @@ int32_t CRYPT_EAL_ProviderInit(CRYPT_EAL_ProvMgrCtx *mgrCtx, BSL_Param *param, C
 {
     (void)param;
     if (mgrCtx == NULL || capFuncs == NULL || outFuncs == NULL || provCtx == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
 
@@ -89,16 +93,18 @@ int32_t CRYPT_EAL_ProviderInit(CRYPT_EAL_ProvMgrCtx *mgrCtx, BSL_Param *param, C
         }
     }
     if (mgrCtrl == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NOT_SUPPORTED);
         return HIFHE_NOT_SUPPORTED;
     }
 
-    HIFHE_ProvCtx *ctx = BSL_SAL_Calloc(1, sizeof(HIFHE_ProvCtx));
+    HIFHE_ProvCtx *ctx = HifheCalloc(1, sizeof(HIFHE_ProvCtx));
     if (ctx == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     int32_t ret = mgrCtrl(mgrCtx, CRYPT_EAL_MGR_GETLIBCTX, &ctx->libCtx, 0);
     if (ret != HIFHE_SUCCESS) {
-        BSL_SAL_Free(ctx);
+        HifheFree(ctx);
         return ret;
     }
     ctx->handle = mgrCtx;

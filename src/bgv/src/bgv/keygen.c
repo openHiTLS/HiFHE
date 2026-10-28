@@ -29,7 +29,7 @@
  */
 
 #include <string.h>
-#include "bsl_sal.h"
+#include "hifhe_err_internal.h"
 #include "bgv/keygen.h"
 #include "bgv/keys.h"
 #include "bgv/ciphertext.h"
@@ -129,7 +129,7 @@ static HIFHE_ERROR SampleSmallCrtCoeff(CrtPoly *out, BGVContext *ctx, const BgvE
     Int64Vector scratch;
     r = Int64Vector_Create(&scratch, NULL, N);
     if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_CleanseDestroy(out);
+        RLWE_CrtPoly_Destroy(out);
         return r;
     }
     if (ternary) {
@@ -139,13 +139,13 @@ static HIFHE_ERROR SampleSmallCrtCoeff(CrtPoly *out, BGVContext *ctx, const BgvE
     }
     if (r != HIFHE_SUCCESS) {
         Int64Vector_Cleanse(&scratch);
-        RLWE_CrtPoly_CleanseDestroy(out);
+        RLWE_CrtPoly_Destroy(out);
         return r;
     }
     r = RLWE_CrtPoly_SetSigned(out, scratch.data);
     Int64Vector_Cleanse(&scratch);
     if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_CleanseDestroy(out);
+        RLWE_CrtPoly_Destroy(out);
         return r;
     }
     return HIFHE_SUCCESS;
@@ -156,6 +156,7 @@ static HIFHE_ERROR SampleSmallCrtCoeff(CrtPoly *out, BGVContext *ctx, const BgvE
 HIFHE_ERROR BGV_KeyGenerator_Create(KeyGenerator *out, BGVContext *ctx)
 {
     if (out == NULL || ctx == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     memset(out, 0, sizeof(*out));
@@ -166,6 +167,7 @@ HIFHE_ERROR BGV_KeyGenerator_Create(KeyGenerator *out, BGVContext *ctx)
 HIFHE_ERROR BGV_KeyGenerator_Destroy(KeyGenerator *self)
 {
     if (self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     BGV_SecretKey_Free(&self->sk);
@@ -176,6 +178,7 @@ HIFHE_ERROR BGV_KeyGenerator_Destroy(KeyGenerator *self)
 HIFHE_ERROR BGV_KeyGenerator_GenSecretKey(KeyGenerator *self)
 {
     if (self == NULL || self->context == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     BGV_SecretKey_Free(&self->sk);
@@ -192,7 +195,7 @@ HIFHE_ERROR BGV_KeyGenerator_GenSecretKey(KeyGenerator *self)
     }
     r = RLWE_CrtPoly_ToNtt(&poly);
     if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_CleanseDestroy(&poly);
+        RLWE_CrtPoly_Destroy(&poly);
         return r;
     }
 
@@ -200,13 +203,14 @@ HIFHE_ERROR BGV_KeyGenerator_GenSecretKey(KeyGenerator *self)
      * RLWE_CrtPoly_Create, so hand it over rather than allocating again. */
     self->sk = BGV_SecretKey_New();
     if (self->sk == NULL) {
-        RLWE_CrtPoly_CleanseDestroy(&poly);
+        RLWE_CrtPoly_Destroy(&poly);
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     r = BGV_Plaintext_CreateFromCrtPoly(self->sk, &poly, 1u, self->context);
     if (r != HIFHE_SUCCESS) {
         BGV_SecretKey_Free(&self->sk);
-        RLWE_CrtPoly_CleanseDestroy(&poly);
+        RLWE_CrtPoly_Destroy(&poly);
         return r;
     }
     return HIFHE_SUCCESS;
@@ -260,7 +264,7 @@ static HIFHE_ERROR MakeKeyPiece(Ciphertext *out, const CrtPoly *sk_ntt, const Cr
     r = RLWE_CrtPoly_ToNtt(&e);
     if (r != HIFHE_SUCCESS) {
         RLWE_CrtPoly_Destroy(&a);
-        RLWE_CrtPoly_CleanseDestroy(&e);
+        RLWE_CrtPoly_Destroy(&e);
         BGV_Ciphertext_Destroy(out);
         return r;
     }
@@ -302,7 +306,7 @@ static HIFHE_ERROR MakeKeyPiece(Ciphertext *out, const CrtPoly *sk_ntt, const Cr
     r = RLWE_CrtPoly_Assign(&b1, &a);
 cleanup:
     RLWE_CrtPoly_Destroy(&a);
-    RLWE_CrtPoly_CleanseDestroy(&e);
+    RLWE_CrtPoly_Destroy(&e);
     if (r != HIFHE_SUCCESS) {
         BGV_Ciphertext_Destroy(out);
     }
@@ -312,6 +316,7 @@ cleanup:
 HIFHE_ERROR BGV_KeyGenerator_GenPublicKey(PublicKey *out, const KeyGenerator *self)
 {
     if (out == NULL || self == NULL || self->sk == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     /* pk = enc_of_zero under sk: b = -a*s + t*e, a. */
@@ -330,6 +335,7 @@ HIFHE_ERROR BGV_KeyGenerator_GenPublicKey(PublicKey *out, const KeyGenerator *se
 HIFHE_ERROR BGV_KeyGenerator_GenRelinKey(RelinKeys *out, uint32_t digits, const KeyGenerator *self)
 {
     if (out == NULL || self == NULL || self->sk == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     /* Non-owning view onto sk_ntt, live until the last MakeKeyPiece. */
@@ -350,7 +356,7 @@ HIFHE_ERROR BGV_KeyGenerator_GenRelinKey(RelinKeys *out, uint32_t digits, const 
     }
     r = RLWE_CrtPoly_MulDot(&sk_sq, &sk_sq, &sk_sq);
     if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_CleanseDestroy(&sk_sq);
+        RLWE_CrtPoly_Destroy(&sk_sq);
         RLWE_CrtPoly_Destroy(&sk_view);
         return r;
     }
@@ -365,13 +371,14 @@ HIFHE_ERROR BGV_KeyGenerator_GenRelinKey(RelinKeys *out, uint32_t digits, const 
      * BGV_KSW_MAX_DIGITS the piece count L * digits can wrap uint32 and the
      * generation loop writes past the allocation. */
     if (digits > BGV_KSW_MAX_DIGITS) {
-        RLWE_CrtPoly_CleanseDestroy(&sk_sq);
+        RLWE_CrtPoly_Destroy(&sk_sq);
         RLWE_CrtPoly_Destroy(&sk_view);
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     r = BGV_RelinKeys_Create(out, L, digits, self->context);
     if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_CleanseDestroy(&sk_sq);
+        RLWE_CrtPoly_Destroy(&sk_sq);
         RLWE_CrtPoly_Destroy(&sk_view);
         return r;
     }
@@ -391,14 +398,14 @@ HIFHE_ERROR BGV_KeyGenerator_GenRelinKey(RelinKeys *out, uint32_t digits, const 
                                  seed ? HIFHE_CTX_SEED_LEN : 0u, "relin", idx, 3u);
             }
             if (r != HIFHE_SUCCESS) {
-                RLWE_CrtPoly_CleanseDestroy(&sk_sq);
+                RLWE_CrtPoly_Destroy(&sk_sq);
                 RLWE_CrtPoly_Destroy(&sk_view);
                 BGV_RelinKeys_Destroy(out);
                 return r;
             }
         }
     }
-    RLWE_CrtPoly_CleanseDestroy(&sk_sq);
+    RLWE_CrtPoly_Destroy(&sk_sq);
     RLWE_CrtPoly_Destroy(&sk_view);
     return HIFHE_SUCCESS;
 }
@@ -408,6 +415,7 @@ HIFHE_ERROR BGV_KeyGenerator_GenRelinKey(RelinKeys *out, uint32_t digits, const 
 static HIFHE_ERROR ApplyGaloisToCoeffPoly(CrtPoly *out, const CrtPoly *in, uint64_t k, uint32_t N)
 {
     if (out == NULL || in == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     /* `in` is POLY form. Destination index is (j*k) mod 2N; landing in
@@ -444,11 +452,13 @@ HIFHE_ERROR BGV_KeyGenerator_GenGaloisKeys(GaloisKeys *out, const uint64_t *elts
                                            const KeyGenerator *self)
 {
     if (out == NULL || self == NULL || self->sk == NULL || elts == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     uint32_t N = self->context->rlweContext.parameter->polyDegree;
     /* At most N distinct odd elements exist mod 2N; more is malformed. */
     if (count == 0u || count > N) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     /* sigma_k permutes coefficients only for odd k below 2N. An even element
@@ -456,6 +466,7 @@ HIFHE_ERROR BGV_KeyGenerator_GenGaloisKeys(GaloisKeys *out, const uint64_t *elts
      * polynomial zeroed, so the key would rotate to garbage without error. */
     for (uint32_t i = 0; i < count; ++i) {
         if ((elts[i] & 1u) == 0u || elts[i] >= 2u * (uint64_t)N) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
             return HIFHE_PARAM_INVALID;
         }
     }
@@ -476,20 +487,20 @@ HIFHE_ERROR BGV_KeyGenerator_GenGaloisKeys(GaloisKeys *out, const uint64_t *elts
     }
     r = RLWE_CrtPoly_ToPoly(&sk_coeff);
     if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_CleanseDestroy(&sk_coeff);
+        RLWE_CrtPoly_Destroy(&sk_coeff);
         return r;
     }
 
     BGV_GaloisKeys_Destroy(out);
     r = BGV_GaloisKeys_Create(out, self->context);
     if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_CleanseDestroy(&sk_coeff);
+        RLWE_CrtPoly_Destroy(&sk_coeff);
         return r;
     }
 
     r = BGV_GaloisKeys_CreateEntries(out, count);
     if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_CleanseDestroy(&sk_coeff);
+        RLWE_CrtPoly_Destroy(&sk_coeff);
         return r;
     }
 
@@ -498,7 +509,7 @@ HIFHE_ERROR BGV_KeyGenerator_GenGaloisKeys(GaloisKeys *out, const uint64_t *elts
     r = RLWE_CrtPoly_CreateFromExist(&sk_ntt_view, self->sk->data, self->sk->dataSize, &self->sk->config.crtConfig,
                                      &self->context->rlweContext);
     if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_CleanseDestroy(&sk_coeff);
+        RLWE_CrtPoly_Destroy(&sk_coeff);
         BGV_GaloisKeys_Destroy(out);
         return r;
     }
@@ -520,13 +531,13 @@ HIFHE_ERROR BGV_KeyGenerator_GenGaloisKeys(GaloisKeys *out, const uint64_t *elts
         }
         r = RLWE_CrtPoly_ToNtt(&target);
         if (r != HIFHE_SUCCESS) {
-            RLWE_CrtPoly_CleanseDestroy(&target);
+            RLWE_CrtPoly_Destroy(&target);
             goto giveup;
         }
 
         r = BGV_GaloisKeyPiece_Create(&out->entries[i], k, L, digits);
         if (r != HIFHE_SUCCESS) {
-            RLWE_CrtPoly_CleanseDestroy(&target);
+            RLWE_CrtPoly_Destroy(&target);
             goto giveup;
         }
         for (uint32_t li = 0; li < L; ++li) {
@@ -540,20 +551,20 @@ HIFHE_ERROR BGV_KeyGenerator_GenGaloisKeys(GaloisKeys *out, const uint64_t *elts
                                      self->context, seed, seed ? HIFHE_CTX_SEED_LEN : 0u, "galois", idx, 4u);
                 }
                 if (r != HIFHE_SUCCESS) {
-                    RLWE_CrtPoly_CleanseDestroy(&target);
+                    RLWE_CrtPoly_Destroy(&target);
                     goto giveup;
                 }
             }
         }
-        RLWE_CrtPoly_CleanseDestroy(&target);
+        RLWE_CrtPoly_Destroy(&target);
     }
     RLWE_CrtPoly_Destroy(&sk_ntt_view);
-    RLWE_CrtPoly_CleanseDestroy(&sk_coeff);
+    RLWE_CrtPoly_Destroy(&sk_coeff);
     return HIFHE_SUCCESS;
 
 giveup:
     RLWE_CrtPoly_Destroy(&sk_ntt_view);
-    RLWE_CrtPoly_CleanseDestroy(&sk_coeff);
+    RLWE_CrtPoly_Destroy(&sk_coeff);
     BGV_GaloisKeys_Destroy(out);
     return r;
 }

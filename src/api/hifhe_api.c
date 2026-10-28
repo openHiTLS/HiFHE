@@ -58,7 +58,7 @@ HIFHE_Ctx *Hifhe_CtxNew(int32_t id, void *libCtx)
     if (method == NULL) {
         return NULL;
     }
-    HIFHE_Ctx *ctx = BSL_SAL_Calloc(1, sizeof(*ctx));
+    HIFHE_Ctx *ctx = HifheCalloc(1, sizeof(*ctx));
     if (ctx != NULL) {
         ctx->method = method;
         ctx->libCtx = libCtx;
@@ -80,7 +80,7 @@ void Hifhe_ParamRelease(HifheParamSnapshot *p)
 {
     if (p != NULL && atomic_fetch_sub_explicit(&p->references, 1, memory_order_acq_rel) == 1) {
         p->method->ctxFree(p->math);
-        BSL_SAL_Free(p);
+        HifheFree(p);
     }
 }
 
@@ -91,8 +91,8 @@ void HIFHE_Free(HIFHE_Ctx *ctx)
     }
     ctx->method->ctxFree(ctx->data);
     Hifhe_ParamRelease(ctx->params);
-    BSL_SAL_CleanseData(ctx, sizeof(*ctx));
-    BSL_SAL_Free(ctx);
+    HifheCleanse(ctx, sizeof(*ctx));
+    HifheFree(ctx);
 }
 
 int32_t Hifhe_ParamSetFingerprint(HifheParamSnapshot *params, const uint8_t *canonical, uint32_t len)
@@ -110,7 +110,7 @@ int32_t Hifhe_SetParam(HIFHE_Ctx *ctx, const HifheParamConfig *p)
     if (ctx->params != NULL) {
         return HIFHE_BAD_STATE;
     }
-    HifheParamSnapshot *fresh = BSL_SAL_Calloc(1, sizeof(*fresh));
+    HifheParamSnapshot *fresh = HifheCalloc(1, sizeof(*fresh));
     if (fresh == NULL) {
         return HIFHE_MEMORY_ERROR;
     }
@@ -186,7 +186,7 @@ int32_t HIFHE_KeyGen(HIFHE_Ctx *ctx)
         ret = ctx->libCtx != NULL ? CRYPT_EAL_RandbytesEx(ctx->libCtx, id, sizeof(id)) :
                                     CRYPT_EAL_Randbytes(id, sizeof(id));
         if (ret != HIFHE_SUCCESS) {
-            BSL_SAL_CleanseData(id, sizeof(id));
+            HifheCleanse(id, sizeof(id));
             ret = HIFHE_RANDOM_ERROR;
         }
     }
@@ -203,7 +203,7 @@ int32_t HIFHE_KeyGen(HIFHE_Ctx *ctx)
 
 int32_t Hifhe_HETextNew(const HIFHE_Ctx *ctx, void *data, HIFHE_HEText **out)
 {
-    HIFHE_HEText *text = BSL_SAL_Calloc(1, sizeof(*text));
+    HIFHE_HEText *text = HifheCalloc(1, sizeof(*text));
     if (text == NULL) {
         ctx->method->textFree(data);
         return HIFHE_MEMORY_ERROR;
@@ -221,7 +221,7 @@ void HIFHE_HETextFree(HIFHE_HEText *text)
         return;
     }
     text->method->textFree(text->data);
-    BSL_SAL_Free(text);
+    HifheFree(text);
 }
 
 static int32_t CheckCtx(const HIFHE_Ctx *ctx)
@@ -309,7 +309,7 @@ int32_t HIFHE_Decode(const HIFHE_Ctx *ctx, const HIFHE_HEText *text, uint64_t *v
     if (Overlap(values, (size_t)need * sizeof(*values), count, sizeof(*count))) {
         return HIFHE_PARAM_INVALID;
     }
-    uint64_t *fresh = BSL_SAL_Calloc(need, sizeof(*fresh));
+    uint64_t *fresh = HifheCalloc(need, sizeof(*fresh));
     if (fresh == NULL) {
         return HIFHE_MEMORY_ERROR;
     }
@@ -318,8 +318,8 @@ int32_t HIFHE_Decode(const HIFHE_Ctx *ctx, const HIFHE_HEText *text, uint64_t *v
         memcpy(values, fresh, (size_t)need * sizeof(*values));
         *count = need;
     }
-    BSL_SAL_CleanseData(fresh, need * sizeof(*fresh));
-    BSL_SAL_Free(fresh);
+    HifheCleanse(fresh, need * sizeof(*fresh));
+    HifheFree(fresh);
     return ret;
 }
 
@@ -554,7 +554,7 @@ int32_t HIFHE_Serialize(const HIFHE_Ctx *ctx, const HIFHE_HEText *text, uint8_t 
         *outLen = total;
         return HIFHE_BUFFER_TOO_SMALL;
     }
-    uint8_t *fresh = BSL_SAL_Calloc(1, total);
+    uint8_t *fresh = HifheCalloc(1, total);
     if (fresh == NULL) {
         return HIFHE_MEMORY_ERROR;
     }
@@ -564,8 +564,8 @@ int32_t HIFHE_Serialize(const HIFHE_Ctx *ctx, const HIFHE_HEText *text, uint8_t 
         memcpy(out, fresh, total);
         *outLen = total;
     }
-    BSL_SAL_CleanseData(fresh, total);
-    BSL_SAL_Free(fresh);
+    HifheCleanse(fresh, total);
+    HifheFree(fresh);
     return ret;
 }
 

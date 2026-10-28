@@ -14,7 +14,8 @@
  */
 
 #include <string.h>
-#include "bsl_sal.h"
+#include "hifhe_mem.h"
+#include "hifhe_err_internal.h"
 #include "rlwe/rlwe.h"
 #include "rlwe/rlwe_context.h"
 #include "kernel/ntt.h"
@@ -26,6 +27,7 @@ HIFHE_ERROR RLWE_RlweParameter_Create(RlweParameter *out, uint32_t defaultCipher
                                       const ModulusVector *cipherMod)
 {
     if (out == NULL || cipherMod == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     memset(out, 0, sizeof(*out));
@@ -37,6 +39,7 @@ HIFHE_ERROR RLWE_RlweParameter_Create(RlweParameter *out, uint32_t defaultCipher
 HIFHE_ERROR RLWE_RlweParameter_Destroy(RlweParameter *self)
 {
     if (self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     Uint64Vector_Destroy(&self->cipherMod);
@@ -46,6 +49,7 @@ HIFHE_ERROR RLWE_RlweParameter_Destroy(RlweParameter *self)
 HIFHE_ERROR RLWE_RlweParameter_Copy(RlweParameter *dst, const RlweParameter *src)
 {
     if (dst == NULL || src == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     RLWE_RlweParameter_Destroy(dst);
@@ -57,6 +61,7 @@ HIFHE_ERROR RLWE_RlweParameter_Copy(RlweParameter *dst, const RlweParameter *src
 HIFHE_ERROR RLWE_RlweContext_BuildWithTables(RlweContext *out, RlweParameter *param, uint64_t *const *tables)
 {
     if (out == NULL || param == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     memset(out, 0, sizeof(*out));
@@ -65,14 +70,15 @@ HIFHE_ERROR RLWE_RlweContext_BuildWithTables(RlweContext *out, RlweParameter *pa
     uint32_t L = param->cipherMod.size;
     uint32_t N = param->polyDegree;
     if (L == 0u || N == 0u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
     BgvContext_Init(&out->seedCtx);
 
     /* Allocate table arrays. */
-    out->nttTables = (NttTables *)BSL_SAL_Calloc(L, (uint32_t)sizeof(NttTables));
-    out->tableBuf = (uint64_t **)BSL_SAL_Calloc(L, (uint32_t)sizeof(uint64_t *));
+    out->nttTables = (NttTables *)HifheCalloc(L, (uint32_t)sizeof(NttTables));
+    out->tableBuf = (uint64_t **)HifheCalloc(L, (uint32_t)sizeof(uint64_t *));
     if (out->nttTables == NULL || out->tableBuf == NULL) {
         goto oom;
     }
@@ -88,7 +94,7 @@ HIFHE_ERROR RLWE_RlweContext_BuildWithTables(RlweContext *out, RlweParameter *pa
             out->tableBuf[i] = tables[i];
             r = Kernel_Ntt_AttachTables(&out->nttTables[i], out->tableBuf[i], q, N);
         } else {
-            out->tableBuf[i] = (uint64_t *)BSL_SAL_Malloc((uint32_t)(HIFHE_NTT_TABLE_WORDS(N) * sizeof(uint64_t)));
+            out->tableBuf[i] = (uint64_t *)HifheMalloc((uint32_t)(HIFHE_NTT_TABLE_WORDS(N) * sizeof(uint64_t)));
             if (out->tableBuf[i] == NULL) {
                 goto oom;
             }
@@ -113,15 +119,18 @@ HIFHE_ERROR RLWE_RlweContext_BuildWithTables(RlweContext *out, RlweParameter *pa
 
 oom:
     RLWE_RlweContext_Destroy(out);
+    HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
     return HIFHE_MEMORY_ERROR;
 err:
     RLWE_RlweContext_Destroy(out);
+    HIFHE_ERR_PUSH_ERROR(HIFHE_INTERNAL);
     return HIFHE_INTERNAL;
 }
 
 HIFHE_ERROR RLWE_RlweContext_Destroy(RlweContext *self)
 {
     if (self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (self->tableBuf != NULL) {
@@ -130,14 +139,14 @@ HIFHE_ERROR RLWE_RlweContext_Destroy(RlweContext *self)
         if (self->ownsTableBuf) {
             for (uint32_t i = 0; i < self->tablesCount; ++i) {
                 if (self->tableBuf[i] != NULL) {
-                    BSL_SAL_Free(self->tableBuf[i]);
+                    HifheFree(self->tableBuf[i]);
                 }
             }
         }
-        BSL_SAL_Free(self->tableBuf);
+        HifheFree(self->tableBuf);
     }
     if (self->nttTables != NULL) {
-        BSL_SAL_Free(self->nttTables);
+        HifheFree(self->nttTables);
     }
     Uint64Vector_Destroy(&self->cipherRnsBase);
     BgvContext_ClearSeed(&self->seedCtx);

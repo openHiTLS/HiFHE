@@ -17,7 +17,8 @@
 
 #include <stdbool.h>
 #include <string.h>
-#include "bsl_sal.h"
+#include "hifhe_mem.h"
+#include "hifhe_err_internal.h"
 #include "kernel/ntt.h"
 
 #include "bgv_local.h"
@@ -43,14 +44,14 @@ void BgvUserPara_Clear(BgvUserPara *p)
     /* Frees the tables. Every context must be destroyed.
      * Run Bgv_FreeState(*ctx) first. */
     if (p->lutBlob != NULL) {
-        BSL_SAL_Free(p->lutBlob);
+        HifheFree(p->lutBlob);
     }
     BgvUserPara *next = p->lutNext;
     while (next != NULL) {
         BgvUserPara *after = next->lutNext;
         next->lutNext = NULL;
         BgvUserPara_Clear(next);
-        BSL_SAL_Free(next);
+        HifheFree(next);
         next = after;
     }
     memset(p, 0, sizeof(*p));
@@ -81,12 +82,14 @@ static HIFHE_ERROR BuildLutInto(BgvUserPara *p, const BGVParameter *param)
     uint32_t L = cipherMod->size;
     uint32_t N = param->rlweParameter.polyDegree;
     if (L == 0u || L > HIFHE_BGV_MAX_CHAIN_LEN || N == 0u || param->plainMod == 0u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
     size_t stride = HIFHE_NTT_TABLE_WORDS(N);
-    uint64_t *blob = (uint64_t *)BSL_SAL_Malloc((uint32_t)(((size_t)L + 1u) * stride * sizeof(uint64_t)));
+    uint64_t *blob = (uint64_t *)HifheMalloc((uint32_t)(((size_t)L + 1u) * stride * sizeof(uint64_t)));
     if (blob == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
 
@@ -94,14 +97,14 @@ static HIFHE_ERROR BuildLutInto(BgvUserPara *p, const BGVParameter *param)
     for (uint32_t i = 0; i < L; ++i) {
         int32_t r = Kernel_Ntt_BuildTables(&scratch, blob + (size_t)i * stride, cipherMod->data[i], N);
         if (r != HIFHE_SUCCESS) {
-            BSL_SAL_Free(blob);
+            HifheFree(blob);
             return r;
         }
         p->lutCipherMod[i] = cipherMod->data[i];
     }
     int32_t r = Kernel_Ntt_BuildTables(&scratch, blob + (size_t)L * stride, param->plainMod, N);
     if (r != HIFHE_SUCCESS) {
-        BSL_SAL_Free(blob);
+        HifheFree(blob);
         return r;
     }
 
@@ -115,6 +118,7 @@ static HIFHE_ERROR BuildLutInto(BgvUserPara *p, const BGVParameter *param)
 HIFHE_ERROR BgvUserPara_EnsureLut(BgvUserPara *p, const BGVParameter *param, const BgvUserPara **holder)
 {
     if (p == NULL || param == NULL || holder == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     *holder = NULL;
@@ -141,17 +145,19 @@ HIFHE_ERROR BgvUserPara_EnsureLut(BgvUserPara *p, const BGVParameter *param, con
     /* Tables already handed out stay put: contexts borrow pointers into
      * them. A new set gets its own node. */
     if (entries >= HIFHE_BGV_LUT_CACHE_ENTRIES) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
-    BgvUserPara *node = (BgvUserPara *)BSL_SAL_Malloc((uint32_t)sizeof(BgvUserPara));
+    BgvUserPara *node = (BgvUserPara *)HifheMalloc((uint32_t)sizeof(BgvUserPara));
     if (node == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     BgvUserPara_Init(node);
     int32_t r = BuildLutInto(node, param);
     if (r != HIFHE_SUCCESS) {
         BgvUserPara_Clear(node);
-        BSL_SAL_Free(node);
+        HifheFree(node);
         return r;
     }
     tail->lutNext = node;
@@ -178,6 +184,7 @@ uint64_t *BgvUserPara_PlainLut(const BgvUserPara *p)
 HIFHE_ERROR BgvUserPara_Copy(BgvUserPara *dst, const BgvUserPara *src)
 {
     if (dst == NULL || src == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     BgvUserPara_Clear(dst);
@@ -203,6 +210,7 @@ HIFHE_ERROR BgvUserPara_Copy(BgvUserPara *dst, const BgvUserPara *src)
 HIFHE_ERROR BgvUserPara_ParseFromBSL(BgvUserPara *p, const BSL_Param *param)
 {
     if (p == NULL || param == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
 
@@ -214,30 +222,35 @@ HIFHE_ERROR BgvUserPara_ParseFromBSL(BgvUserPara *p, const BSL_Param *param)
         switch (cur->key) {
             case HIFHE_PARAM_BGV_POLY_DEGREE:
                 if (cur->valueLen != sizeof(uint32_t) || cur->value == NULL) {
+                    HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                     return HIFHE_PARAM_INVALID;
                 }
                 p->polyDegree = *(const uint32_t *)cur->value;
                 break;
             case HIFHE_PARAM_BGV_PLAIN_MOD_BIT:
                 if (cur->valueLen != sizeof(uint32_t) || cur->value == NULL) {
+                    HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                     return HIFHE_PARAM_INVALID;
                 }
                 p->plainModBit = *(const uint32_t *)cur->value;
                 break;
             case HIFHE_PARAM_BGV_CORRECTION_FACTOR:
                 if (cur->valueLen != sizeof(uint64_t) || cur->value == NULL) {
+                    HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                     return HIFHE_PARAM_INVALID;
                 }
                 p->correctionFactor = *(const uint64_t *)cur->value;
                 break;
             case HIFHE_PARAM_BGV_RELIN_DNUM:
                 if (cur->valueLen != sizeof(uint32_t) || cur->value == NULL) {
+                    HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                     return HIFHE_PARAM_INVALID;
                 }
                 p->relinDnum = *(const uint32_t *)cur->value;
                 break;
             case HIFHE_PARAM_BGV_CIPHER_MOD_BITS: {
                 if (cur->value == NULL || cur->valueLen == 0 || cur->valueLen % sizeof(uint32_t) != 0) {
+                    HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                     return HIFHE_PARAM_INVALID;
                 }
                 uint32_t n = cur->valueLen / (uint32_t)sizeof(uint32_t);
@@ -254,11 +267,20 @@ HIFHE_ERROR BgvUserPara_ParseFromBSL(BgvUserPara *p, const BSL_Param *param)
         }
     }
 
-    if (!BGV_Params_IsPolyDegreeSupported(p->polyDegree)) {
+    /* The whole set is checked here. An incomplete or inadmissible set is
+     * rejected by this call, not by key generation. */
+    if (p->cipherModBit.data == NULL || p->cipherModBit.size == 0u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
-    if (p->cipherModBit.size != 0u && !BGV_Params_IsChainLenSupported(p->cipherModBit.size)) {
+    if (p->correctionFactor == 0u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
+    }
+    int32_t vr = BGV_Params_Validate(p->polyDegree, p->plainModBit, p->cipherModBit.data, p->cipherModBit.size,
+                                     HIFHE_BGV_DEFAULT_SECURITY_LEVEL);
+    if (vr != HIFHE_SUCCESS) {
+        return vr;
     }
     p->set = 1u;
     return HIFHE_SUCCESS;
@@ -269,6 +291,7 @@ HIFHE_ERROR BgvUserPara_ParseFromBSL(BgvUserPara *p, const BSL_Param *param)
 HIFHE_ERROR BgvUserPara_LoadPreset(BgvUserPara *p, int32_t presetId)
 {
     if (p == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     BgvPresetPara preset;

@@ -20,7 +20,7 @@
  */
 
 #include <string.h>
-#include "bsl_sal.h"
+#include "hifhe_err_internal.h"
 #include "bgv/evaluator.h"
 #include "bgv/ciphertext.h"
 #include "rlwe/crt_ops.h"
@@ -31,12 +31,15 @@
 HIFHE_ERROR BGV_Evaluator_Relinearize(Ciphertext *out, const Ciphertext *in, const Evaluator *self)
 {
     if (out == NULL || in == NULL || self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (self->relinKeys == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NO_RELIN_KEY);
         return HIFHE_NO_RELIN_KEY;
     }
     if (in->config.ciphertextSize != 3u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_CT_DEGREE_MISMATCH);
         return HIFHE_CT_DEGREE_MISMATCH;
     }
 
@@ -44,6 +47,7 @@ HIFHE_ERROR BGV_Evaluator_Relinearize(Ciphertext *out, const Ciphertext *in, con
     uint32_t L = in->config.crtConfig.rnsbase.size;
     /* The gadget bakes in its chain: relinearize before mod-switching. */
     if (L != self->relinKeys->rnsSize) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 

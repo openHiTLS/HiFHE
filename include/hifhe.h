@@ -40,6 +40,16 @@ extern "C" {
  */
 
 /**
+ * @brief Install the allocator the whole library uses.
+ * @param[in] mallocFunc Allocator; NULL together with freeFunc restores malloc.
+ * @param[in] freeFunc Deallocator; NULL together with mallocFunc restores free.
+ * @return HIFHE_SUCCESS, or HIFHE_PARAM_INVALID when only one of the two is NULL.
+ * @note Call before anything else: memory already handed out is freed through
+ *       whichever pair was installed when it was taken.
+ */
+int32_t HIFHE_SetMemFuncs(HIFHE_MallocFunc mallocFunc, HIFHE_FreeFunc freeFunc);
+
+/**
  * @brief Create a context without parameters or keys.
  * @param[in] algId Algorithm identifier from HIFHE_ALG_ID.
  * @return Caller-owned context, to be released with HIFHE_Free; NULL for an

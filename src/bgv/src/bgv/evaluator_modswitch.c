@@ -36,7 +36,8 @@
  */
 
 #include <string.h>
-#include "bsl_sal.h"
+#include "hifhe_mem.h"
+#include "hifhe_err_internal.h"
 #include "bgv/evaluator.h"
 #include "bgv/ciphertext.h"
 #include "kernel/modulus.h"
@@ -49,15 +50,18 @@
 HIFHE_ERROR BGV_Evaluator_ModSwitch(Ciphertext *out, const Ciphertext *in, const Evaluator *self)
 {
     if (out == NULL || in == NULL || self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (in->context == NULL || in->data == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
 
     BGVContext *ctx = self->context;
     uint32_t L = in->config.crtConfig.rnsbase.size;
     if (L <= 1u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MODSWITCH_EXHAUSTED);
         return HIFHE_MODSWITCH_EXHAUSTED;
     }
 
@@ -69,10 +73,12 @@ HIFHE_ERROR BGV_Evaluator_ModSwitch(Ciphertext *out, const Ciphertext *in, const
 
     uint64_t invT = Kernel_ModInv(t % qLast, qLast);
     if (invT == 0u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID; /* t must be coprime to q_last */
     }
     uint64_t invQLastModT = Kernel_ModInv(qLast % t, t);
     if (invQLastModT == 0u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
@@ -159,8 +165,8 @@ HIFHE_ERROR BGV_Evaluator_ModSwitch(Ciphertext *out, const Ciphertext *in, const
     int64_t *u = NULL;
     uint64_t *buf = NULL;
     if (r == HIFHE_SUCCESS) {
-        u = (int64_t *)BSL_SAL_Malloc(N * (uint32_t)sizeof(int64_t));
-        buf = (uint64_t *)BSL_SAL_Malloc(N * (uint32_t)sizeof(uint64_t));
+        u = (int64_t *)HifheMalloc(N * (uint32_t)sizeof(int64_t));
+        buf = (uint64_t *)HifheMalloc(N * (uint32_t)sizeof(uint64_t));
         if (u == NULL || buf == NULL) {
             r = HIFHE_MEMORY_ERROR;
         }
@@ -202,8 +208,8 @@ HIFHE_ERROR BGV_Evaluator_ModSwitch(Ciphertext *out, const Ciphertext *in, const
         }
     }
 
-    BSL_SAL_Free(u);
-    BSL_SAL_Free(buf);
+    HifheFree(u);
+    HifheFree(buf);
     BGV_Ciphertext_Destroy(&work);
     if (r != HIFHE_SUCCESS) {
         BGV_Ciphertext_Destroy(&res);

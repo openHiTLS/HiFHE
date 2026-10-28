@@ -37,7 +37,7 @@
  */
 
 #include <string.h>
-#include "bsl_sal.h"
+#include "hifhe_err_internal.h"
 #include "bgv_local.h"
 #include "bgv/plaintext.h"
 #include "bgv/ciphertext.h"
@@ -108,9 +108,11 @@ typedef struct {
 static HIFHE_ERROR DomainFactors_Init(DomainFactors *f, const RnsBase *base, PolyForm dtype)
 {
     if (f == NULL || base == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (base->size == 0u || base->size > HIFHE_BGV_MAX_CHAIN_LEN) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     f->size = base->size;
@@ -118,16 +120,19 @@ static HIFHE_ERROR DomainFactors_Init(DomainFactors *f, const RnsBase *base, Pol
     for (uint32_t i = 0; i < base->size; ++i) {
         Modulus qi = base->data[i];
         if (qi < 2u) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
             return HIFHE_SERDES_FAIL;
         }
         f->q[i] = qi;
         f->r[i] = (uint64_t)((((ModulusWide)1u) << 64) % (ModulusWide)qi);
         f->rInv[i] = Kernel_ModInv(f->r[i], qi);
         if (f->scaled && f->rInv[i] == 0u) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
             return HIFHE_SERDES_FAIL;
         }
         if (Kernel_ShoupConst_Init(&f->rSc[i], f->r[i], qi) != HIFHE_SUCCESS ||
             Kernel_ShoupConst_Init(&f->rInvSc[i], f->rInv[i], qi) != HIFHE_SUCCESS) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
             return HIFHE_SERDES_FAIL;
         }
     }
@@ -170,6 +175,7 @@ static void ReadSlice(uint64_t *dst, const uint8_t *src, uint32_t N, const Domai
 static HIFHE_ERROR WriteHeader(uint8_t *buf, uint32_t bufLen, int32_t algId, uint16_t type, uint32_t *offset)
 {
     if (bufLen < WIRE_HEADER_BYTES) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_BUFFER_TOO_SMALL);
         return HIFHE_BUFFER_TOO_SMALL;
     }
     PutU32(buf, HIFHE_SERDES_MAGIC);
@@ -184,16 +190,20 @@ static HIFHE_ERROR ReadHeader(const uint8_t *buf, uint32_t bufLen, uint16_t expe
                               uint32_t *offset)
 {
     if (bufLen < WIRE_HEADER_BYTES) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     uint32_t magic = GetU32(buf);
     if (magic != HIFHE_SERDES_MAGIC && magic != HIFHE_SERDES_MAGIC_ALT) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     if (GetU16(buf + 8) != HIFHE_SERDES_VERSION) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     if (GetU16(buf + 10) != expectType) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     if (outAlgId != NULL) {
@@ -209,10 +219,12 @@ static HIFHE_ERROR CheckRnsPrefix(const uint64_t *carried, uint32_t carriedSize,
 {
     const RnsBase *chain = &ctx->rlweContext.cipherRnsBase;
     if (carriedSize == 0u || carriedSize > chain->size) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     for (uint32_t i = 0; i < carriedSize; ++i) {
         if (carried[i] != chain->data[i]) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
             return HIFHE_SERDES_FAIL;
         }
     }
@@ -248,10 +260,12 @@ uint32_t BgvSerDes_PlaintextSize(const Plaintext *pt)
 static HIFHE_ERROR WritePtBody(uint8_t *buf, uint32_t bufLen, uint32_t *off, const Plaintext *pt)
 {
     if (pt->context == NULL || pt->data == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     uint32_t need = PtBodyBytes(pt);
     if (bufLen - *off < need) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_BUFFER_TOO_SMALL);
         return HIFHE_BUFFER_TOO_SMALL;
     }
     uint32_t N = BGV_BGVContext_GetPolyDegree(pt->context);
@@ -285,6 +299,7 @@ static HIFHE_ERROR WritePtBody(uint8_t *buf, uint32_t bufLen, uint32_t *off, con
 static HIFHE_ERROR ReadPtBody(const uint8_t *buf, uint32_t bufLen, uint32_t *off, Plaintext *pt, BGVContext *ctx)
 {
     if (bufLen - *off < 20u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     uint64_t scale = GetU64(buf + *off);
@@ -296,15 +311,19 @@ static HIFHE_ERROR ReadPtBody(const uint8_t *buf, uint32_t bufLen, uint32_t *off
     uint32_t dword = GetU32(buf + *off);
     *off += 4u;
     if (N != BGV_BGVContext_GetPolyDegree(ctx)) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     if (rns == 0u || rns > ctx->rlweContext.cipherRnsBase.size) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     if (dword != (uint32_t)HIFHE_POLY && dword != (uint32_t)HIFHE_NTT) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     if (bufLen - *off < rns * 8u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
 
@@ -346,6 +365,7 @@ static HIFHE_ERROR ReadPtBody(const uint8_t *buf, uint32_t bufLen, uint32_t *off
     uint32_t want = pt->dataSize * (uint32_t)sizeof(uint64_t);
     if (bufLen - *off < want) {
         BGV_Plaintext_Destroy(pt);
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     for (uint32_t i = 0; i < rns; ++i) {
@@ -386,10 +406,12 @@ uint32_t BgvSerDes_CiphertextSize(const Ciphertext *ct)
 static HIFHE_ERROR WriteCtBody(uint8_t *buf, uint32_t bufLen, uint32_t *off, const Ciphertext *ct)
 {
     if (ct->context == NULL || ct->data == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     uint32_t need = CtBodyBytes(ct);
     if (bufLen - *off < need) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_BUFFER_TOO_SMALL);
         return HIFHE_BUFFER_TOO_SMALL;
     }
     uint32_t N = BGV_BGVContext_GetPolyDegree(ct->context);
@@ -432,6 +454,7 @@ static HIFHE_ERROR ReadCtBody(const uint8_t *buf, uint32_t bufLen, uint32_t *off
 {
     uint32_t fixed = 4u + 8u + HIFHE_CIPHERTEXT_SEED_LEN * 8u + 4u + 4u + 4u;
     if (bufLen - *off < fixed) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     uint32_t sz = GetU32(buf + *off);
@@ -451,15 +474,19 @@ static HIFHE_ERROR ReadCtBody(const uint8_t *buf, uint32_t bufLen, uint32_t *off
     *off += 4u;
     /* Decryption work and the allocation below both scale with sz. */
     if (sz < 2u || sz > HIFHE_BGV_MAX_CIPHERTEXT_SIZE) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     if (N != BGV_BGVContext_GetPolyDegree(ctx)) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     if (rns == 0u || rns > ctx->rlweContext.cipherRnsBase.size) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     if (dword != (uint32_t)HIFHE_POLY && dword != (uint32_t)HIFHE_NTT) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     /* ciphertextSize arrives on the wire and CalDataSize multiplies it out in
@@ -468,6 +495,7 @@ static HIFHE_ERROR ReadCtBody(const uint8_t *buf, uint32_t bufLen, uint32_t *off
      * ties the allocation to the input length. */
     uint64_t bodyBytes = (uint64_t)rns * 8u + (uint64_t)sz * (uint64_t)rns * (uint64_t)N * sizeof(uint64_t);
     if (bodyBytes > (uint64_t)(bufLen - *off)) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
 
@@ -515,6 +543,7 @@ static HIFHE_ERROR ReadCtBody(const uint8_t *buf, uint32_t bufLen, uint32_t *off
     uint32_t want = ct->dataSize * (uint32_t)sizeof(uint64_t);
     if (bufLen - *off < want) {
         BGV_Ciphertext_Destroy(ct);
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     for (uint32_t k = 0; k < sz; ++k) {
@@ -531,11 +560,13 @@ static HIFHE_ERROR ReadCtBody(const uint8_t *buf, uint32_t bufLen, uint32_t *off
 static int32_t DumpPtTyped(const Plaintext *pt, uint8_t *buf, uint32_t *bufLen, int32_t algId, uint16_t type)
 {
     if (pt == NULL || bufLen == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     uint32_t need = BgvSerDes_PlaintextSize(pt);
     if (buf == NULL || *bufLen < need) {
         *bufLen = need;
+        HIFHE_ERR_PUSH_ERROR(HIFHE_BUFFER_TOO_SMALL);
         return HIFHE_BUFFER_TOO_SMALL;
     }
     uint32_t off = 0u;
@@ -554,11 +585,13 @@ static int32_t DumpPtTyped(const Plaintext *pt, uint8_t *buf, uint32_t *bufLen, 
 static int32_t DumpCtTyped(const Ciphertext *ct, uint8_t *buf, uint32_t *bufLen, int32_t algId, uint16_t type)
 {
     if (ct == NULL || bufLen == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     uint32_t need = BgvSerDes_CiphertextSize(ct);
     if (buf == NULL || *bufLen < need) {
         *bufLen = need;
+        HIFHE_ERR_PUSH_ERROR(HIFHE_BUFFER_TOO_SMALL);
         return HIFHE_BUFFER_TOO_SMALL;
     }
     uint32_t off = 0u;
@@ -582,6 +615,7 @@ int32_t BgvSerDes_DumpPlaintext(const Plaintext *pt, uint8_t *buf, uint32_t *buf
 int32_t BgvSerDes_LoadPlaintext(Plaintext *pt, const uint8_t *buf, uint32_t bufLen, BGVContext *context)
 {
     if (pt == NULL || buf == NULL || context == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     uint32_t off = 0u;
@@ -600,6 +634,7 @@ int32_t BgvSerDes_DumpCiphertext(const Ciphertext *ct, uint8_t *buf, uint32_t *b
 int32_t BgvSerDes_LoadCiphertext(Ciphertext *ct, const uint8_t *buf, uint32_t bufLen, BGVContext *context)
 {
     if (ct == NULL || buf == NULL || context == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     uint32_t off = 0u;
@@ -621,6 +656,7 @@ int32_t BgvSerDes_DumpPubKey(const PublicKey *pk, uint8_t *buf, uint32_t *bufLen
 int32_t BgvSerDes_LoadPubKey(PublicKey *pk, const uint8_t *buf, uint32_t bufLen, BGVContext *context)
 {
     if (pk == NULL || buf == NULL || context == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     uint32_t off = 0u;
@@ -639,6 +675,7 @@ int32_t BgvSerDes_DumpPrvKey(const SecretKey *sk, uint8_t *buf, uint32_t *bufLen
 int32_t BgvSerDes_LoadPrvKey(SecretKey *sk, const uint8_t *buf, uint32_t bufLen, BGVContext *context)
 {
     if (sk == NULL || buf == NULL || context == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     uint32_t off = 0u;
@@ -650,6 +687,7 @@ int32_t BgvSerDes_LoadPrvKey(SecretKey *sk, const uint8_t *buf, uint32_t bufLen,
      * carrying fewer limbs would be read past its allocation. The rns field
      * follows scale(8) and N(4). */
     if (bufLen - off < 20u || GetU32(buf + off + 12u) != context->rlweContext.cipherRnsBase.size) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     return ReadPtBody(buf, bufLen, &off, sk, context);

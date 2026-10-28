@@ -13,6 +13,12 @@
 #ifndef HIFHE_ERR_H
 #define HIFHE_ERR_H
 
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
     HIFHE_SUCCESS = 0,
     HIFHE_NOT_SUPPORTED = 0x39000001,
@@ -40,4 +46,19 @@ typedef enum {
     HIFHE_HASH_ERROR
 } HIFHE_ERROR;
 
+/* ---- error stack ----
+ * Every failure the library decides is recorded once, where the code is first
+ * returned, with the file and line that decided it. The stack is per thread,
+ * holds HIFHE_ERR_STACK_DEPTH entries and drops its oldest when it wraps, and
+ * is never cleared on its own, so read it right after the call that failed.
+ * A successful call pushes nothing. */
+#define HIFHE_ERR_STACK_DEPTH 20u
+
+/* file and line may be NULL. The return is HIFHE_SUCCESS on an empty stack. */
+int32_t HIFHE_ErrPeekError(const char **file, uint32_t *line);
+int32_t HIFHE_ErrPeekLastError(const char **file, uint32_t *line);
+
+#ifdef __cplusplus
+}
+#endif
 #endif

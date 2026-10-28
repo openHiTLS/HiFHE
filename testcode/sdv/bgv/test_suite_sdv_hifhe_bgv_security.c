@@ -659,22 +659,18 @@ static void SecAllocReset(void)
 static int SecAllocHookInstall(void)
 {
     SecAllocReset();
-    if (BSL_SAL_CallBack_Ctrl(BSL_SAL_MEM_MALLOC, SecMallocHook) != BSL_SUCCESS) {
-        return -1;
-    }
-    if (BSL_SAL_CallBack_Ctrl(BSL_SAL_MEM_FREE, SecFreeHook) != BSL_SUCCESS) {
+    if (HIFHE_SetMemFuncs(SecMallocHook, SecFreeHook) != HIFHE_SUCCESS) {
         return -1;
     }
     return 0;
 }
 
-/* Handing the SAL its own entry points back is how it reads "unregistered". */
+/* Both NULL restores malloc and free. */
 static void SecAllocHookRemove(void)
 {
     g_secArmed = 0;
     g_secNeedle = NULL;
-    (void)BSL_SAL_CallBack_Ctrl(BSL_SAL_MEM_MALLOC, BSL_SAL_Malloc);
-    (void)BSL_SAL_CallBack_Ctrl(BSL_SAL_MEM_FREE, BSL_SAL_Free);
+    (void)HIFHE_SetMemFuncs(NULL, NULL);
 }
 
 /* @
@@ -920,5 +916,73 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_REDUCTION_FIXED_CORRECTION_TC001(void)
 
 EXIT:
     return;
+}
+/* END_CASE */
+
+/* @
+* @test  SDV_CRYPTO_HIFHE_BGV_SEC_ENCODE_MSG_COPY_WIPED_TC001
+* @title  The realigned copy of a caller message is wiped before it is released.
+* @brief  HIFHE_PARAM_BGV_MSG carries OCTETS, which promise no alignment, so a
+*         message that is not 8-byte aligned is copied inside the encode. The
+*         copy holds the caller's cleartext. The recording allocator compares
+*         every released block against the message bytes.
+* @auto  TRUE
+@ */
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_SEC_ENCODE_MSG_COPY_WIPED_TC001(void)
+{
+    CRYPT_BGV_Ctx *ctx = NULL;
+    uint8_t *slab = NULL, *needle = NULL, *pt = NULL;
+    SecDims d;
+    int installed = 0;
+
+    TestMemInit();
+    TestRandInit();
+    ctx = SecNewCtx(HIFHE_BGV_2048_48_17BIT, SEC_SEED_A, 0);
+    ASSERT_TRUE(ctx != NULL);
+    ASSERT_EQ(SecDimsGet(ctx, &d), 0);
+
+    /* One odd byte in, so the message never starts on a word boundary. */
+    slab = (uint8_t *)BSL_SAL_Malloc(d.msgLen + sizeof(uint64_t));
+    needle = (uint8_t *)malloc(d.msgLen);
+    pt = (uint8_t *)BSL_SAL_Malloc(d.ptLen);
+    ASSERT_TRUE(slab != NULL && needle != NULL && pt != NULL);
+    uint8_t *mis = slab + 1u;
+    ASSERT_TRUE(((uintptr_t)mis % sizeof(uint64_t)) != 0u);
+    uint64_t v;
+    for (uint32_t i = 0; i < d.n; ++i) {
+        v = (uint64_t)((i * 7919u + 13u) % d.t);
+        memcpy(mis + (size_t)i * sizeof(uint64_t), &v, sizeof(v));
+    }
+    memcpy(needle, mis, d.msgLen);
+
+    ASSERT_EQ(SecAllocHookInstall(), 0);
+    installed = 1;
+    g_secNeedle = needle;
+    g_secNeedleLen = d.msgLen;
+    g_secArmed = 1;
+    uint32_t ptLen = 0u;
+    int rc = SecEncode(ctx, (const uint64_t *)mis, d.msgLen, pt, d.ptLen, &ptLen);
+    int seen = g_secNeedleSeen;
+    int overflow = g_secOverflow;
+    g_secArmed = 0;
+    g_secNeedle = NULL;
+    SecAllocHookRemove();
+    installed = 0;
+
+    ASSERT_EQ(rc, 0);
+    ASSERT_EQ(overflow, 0);
+    ASSERT_EQ(seen, 0);
+    /* The caller's own buffer is untouched. */
+    ASSERT_EQ(memcmp(mis, needle, d.msgLen), 0);
+
+EXIT:
+    if (installed) {
+        SecAllocHookRemove();
+    }
+    free(needle);
+    BSL_SAL_Free(slab);
+    BSL_SAL_Free(pt);
+    CRYPT_BGV_FreeCtx(ctx);
 }
 /* END_CASE */

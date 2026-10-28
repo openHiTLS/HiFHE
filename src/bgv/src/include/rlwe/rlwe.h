@@ -141,10 +141,9 @@ HIFHE_ERROR RLWE_CrtPoly_Create(CrtPoly *out, const CrtPolyConfig *cfg, RlweCont
 HIFHE_ERROR RLWE_CrtPoly_CreateFromExist(CrtPoly *out, uint64_t *data, uint32_t size, const CrtPolyConfig *cfg,
                                          RlweContext *ctx);
 HIFHE_ERROR RLWE_CrtPoly_Copy(CrtPoly *dst, const CrtPoly *src);
+/* Wipes owned coefficients before releasing them. A view owns nothing and
+ * keeps its storage untouched. */
 HIFHE_ERROR RLWE_CrtPoly_Destroy(CrtPoly *self);
-/* Destroy, wiping owned coefficients first. Views own nothing and keep their
- * storage, which is the secret itself, untouched. */
-HIFHE_ERROR RLWE_CrtPoly_CleanseDestroy(CrtPoly *self);
 HIFHE_ERROR RLWE_CrtPoly_GetRnsPolyAt(RnsPoly *out, uint32_t index, const CrtPoly *self);
 
 /* CrtPolyConfig helpers. */

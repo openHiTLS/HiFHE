@@ -14,7 +14,8 @@
  */
 
 #include <string.h>
-#include "bsl_sal.h"
+#include "hifhe_mem.h"
+#include "hifhe_err_internal.h"
 #include "rlwe/rlwe.h"
 #include "rlwe/rlwe_context.h"
 #include "rlwe/rns_ops.h"
@@ -27,14 +28,16 @@
 HIFHE_ERROR RLWE_RnsPoly_Create(RnsPoly *out, const RnsPolyConfig *cfg, RlweContext *ctx)
 {
     if (out == NULL || cfg == NULL || ctx == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     memset(out, 0, sizeof(*out));
     out->config = *cfg;
     out->context = ctx;
     out->dataSize = ctx->parameter->polyDegree;
-    out->data = (uint64_t *)BSL_SAL_Calloc(out->dataSize, (uint32_t)sizeof(uint64_t));
+    out->data = (uint64_t *)HifheCalloc(out->dataSize, (uint32_t)sizeof(uint64_t));
     if (out->data == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     out->ownsData = 1u;
@@ -44,10 +47,11 @@ HIFHE_ERROR RLWE_RnsPoly_Create(RnsPoly *out, const RnsPolyConfig *cfg, RlweCont
 HIFHE_ERROR RLWE_RnsPoly_Destroy(RnsPoly *self)
 {
     if (self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (self->ownsData && self->data != NULL) {
-        BSL_SAL_Free(self->data);
+        HifheFree(self->data);
     }
     self->data = NULL;
     self->dataSize = 0u;
@@ -60,15 +64,19 @@ HIFHE_ERROR RLWE_RnsPoly_Destroy(RnsPoly *self)
 static HIFHE_ERROR CheckShape(const RnsPoly *a, const RnsPoly *b)
 {
     if (a == NULL || b == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (a->config.modulus != b->config.modulus) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     if (a->dataSize != b->dataSize) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     if (a->context != b->context) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     return HIFHE_SUCCESS;
@@ -81,6 +89,7 @@ HIFHE_ERROR RLWE_RnsPoly_Add(RnsPoly *out, const RnsPoly *a, const RnsPoly *b)
         return r;
     }
     if (out == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     Modulus q = a->config.modulus;
@@ -102,6 +111,7 @@ HIFHE_ERROR RLWE_RnsPoly_Sub(RnsPoly *out, const RnsPoly *a, const RnsPoly *b)
         return r;
     }
     if (out == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     Modulus q = a->config.modulus;
@@ -119,6 +129,7 @@ HIFHE_ERROR RLWE_RnsPoly_Sub(RnsPoly *out, const RnsPoly *a, const RnsPoly *b)
 HIFHE_ERROR RLWE_RnsPoly_Neg(RnsPoly *out, const RnsPoly *a)
 {
     if (out == NULL || a == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     Modulus q = a->config.modulus;
@@ -144,6 +155,7 @@ HIFHE_ERROR RLWE_RnsPoly_MulDot(RnsPoly *out, const RnsPoly *a, const RnsPoly *b
         return r;
     }
     if (out == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     Modulus q = a->config.modulus;
@@ -171,6 +183,7 @@ HIFHE_ERROR RLWE_RnsPoly_MulDotAcc(RnsPoly *out, const RnsPoly *a, const RnsPoly
         return r;
     }
     if (out == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     Modulus q = a->config.modulus;
@@ -199,6 +212,7 @@ HIFHE_ERROR RLWE_RnsPoly_MulDotAcc(RnsPoly *out, const RnsPoly *a, const RnsPoly
 HIFHE_ERROR RLWE_RnsPoly_MulScalar(RnsPoly *out, const RnsPoly *a, uint64_t x)
 {
     if (out == NULL || a == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     Modulus q = a->config.modulus;
@@ -228,10 +242,12 @@ HIFHE_ERROR RLWE_RnsPoly_MulScalar(RnsPoly *out, const RnsPoly *a, uint64_t x)
 HIFHE_ERROR RLWE_RnsPoly_SetSigned(RnsPoly *self, const int64_t *v)
 {
     if (self == NULL || v == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     Modulus q = self->config.modulus;
     if (q < 2u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     /* Sampler output is in [-2, 2] for CBD-2 and {-1, 0, 1} for ternary, so
@@ -254,6 +270,7 @@ HIFHE_ERROR RLWE_RnsPoly_SetSigned(RnsPoly *self, const int64_t *v)
 HIFHE_ERROR RLWE_RnsPoly_ToNtt(RnsPoly *self)
 {
     if (self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (self->config.dtype == HIFHE_NTT) {
@@ -261,6 +278,7 @@ HIFHE_ERROR RLWE_RnsPoly_ToNtt(RnsPoly *self)
     }
     const NttTables *tbl = RLWE_RlweContext_GetNttTablesByModulus(self->context, self->config.modulus);
     if (tbl == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_INTERNAL);
         return HIFHE_INTERNAL;
     }
     int32_t r = Kernel_Ntt_Forward(self->data, tbl);
@@ -274,6 +292,7 @@ HIFHE_ERROR RLWE_RnsPoly_ToNtt(RnsPoly *self)
 HIFHE_ERROR RLWE_RnsPoly_ToPoly(RnsPoly *self)
 {
     if (self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (self->config.dtype == HIFHE_POLY) {
@@ -281,6 +300,7 @@ HIFHE_ERROR RLWE_RnsPoly_ToPoly(RnsPoly *self)
     }
     const NttTables *tbl = RLWE_RlweContext_GetNttTablesByModulus(self->context, self->config.modulus);
     if (tbl == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_INTERNAL);
         return HIFHE_INTERNAL;
     }
     int32_t r = Kernel_Ntt_Inverse(self->data, tbl);

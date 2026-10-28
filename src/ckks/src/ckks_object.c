@@ -14,14 +14,13 @@
 #include "hifhe_local.h"
 #include "ckks_local.h"
 #include "crypt_ckks.h"
-#include "crypt_errno.h"
 
 static int32_t Error(int32_t ret)
 {
     if (ret == HIFHE_SUCCESS || ((uint32_t)ret >= 0x39000001u && (uint32_t)ret <= 0x390001ffu)) {
         return ret;
     }
-    return ret == CRYPT_MEM_ALLOC_FAIL ? HIFHE_MEMORY_ERROR : HIFHE_INTERNAL;
+    return HIFHE_INTERNAL;
 }
 
 typedef struct {
@@ -56,7 +55,7 @@ static void CkksTextFree(void *data)
         CKKS_FreePoly(t->value.ciphertext.c0);
         CKKS_FreePoly(t->value.ciphertext.c1);
     }
-    BSL_SAL_Free(t);
+    HifheFree(t);
 }
 
 static void CkksCtxFree(void *data)
@@ -87,7 +86,7 @@ static int32_t CkksCtxNew(HifheParamSnapshot *p, void *libCtx, void **out)
     p->math = math;
     int32_t ret = CRYPT_CKKS_SetPara(math, &config);
     if (ret != HIFHE_SUCCESS) {
-        return ret == CRYPT_MEM_ALLOC_FAIL ? HIFHE_MEMORY_ERROR : HIFHE_PARAM_INVALID;
+        return (ret == HIFHE_MEMORY_ERROR) ? ret : HIFHE_PARAM_INVALID;
     }
     uint8_t canonical[24] = {0};
     Hifhe_Put32(canonical, HIFHE_CKKS);
@@ -156,11 +155,11 @@ static int32_t CkksEncode(const HIFHE_Ctx *ctx, const void *values, uint32_t cou
     if (out == NULL) {
         return 0;
     }
-    double complex *padded = BSL_SAL_Calloc(slots, sizeof(*padded));
-    HifheCkksText *t = BSL_SAL_Calloc(1, sizeof(*t));
+    double complex *padded = HifheCalloc(slots, sizeof(*padded));
+    HifheCkksText *t = HifheCalloc(1, sizeof(*t));
     if (padded == NULL || t == NULL) {
-        BSL_SAL_Free(padded);
-        BSL_SAL_Free(t);
+        HifheFree(padded);
+        HifheFree(t);
         return HIFHE_MEMORY_ERROR;
     }
     t->meta.kind = HIFHE_TEXT_PLAIN;
@@ -172,8 +171,8 @@ static int32_t CkksEncode(const HIFHE_Ctx *ctx, const void *values, uint32_t cou
         memcpy(padded, values, (size_t)count * sizeof(*padded));
         ret = CKKS_Encode(math, padded, slots, t->value.plaintext);
     }
-    BSL_SAL_CleanseData(padded, slots * sizeof(*padded));
-    BSL_SAL_Free(padded);
+    HifheCleanse(padded, slots * sizeof(*padded));
+    HifheFree(padded);
     if (ret != HIFHE_SUCCESS) {
         CkksTextFree(t);
         return Error(ret);
@@ -192,7 +191,7 @@ static int32_t CkksEncrypt(const HIFHE_Ctx *ctx, const void *data, void **out)
 {
     const HifheCkksText *input = data;
     CRYPT_CKKS_Ctx *runtime = ctx->data;
-    HifheCkksText *text = BSL_SAL_Calloc(1, sizeof(*text));
+    HifheCkksText *text = HifheCalloc(1, sizeof(*text));
     if (text == NULL) {
         return HIFHE_MEMORY_ERROR;
     }
@@ -218,7 +217,7 @@ static int32_t CkksDecrypt(const HIFHE_Ctx *ctx, const void *data, void **out)
 {
     const HifheCkksText *input = data;
     CRYPT_CKKS_Ctx *runtime = ctx->data;
-    HifheCkksText *text = BSL_SAL_Calloc(1, sizeof(*text));
+    HifheCkksText *text = HifheCalloc(1, sizeof(*text));
     if (text == NULL) {
         return HIFHE_MEMORY_ERROR;
     }
@@ -269,7 +268,7 @@ static int32_t CkksDeserialize(const HIFHE_Ctx *ctx, uint32_t kind, const uint8_
     if (len != need || Hifhe_Get32(in) != math->para->pBits || Hifhe_Get32(in + 4) != math->para->slots) {
         return HIFHE_SERDES_FAIL;
     }
-    HifheCkksText *t = BSL_SAL_Calloc(1, sizeof(*t));
+    HifheCkksText *t = HifheCalloc(1, sizeof(*t));
     if (t == NULL) {
         return HIFHE_MEMORY_ERROR;
     }

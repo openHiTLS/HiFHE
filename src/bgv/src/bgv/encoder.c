@@ -26,7 +26,7 @@
  */
 
 #include <string.h>
-#include "bsl_sal.h"
+#include "hifhe_err_internal.h"
 #include "bgv/encoder.h"
 #include "bgv/plaintext.h"
 #include "bgv/bgv.h"
@@ -39,6 +39,7 @@
 HIFHE_ERROR BGV_Encoder_Create(Encoder *out, BGVContext *ctx)
 {
     if (out == NULL || ctx == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     out->context = ctx;
@@ -48,6 +49,7 @@ HIFHE_ERROR BGV_Encoder_Create(Encoder *out, BGVContext *ctx)
 HIFHE_ERROR BGV_Encoder_Destroy(Encoder *self)
 {
     if (self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     self->context = NULL;
@@ -57,11 +59,13 @@ HIFHE_ERROR BGV_Encoder_Destroy(Encoder *self)
 HIFHE_ERROR BGV_Encoder_Encode(Plaintext *out, const uint64_t *msg, uint32_t slotCount, const Encoder *self)
 {
     if (out == NULL || msg == NULL || self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     BGVContext *ctx = self->context;
     uint32_t N = ctx->rlweContext.parameter->polyDegree;
     if (slotCount != N) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
@@ -150,10 +154,12 @@ HIFHE_ERROR BGV_Encoder_Encode(Plaintext *out, const uint64_t *msg, uint32_t slo
 HIFHE_ERROR BGV_Encoder_CrtCenteredModT(uint64_t *out, const uint64_t *data, const RnsBase *base, uint32_t N, Modulus t)
 {
     if (out == NULL || data == NULL || base == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     uint32_t L = base->size;
     if (L == 0u || L > HIFHE_BGV_MAX_CHAIN_LEN) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
@@ -183,6 +189,7 @@ HIFHE_ERROR BGV_Encoder_CrtCenteredModT(uint64_t *out, const uint64_t *data, con
         }
         uint64_t qhatInv = (L == 1u) ? 1u : Kernel_ModInv(prodModQi, qi);
         if (qhatInv == 0u && L > 1u) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_INTERNAL);
             return HIFHE_INTERNAL;
         }
         qhatModT[i] = prodModT;
@@ -192,6 +199,7 @@ HIFHE_ERROR BGV_Encoder_CrtCenteredModT(uint64_t *out, const uint64_t *data, con
          * each carries a Shoup constant. */
         if (Kernel_ShoupConst_Init(&qhatInvSc[i], qhatInv, qi) != HIFHE_SUCCESS ||
             Kernel_ShoupConst_Init(&qhatModTSc[i], qhatModT[i], t) != HIFHE_SUCCESS) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_INTERNAL);
             return HIFHE_INTERNAL;
         }
         /* Held at full width: parameter validation admits moduli from 20
@@ -213,12 +221,15 @@ HIFHE_ERROR BGV_Encoder_CrtCenteredModT(uint64_t *out, const uint64_t *data, con
      * in soft float elsewhere.
      */
     if (Kernel_ShoupConst_Init(&qModTSc, qModT, t) != HIFHE_SUCCESS) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_INTERNAL);
         return HIFHE_INTERNAL;
     }
     for (uint32_t j = 0; j < N; ++j) {
         ModulusWide frac = 0;
         uint64_t acc = 0u;
         for (uint32_t i = 0; i < L; ++i) {
+            /* L is the chain length, which is a parameter and not a secret.
+             * Every other operand below is secret and is reduced by mask. */
             uint64_t y = (L == 1u) ? data[j] : Kernel_ShoupMulModInl(data[i * N + j], &qhatInvSc[i]);
             frac += (ModulusWide)y * recip[i];
             acc += Kernel_ShoupMulModInl(Kernel_BarrettReduce64Inl(y, &tBarrett), &qhatModTSc[i]);
@@ -240,11 +251,13 @@ HIFHE_ERROR BGV_Encoder_CrtCenteredModT(uint64_t *out, const uint64_t *data, con
 HIFHE_ERROR BGV_Encoder_Decode(uint64_t *msg, uint32_t slotCount, const Plaintext *pt, const Encoder *self)
 {
     if (msg == NULL || pt == NULL || self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     BGVContext *ctx = self->context;
     uint32_t N = ctx->rlweContext.parameter->polyDegree;
     if (slotCount != N) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
@@ -287,10 +300,12 @@ HIFHE_ERROR BGV_Encoder_Decode(uint64_t *msg, uint32_t slotCount, const Plaintex
     if (scale != 1u) {
         uint64_t inv = Kernel_ModInv(scale, t);
         if (inv == 0u) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
             return HIFHE_PARAM_INVALID;
         }
         ShoupConst invSc;
         if (Kernel_ShoupConst_Init(&invSc, inv, t) != HIFHE_SUCCESS) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_INTERNAL);
             return HIFHE_INTERNAL;
         }
         for (uint32_t j = 0; j < N; ++j) {

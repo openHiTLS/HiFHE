@@ -16,7 +16,8 @@
 /* EAL entry points; dispatch to Bgv_* and BgvCtrl_Dispatch. */
 
 #include <string.h>
-#include "bsl_sal.h"
+#include "hifhe_mem.h"
+#include "hifhe_err_internal.h"
 #include "crypt_types.h"
 
 #include "bgv_local.h"
@@ -26,7 +27,7 @@ void *CRYPT_BGV_NewCtx(int32_t algId)
     if (algId != HIFHE_BGV) {
         return NULL;
     }
-    CRYPT_BGV_Ctx *ctx = (CRYPT_BGV_Ctx *)BSL_SAL_Calloc(1u, sizeof(CRYPT_BGV_Ctx));
+    CRYPT_BGV_Ctx *ctx = (CRYPT_BGV_Ctx *)HifheCalloc(1u, sizeof(CRYPT_BGV_Ctx));
     if (ctx == NULL) {
         return NULL;
     }
@@ -46,7 +47,7 @@ void *CRYPT_BGV_NewCtxWithCache(int32_t algId, BgvUserPara **cache)
         return NULL;
     }
     if (*cache == NULL) {
-        BgvUserPara *fresh = (BgvUserPara *)BSL_SAL_Malloc((uint32_t)sizeof(BgvUserPara));
+        BgvUserPara *fresh = (BgvUserPara *)HifheMalloc((uint32_t)sizeof(BgvUserPara));
         if (fresh == NULL) {
             CRYPT_BGV_FreeCtx(ctx);
             return NULL;
@@ -65,7 +66,7 @@ void CRYPT_BGV_FreeCache(BgvUserPara *cache)
         return;
     }
     BgvUserPara_Clear(cache);
-    BSL_SAL_Free(cache);
+    HifheFree(cache);
 }
 
 void CRYPT_BGV_FreeCtx(CRYPT_BGV_Ctx *ctx)
@@ -75,7 +76,7 @@ void CRYPT_BGV_FreeCtx(CRYPT_BGV_Ctx *ctx)
     }
     Bgv_FreeState(&ctx->bgv);
     BgvUserPara_Clear(&ctx->para);
-    BSL_SAL_Free(ctx);
+    HifheFree(ctx);
 }
 
 /* Deep copy ctx */
@@ -108,6 +109,7 @@ CRYPT_BGV_Ctx *CRYPT_BGV_DupCtx(CRYPT_BGV_Ctx *src)
 int32_t CRYPT_BGV_SetParaEx(CRYPT_BGV_Ctx *ctx, const BSL_Param *param)
 {
     if (ctx == NULL || param == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     int32_t r = BgvUserPara_ParseFromBSL(&ctx->para, param);
@@ -126,6 +128,7 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
 int32_t CRYPT_BGV_Ctrl(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t valLen)
 {
     if (ctx == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     return BgvCtrl_Dispatch(ctx, cmd, val, valLen);

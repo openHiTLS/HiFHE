@@ -133,7 +133,7 @@ static int32_t Encode(const void *data, const BSL_Param *input, uint8_t *out, ui
     if (count > ctx->params->config.slots) {
         return HIFHE_PARAM_INVALID;
     }
-    uint64_t *values = BSL_SAL_Calloc(count, sizeof(*values));
+    uint64_t *values = HifheCalloc(count, sizeof(*values));
     if (values == NULL) {
         return HIFHE_MEMORY_ERROR;
     }
@@ -150,8 +150,8 @@ static int32_t Encode(const void *data, const BSL_Param *input, uint8_t *out, ui
         ret = HIFHE_Serialize(ctx, text, out, len);
     }
     HIFHE_HETextFree(text);
-    BSL_SAL_CleanseData(values, count * sizeof(*values));
-    BSL_SAL_Free(values);
+    HifheCleanse(values, count * sizeof(*values));
+    HifheFree(values);
     return ret;
 }
 
@@ -182,7 +182,7 @@ static int32_t Decode(const void *data, const BSL_Param *input, uint8_t *out, ui
     }
     uint64_t *values = NULL;
     if (ret == HIFHE_SUCCESS) {
-        values = BSL_SAL_Calloc(count, sizeof(*values));
+        values = HifheCalloc(count, sizeof(*values));
         if (values == NULL) {
             ret = HIFHE_MEMORY_ERROR;
         }
@@ -195,9 +195,9 @@ static int32_t Decode(const void *data, const BSL_Param *input, uint8_t *out, ui
         *len = need;
     }
     if (values != NULL) {
-        BSL_SAL_CleanseData(values, count * sizeof(*values));
+        HifheCleanse(values, count * sizeof(*values));
     }
-    BSL_SAL_Free(values);
+    HifheFree(values);
     HIFHE_HETextFree(text);
     return ret;
 }
@@ -279,14 +279,14 @@ static int32_t Crypt(void *data, const uint8_t *input, uint32_t n, uint8_t *out,
         if (n == 0 || (n % sizeof(double complex)) != 0 || n / sizeof(double complex) > ctx->params->config.slots) {
             return HIFHE_PARAM_INVALID;
         }
-        double complex *values = BSL_SAL_Malloc(n);
+        double complex *values = HifheMalloc(n);
         if (values == NULL) {
             return HIFHE_MEMORY_ERROR;
         }
         memcpy(values, input, n);
         ret = ctx->method->encode(ctx, values, n / sizeof(double complex), NULL);
-        BSL_SAL_CleanseData(values, n);
-        BSL_SAL_Free(values);
+        HifheCleanse(values, n);
+        HifheFree(values);
     } else {
         ret = HIFHE_Deserialize(ctx, input, n, &text);
         if (ret == HIFHE_SUCCESS) {
@@ -303,7 +303,7 @@ static int32_t Crypt(void *data, const uint8_t *input, uint32_t n, uint8_t *out,
         ret = OutputSize(ctx, enc ? HIFHE_OP_ENCRYPT : HIFHE_OP_DECRYPT, text, out, len);
     }
     if (ret == HIFHE_SUCCESS && enc && ckks) {
-        double complex *aligned = BSL_SAL_Malloc(n);
+        double complex *aligned = HifheMalloc(n);
         void *plain = NULL;
         if (aligned == NULL) {
             ret = HIFHE_MEMORY_ERROR;
@@ -313,8 +313,8 @@ static int32_t Crypt(void *data, const uint8_t *input, uint32_t n, uint8_t *out,
             if (ret == HIFHE_SUCCESS) {
                 ret = Hifhe_HETextNew(ctx, plain, &text);
             }
-            BSL_SAL_CleanseData(aligned, n);
-            BSL_SAL_Free(aligned);
+            HifheCleanse(aligned, n);
+            HifheFree(aligned);
         }
     }
     if (ret == HIFHE_SUCCESS) {
@@ -322,7 +322,7 @@ static int32_t Crypt(void *data, const uint8_t *input, uint32_t n, uint8_t *out,
     }
     if (ret == HIFHE_SUCCESS && ckks && !enc) {
         uint32_t count = ctx->params->config.slots;
-        double complex *values = BSL_SAL_Calloc(count, sizeof(*values));
+        double complex *values = HifheCalloc(count, sizeof(*values));
         if (values == NULL) {
             ret = HIFHE_MEMORY_ERROR;
         } else {
@@ -331,8 +331,8 @@ static int32_t Crypt(void *data, const uint8_t *input, uint32_t n, uint8_t *out,
                 *len = count * sizeof(*values);
                 memcpy(out, values, *len);
             }
-            BSL_SAL_CleanseData(values, count * sizeof(*values));
-            BSL_SAL_Free(values);
+            HifheCleanse(values, count * sizeof(*values));
+            HifheFree(values);
         }
     } else if (ret == HIFHE_SUCCESS) {
         ret = HIFHE_Serialize(ctx, result, out, len);

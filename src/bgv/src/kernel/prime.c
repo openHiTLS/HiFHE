@@ -22,6 +22,7 @@
  */
 
 #include <stdbool.h>
+#include "hifhe_err_internal.h"
 #include "kernel/prime.h"
 #include "kernel/modulus.h"
 
@@ -130,18 +131,22 @@ HIFHE_ERROR Kernel_Prime_FindProth(Modulus *out, uint32_t bits, uint32_t polyDeg
                                    uint32_t avoidLen)
 {
     if (out == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (bits < 8u || bits > 62u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     if (polyDegree == 0u || (polyDegree & (polyDegree - 1u)) != 0u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
     uint32_t logN = LogTwoU64(polyDegree);
     /* Below this the starting k underflows. */
     if (bits < logN + 2u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
@@ -173,10 +178,18 @@ HIFHE_ERROR Kernel_Prime_FindProth(Modulus *out, uint32_t bits, uint32_t polyDeg
         *out = cand;
         return HIFHE_SUCCESS;
     }
+    HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
     return HIFHE_PARAM_INVALID;
 }
 
-/* Primitive 2N-th root of unity in F_q. Assumes q = 1 mod 2N. */
+/* Primitive 2N-th root of unity in F_q. Assumes q = 1 mod 2N.
+ *
+ * This one does not push its error code. FindProth above calls it once per
+ * candidate and reads a failure as "try the next q", so a report here would
+ * land on the stack of an operation that went on to succeed, and nothing
+ * clears that stack on its own. A caller for which no root is a real failure
+ * reports it instead: see Kernel_Ntt_BuildTables.
+ */
 HIFHE_ERROR Kernel_Prime_PrimitiveRoot2N(uint64_t *out, Modulus q, uint32_t polyDegree)
 {
     if (out == NULL) {

@@ -19,7 +19,7 @@
  */
 
 #include <string.h>
-#include "bsl_sal.h"
+#include "hifhe_err_internal.h"
 #include "bgv/evaluator.h"
 #include "bgv/ciphertext.h"
 #include "bgv/plaintext.h"
@@ -31,6 +31,7 @@
 HIFHE_ERROR BGV_Evaluator_Create(Evaluator *self, BGVContext *ctx, const RelinKeys *rlk, const GaloisKeys *glk)
 {
     if (self == NULL || ctx == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     self->context = ctx;
@@ -42,6 +43,7 @@ HIFHE_ERROR BGV_Evaluator_Create(Evaluator *self, BGVContext *ctx, const RelinKe
 HIFHE_ERROR BGV_Evaluator_Destroy(Evaluator *self)
 {
     if (self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     self->context = NULL;
@@ -55,18 +57,23 @@ HIFHE_ERROR BGV_Evaluator_Destroy(Evaluator *self)
 static HIFHE_ERROR SameShapeCt(const Ciphertext *a, const Ciphertext *b)
 {
     if (a == NULL || b == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (a->context != b->context) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     if (a->config.ciphertextSize != b->config.ciphertextSize) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_CT_DEGREE_MISMATCH);
         return HIFHE_CT_DEGREE_MISMATCH;
     }
     if (a->config.crtConfig.rnsbase.size != b->config.crtConfig.rnsbase.size) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     if (a->config.crtConfig.dtype != b->config.crtConfig.dtype) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     return HIFHE_SUCCESS;
@@ -107,15 +114,18 @@ static HIFHE_ERROR BGV_Evaluator_MakeScaleFactorSame(bool *isFirstEle, uint64_t 
                                                      uint64_t ptMod)
 {
     if (isFirstEle == NULL || x == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (ptMod < 2u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
     uint64_t invF1 = Kernel_ModInv(f1 % ptMod, ptMod);
     uint64_t invF2 = Kernel_ModInv(f2 % ptMod, ptMod);
     if (invF1 == 0u || invF2 == 0u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
@@ -141,6 +151,7 @@ static HIFHE_ERROR BGV_Evaluator_MakeScaleFactorSame(bool *isFirstEle, uint64_t 
 HIFHE_ERROR BGV_Evaluator_Neg(Ciphertext *out, const Ciphertext *a, const Evaluator *self)
 {
     if (out == NULL || a == NULL || self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     int32_t r = EnsureOutShape(out, a, a->config.ciphertextSize);
@@ -155,6 +166,7 @@ HIFHE_ERROR BGV_Evaluator_Neg(Ciphertext *out, const Ciphertext *a, const Evalua
 HIFHE_ERROR BGV_Evaluator_AddCtCt(Ciphertext *out, const Ciphertext *a, const Ciphertext *b, const Evaluator *self)
 {
     if (self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     int32_t r = SameShapeCt(a, b);
@@ -212,12 +224,15 @@ HIFHE_ERROR BGV_Evaluator_AddCtCt(Ciphertext *out, const Ciphertext *a, const Ci
 HIFHE_ERROR BGV_Evaluator_AddCtPt(Ciphertext *out, const Ciphertext *a, const Plaintext *b, const Evaluator *self)
 {
     if (out == NULL || a == NULL || b == NULL || self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (a->context != b->context) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     if (a->config.crtConfig.rnsbase.size != b->config.crtConfig.rnsbase.size) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     int32_t r = EnsureOutShape(out, a, a->config.ciphertextSize);
@@ -233,6 +248,7 @@ HIFHE_ERROR BGV_Evaluator_AddCtPt(Ciphertext *out, const Ciphertext *a, const Pl
     if (f1 != f2) {
         uint64_t invF2 = Kernel_ModInv(f2, t);
         if (invF2 == 0u) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
             return HIFHE_PARAM_INVALID;
         }
         x = Kernel_MulMod(f1, invF2, t);
@@ -269,12 +285,15 @@ HIFHE_ERROR BGV_Evaluator_AddCtPt(Ciphertext *out, const Ciphertext *a, const Pl
 HIFHE_ERROR BGV_Evaluator_MulCtPt(Ciphertext *out, const Ciphertext *a, const Plaintext *b, const Evaluator *self)
 {
     if (out == NULL || a == NULL || b == NULL || self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (a->context != b->context) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     if (a->config.crtConfig.rnsbase.size != b->config.crtConfig.rnsbase.size) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     int32_t r = EnsureOutShape(out, a, a->config.ciphertextSize);
@@ -303,6 +322,7 @@ HIFHE_ERROR BGV_Evaluator_MulCtPt(Ciphertext *out, const Ciphertext *a, const Pl
 HIFHE_ERROR BGV_Evaluator_MulCtScalar(Ciphertext *out, const Ciphertext *a, uint64_t x, const Evaluator *self)
 {
     if (out == NULL || a == NULL || self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     int32_t r = EnsureOutShape(out, a, a->config.ciphertextSize);

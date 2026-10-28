@@ -22,7 +22,8 @@
 
 #include <string.h>
 #include <stdint.h>
-#include "bsl_sal.h"
+#include "hifhe_mem.h"
+#include "hifhe_err_internal.h"
 #include "crypt_types.h"
 #include "crypt_params_key.h"
 
@@ -90,6 +91,7 @@ static void RepointKeyPieces(Ciphertext *pieces, uint32_t count, BGVContext *ctx
 HIFHE_ERROR Bgv_DupState(BgvState *dst, const BgvState *src)
 {
     if (dst == NULL || src == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     memset(dst, 0, sizeof(*dst));
@@ -191,9 +193,11 @@ fail:
 HIFHE_ERROR Bgv_BuildContext(CRYPT_BGV_Ctx *ctx)
 {
     if (ctx == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (!ctx->para.set) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_NOT_SET);
         return HIFHE_PARAM_NOT_SET;
     }
     if (ctx->bgv.haveContext) {
@@ -202,6 +206,7 @@ HIFHE_ERROR Bgv_BuildContext(CRYPT_BGV_Ctx *ctx)
 
     BgvUserPara *p = &ctx->para;
     if (p->cipherModBit.data == NULL || p->cipherModBit.size == 0u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     /* Reject bad ring / over-long chain / insufficient modulus
@@ -217,6 +222,7 @@ HIFHE_ERROR Bgv_BuildContext(CRYPT_BGV_Ctx *ctx)
     memset(&cipherMod, 0, sizeof(cipherMod));
     if (p->cipherMod.size != 0u) {
         if (p->cipherMod.size != p->cipherModBit.size) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
             return HIFHE_PARAM_INVALID;
         }
         for (uint32_t i = 0; i < p->cipherMod.size; ++i) {
@@ -226,6 +232,7 @@ HIFHE_ERROR Bgv_BuildContext(CRYPT_BGV_Ctx *ctx)
             uint64_t root = 0u;
             if (!Kernel_Prime_IsPrime(p->cipherMod.data[i]) ||
                 Kernel_Prime_PrimitiveRoot2N(&root, p->cipherMod.data[i], p->polyDegree) != HIFHE_SUCCESS) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                 return HIFHE_PARAM_INVALID;
             }
         }
@@ -266,6 +273,7 @@ HIFHE_ERROR Bgv_BuildContext(CRYPT_BGV_Ctx *ctx)
         /* A pinned plainMod must still be Proth for this N,
          * else the LUT encoder has no transform. */
         Uint64Vector_Destroy(&cipherMod);
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
@@ -307,7 +315,12 @@ HIFHE_ERROR Bgv_BuildContext(CRYPT_BGV_Ctx *ctx)
     if (cipherArg != NULL) {
         uint64_t *ptLut = BgvUserPara_PlainLut(lut);
         if (ptLut != NULL) {
+            /* A table that cannot be built now is built on the first encode
+             * instead, so this failure is not the caller's. The mark takes the
+             * codes it reported back off the stack. */
+            HIFHE_ERR_SET_MARK();
             (void)BGV_BGVContext_EnsurePlainNttWith(&ctx->bgv.context, ptLut);
+            HIFHE_ERR_POP_TO_MARK();
         }
     }
     return HIFHE_SUCCESS;
@@ -364,9 +377,11 @@ HIFHE_ERROR Bgv_Gen(CRYPT_BGV_Ctx *ctx)
 HIFHE_ERROR Bgv_GenRelinKey(CRYPT_BGV_Ctx *ctx)
 {
     if (ctx == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (!ctx->bgv.haveKeygen || ctx->bgv.keygen.sk == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_KEY_NOT_SET);
         return HIFHE_KEY_NOT_SET;
     }
     if (ctx->bgv.haveRelin) {
@@ -393,9 +408,11 @@ HIFHE_ERROR Bgv_GenRelinKey(CRYPT_BGV_Ctx *ctx)
 HIFHE_ERROR Bgv_GenGaloisKeys(CRYPT_BGV_Ctx *ctx, const uint64_t *elts, uint32_t count)
 {
     if (ctx == NULL || elts == NULL || count == 0u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (!ctx->bgv.haveKeygen || ctx->bgv.keygen.sk == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_KEY_NOT_SET);
         return HIFHE_KEY_NOT_SET;
     }
     if (ctx->bgv.haveGalois) {
@@ -433,13 +450,16 @@ static HIFHE_ERROR DumpCtParam(const Ciphertext *ct, BSL_Param *p, int32_t algId
 HIFHE_ERROR Bgv_GetPub(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
 {
     if (ctx == NULL || param == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (!ctx->bgv.havePk) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_KEY_NOT_SET);
         return HIFHE_KEY_NOT_SET;
     }
     BSL_Param *p = BSL_PARAM_FindParam(param, HIFHE_PARAM_BGV_PUBKEY);
     if (p == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     uint32_t len = p->valueLen;
@@ -451,13 +471,16 @@ HIFHE_ERROR Bgv_GetPub(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
 HIFHE_ERROR Bgv_GetPrv(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
 {
     if (ctx == NULL || param == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (!ctx->bgv.haveKeygen || ctx->bgv.keygen.sk == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_KEY_NOT_SET);
         return HIFHE_KEY_NOT_SET;
     }
     BSL_Param *p = BSL_PARAM_FindParam(param, HIFHE_PARAM_BGV_PRVKEY);
     if (p == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     uint32_t len = p->valueLen;
@@ -469,6 +492,7 @@ HIFHE_ERROR Bgv_GetPrv(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
 HIFHE_ERROR Bgv_SetPub(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
 {
     if (ctx == NULL || param == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     int32_t r = Bgv_BuildContext(ctx);
@@ -477,6 +501,7 @@ HIFHE_ERROR Bgv_SetPub(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
     }
     const BSL_Param *p = BSL_PARAM_FindConstParam(param, HIFHE_PARAM_BGV_PUBKEY);
     if (p == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     if (ctx->bgv.havePk) {
@@ -497,6 +522,7 @@ HIFHE_ERROR Bgv_SetPub(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
 HIFHE_ERROR Bgv_SetPrv(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
 {
     if (ctx == NULL || param == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     int32_t r = Bgv_BuildContext(ctx);
@@ -505,6 +531,7 @@ HIFHE_ERROR Bgv_SetPrv(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
     }
     const BSL_Param *p = BSL_PARAM_FindConstParam(param, HIFHE_PARAM_BGV_PRVKEY);
     if (p == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     if (!ctx->bgv.haveKeygen) {
@@ -519,6 +546,7 @@ HIFHE_ERROR Bgv_SetPrv(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
      * later decryptions would dereference. */
     SecretKey *fresh = BGV_SecretKey_New();
     if (fresh == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     r = BgvSerDes_LoadPrvKey(fresh, (const uint8_t *)p->value, p->valueLen, &ctx->bgv.context);
@@ -540,9 +568,11 @@ HIFHE_ERROR Bgv_SetPrv(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
 HIFHE_ERROR Bgv_Encrypt(CRYPT_BGV_Ctx *ctx, const uint8_t *data, uint32_t dataLen, uint8_t *out, uint32_t *outLen)
 {
     if (ctx == NULL || data == NULL || outLen == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (!ctx->bgv.havePk && !(ctx->bgv.haveKeygen && ctx->bgv.keygen.sk != NULL)) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_KEY_NOT_SET);
         return HIFHE_KEY_NOT_SET;
     }
     /* Load pt from wire. */
@@ -586,9 +616,11 @@ HIFHE_ERROR Bgv_Encrypt(CRYPT_BGV_Ctx *ctx, const uint8_t *data, uint32_t dataLe
 HIFHE_ERROR Bgv_Decrypt(CRYPT_BGV_Ctx *ctx, const uint8_t *data, uint32_t dataLen, uint8_t *out, uint32_t *outLen)
 {
     if (ctx == NULL || data == NULL || outLen == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (!ctx->bgv.haveKeygen || ctx->bgv.keygen.sk == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_KEY_NOT_SET);
         return HIFHE_KEY_NOT_SET;
     }
     Ciphertext ct;
@@ -621,6 +653,7 @@ HIFHE_ERROR Bgv_Decrypt(CRYPT_BGV_Ctx *ctx, const uint8_t *data, uint32_t dataLe
 static HIFHE_ERROR LoadCtParam(Ciphertext *ct, const BSL_Param *p, BGVContext *ctx)
 {
     if (p == NULL || p->value == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     return BgvSerDes_LoadCiphertext(ct, (const uint8_t *)p->value, p->valueLen, ctx);
@@ -628,6 +661,7 @@ static HIFHE_ERROR LoadCtParam(Ciphertext *ct, const BSL_Param *p, BGVContext *c
 static HIFHE_ERROR LoadPtParam(Plaintext *pt, const BSL_Param *p, BGVContext *ctx)
 {
     if (p == NULL || p->value == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     return BgvSerDes_LoadPlaintext(pt, (const uint8_t *)p->value, p->valueLen, ctx);
@@ -636,9 +670,11 @@ static HIFHE_ERROR LoadPtParam(Plaintext *pt, const BSL_Param *p, BGVContext *ct
 HIFHE_ERROR Bgv_HEAdd(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, uint8_t *out, uint32_t *outLen)
 {
     if (ctx == NULL || input == NULL || outLen == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (!ctx->bgv.haveContext) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_NOT_SET);
         return HIFHE_PARAM_NOT_SET;
     }
 
@@ -648,6 +684,13 @@ HIFHE_ERROR Bgv_HEAdd(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, uint8_t 
     const BSL_Param *pPt = BSL_PARAM_FindConstParam(input, HIFHE_PARAM_BGV_PLAINTEXT);
     const BSL_Param *pNeg = BSL_PARAM_FindConstParam(input, HIFHE_PARAM_BGV_NEGATE);
     if (pC1 == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
+        return HIFHE_PARAM_INVALID;
+    }
+    /* Exactly one second operand. */
+    uint32_t nOperand = (pC2 != NULL ? 1u : 0u) + (pPt != NULL ? 1u : 0u) + (pNeg != NULL ? 1u : 0u);
+    if (nOperand != 1u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
@@ -677,7 +720,7 @@ HIFHE_ERROR Bgv_HEAdd(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, uint8_t 
             r = BGV_Evaluator_AddCtCt(&dst, &c1, &c2, &ev);
             BGV_Ciphertext_Destroy(&c2);
         }
-    } else if (pPt != NULL) {
+    } else {
         Plaintext pt;
         memset(&pt, 0, sizeof(pt));
         r = LoadPtParam(&pt, pPt, bctx);
@@ -685,8 +728,6 @@ HIFHE_ERROR Bgv_HEAdd(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, uint8_t 
             r = BGV_Evaluator_AddCtPt(&dst, &c1, &pt, &ev);
             BGV_Plaintext_Destroy(&pt);
         }
-    } else {
-        r = HIFHE_PARAM_INVALID;
     }
     BGV_Ciphertext_Destroy(&c1);
     BGV_Evaluator_Destroy(&ev);
@@ -702,9 +743,11 @@ HIFHE_ERROR Bgv_HEAdd(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, uint8_t 
 HIFHE_ERROR Bgv_HEMul(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, uint8_t *out, uint32_t *outLen)
 {
     if (ctx == NULL || input == NULL || outLen == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (!ctx->bgv.haveContext) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_NOT_SET);
         return HIFHE_PARAM_NOT_SET;
     }
     BGVContext *bctx = (BGVContext *)&ctx->bgv.context;
@@ -714,6 +757,13 @@ HIFHE_ERROR Bgv_HEMul(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, uint8_t 
     const BSL_Param *pPt = BSL_PARAM_FindConstParam(input, HIFHE_PARAM_BGV_PLAINTEXT);
     const BSL_Param *pConst = BSL_PARAM_FindConstParam(input, HIFHE_PARAM_BGV_CONSTANT);
     if (pC1 == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
+        return HIFHE_PARAM_INVALID;
+    }
+    /* Exactly one second operand. */
+    uint32_t nOperand = (pC2 != NULL ? 1u : 0u) + (pPt != NULL ? 1u : 0u) + (pConst != NULL ? 1u : 0u);
+    if (nOperand != 1u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
@@ -764,16 +814,15 @@ HIFHE_ERROR Bgv_HEMul(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, uint8_t 
             r = BGV_Evaluator_MulCtPt(&dst, &c1, &pt, &ev);
             BGV_Plaintext_Destroy(&pt);
         }
-    } else if (pConst != NULL) {
+    } else {
         if (pConst->value == NULL || pConst->valueLen != sizeof(uint64_t)) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
             r = HIFHE_PARAM_INVALID;
         } else {
             uint64_t x;
             memcpy(&x, pConst->value, sizeof(x));
             r = BGV_Evaluator_MulCtScalar(&dst, &c1, x, &ev);
         }
-    } else {
-        r = HIFHE_PARAM_INVALID;
     }
     BGV_Ciphertext_Destroy(&c1);
     BGV_Evaluator_Destroy(&ev);
@@ -789,18 +838,22 @@ HIFHE_ERROR Bgv_HEMul(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, uint8_t 
 HIFHE_ERROR Bgv_HEMsgEncode(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, uint8_t *out, uint32_t *outLen)
 {
     if (ctx == NULL || input == NULL || outLen == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (!ctx->bgv.haveContext) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_NOT_SET);
         return HIFHE_PARAM_NOT_SET;
     }
     BGVContext *bctx = (BGVContext *)&ctx->bgv.context;
     const BSL_Param *pMsg = BSL_PARAM_FindConstParam(input, HIFHE_PARAM_BGV_MSG);
     if (pMsg == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     uint32_t N = bctx->rlweContext.parameter->polyDegree;
     if (pMsg->valueLen != N * sizeof(uint64_t)) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
@@ -814,9 +867,10 @@ HIFHE_ERROR Bgv_HEMsgEncode(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, ui
     const uint64_t *msg = (const uint64_t *)pMsg->value;
     uint64_t *msgCopy = NULL;
     if (((uintptr_t)pMsg->value % sizeof(uint64_t)) != 0u) {
-        msgCopy = (uint64_t *)BSL_SAL_Malloc(pMsg->valueLen);
+        msgCopy = (uint64_t *)HifheMalloc(pMsg->valueLen);
         if (msgCopy == NULL) {
             BGV_Encoder_Destroy(&enc);
+            HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
             return HIFHE_MEMORY_ERROR;
         }
         memcpy(msgCopy, pMsg->value, pMsg->valueLen);
@@ -826,7 +880,10 @@ HIFHE_ERROR Bgv_HEMsgEncode(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, ui
     memset(&pt, 0, sizeof(pt));
     r = BGV_Encoder_Encode(&pt, msg, N, &enc);
     BGV_Encoder_Destroy(&enc);
-    BSL_SAL_Free(msgCopy);
+    if (msgCopy != NULL) {
+        HifheCleanse(msgCopy, pMsg->valueLen);
+        HifheFree(msgCopy);
+    }
     if (r != HIFHE_SUCCESS) {
         /* Encode allocates its output before the work that can still fail. */
         BGV_Plaintext_Destroy(&pt);
@@ -841,9 +898,11 @@ HIFHE_ERROR Bgv_HEMsgEncode(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, ui
 HIFHE_ERROR Bgv_HEMsgDecode(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, uint8_t *out, uint32_t *outLen)
 {
     if (ctx == NULL || input == NULL || outLen == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (!ctx->bgv.haveContext) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_NOT_SET);
         return HIFHE_PARAM_NOT_SET;
     }
     BGVContext *bctx = (BGVContext *)&ctx->bgv.context;
@@ -851,6 +910,7 @@ HIFHE_ERROR Bgv_HEMsgDecode(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, ui
      * output buffer. Fall back to MSG, the predecessor's only input slot. */
     const BSL_Param *pPt = FindParamAny(input, HIFHE_PARAM_BGV_PLAINTEXT, HIFHE_PARAM_BGV_MSG);
     if (pPt == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     Plaintext pt;
@@ -864,6 +924,7 @@ HIFHE_ERROR Bgv_HEMsgDecode(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, ui
     if (out == NULL || *outLen < need) {
         *outLen = need;
         BGV_Plaintext_Destroy(&pt);
+        HIFHE_ERR_PUSH_ERROR(HIFHE_BUFFER_TOO_SMALL);
         return HIFHE_BUFFER_TOO_SMALL;
     }
     Encoder enc;
@@ -875,10 +936,11 @@ HIFHE_ERROR Bgv_HEMsgDecode(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, ui
     uint64_t *dstMsg = (uint64_t *)out;
     uint64_t *outCopy = NULL;
     if (((uintptr_t)out % sizeof(uint64_t)) != 0u) {
-        outCopy = (uint64_t *)BSL_SAL_Malloc(need);
+        outCopy = (uint64_t *)HifheMalloc(need);
         if (outCopy == NULL) {
             BGV_Encoder_Destroy(&enc);
             BGV_Plaintext_Destroy(&pt);
+            HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
             return HIFHE_MEMORY_ERROR;
         }
         dstMsg = outCopy;
@@ -889,7 +951,7 @@ HIFHE_ERROR Bgv_HEMsgDecode(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, ui
     if (r == HIFHE_SUCCESS && outCopy != NULL) {
         memcpy(out, outCopy, need);
     }
-    BSL_SAL_Free(outCopy);
+    HifheFree(outCopy);
     if (r != HIFHE_SUCCESS) {
         return r;
     }
@@ -904,6 +966,7 @@ HIFHE_ERROR Bgv_HEMsgDecode(const CRYPT_BGV_Ctx *ctx, const BSL_Param *input, ui
 HIFHE_ERROR Bgv_GetPubKeyLen(CRYPT_BGV_Ctx *ctx, uint32_t *outLen)
 {
     if (ctx == NULL || outLen == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     int32_t r = Bgv_BuildContext(ctx);
@@ -920,6 +983,7 @@ HIFHE_ERROR Bgv_GetPubKeyLen(CRYPT_BGV_Ctx *ctx, uint32_t *outLen)
 HIFHE_ERROR Bgv_GetPrvKeyLen(CRYPT_BGV_Ctx *ctx, uint32_t *outLen)
 {
     if (ctx == NULL || outLen == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     int32_t r = Bgv_BuildContext(ctx);
@@ -945,6 +1009,7 @@ HIFHE_ERROR Bgv_GetPlaintextLen(CRYPT_BGV_Ctx *ctx, uint32_t *outLen)
 HIFHE_ERROR Bgv_GetMsgLen(CRYPT_BGV_Ctx *ctx, uint32_t *outLen)
 {
     if (ctx == NULL || outLen == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     int32_t r = Bgv_BuildContext(ctx);
@@ -968,6 +1033,7 @@ static HIFHE_ERROR RunCtOp(CRYPT_BGV_Ctx *ctx, BSL_Param *param, BgvCtOp op, con
                            const GaloisKeys *glk)
 {
     if (ctx == NULL || param == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     int32_t r = Bgv_BuildContext(ctx);
@@ -978,6 +1044,7 @@ static HIFHE_ERROR RunCtOp(CRYPT_BGV_Ctx *ctx, BSL_Param *param, BgvCtOp op, con
     const BSL_Param *pIn = BSL_PARAM_FindConstParam(param, HIFHE_PARAM_BGV_CIPHERTEXT1);
     BSL_Param *pOut = BSL_PARAM_FindParam(param, HIFHE_PARAM_BGV_CIPHERTEXT2);
     if (pIn == NULL || pOut == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
@@ -1042,9 +1109,11 @@ HIFHE_ERROR Bgv_HEModSwitch(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
 HIFHE_ERROR Bgv_HERelinearize(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
 {
     if (ctx == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (!ctx->bgv.haveRelin) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NO_RELIN_KEY);
         return HIFHE_NO_RELIN_KEY;
     }
     return RunCtOp(ctx, param, OpRelinearize, NULL, &ctx->bgv.relinKeys, NULL);
@@ -1055,9 +1124,11 @@ HIFHE_ERROR Bgv_HERelinearize(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
 HIFHE_ERROR Bgv_HERotateStep(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
 {
     if (ctx == NULL || param == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (!ctx->bgv.haveGalois) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NO_GALOIS_KEY);
         return HIFHE_NO_GALOIS_KEY;
     }
     int32_t r = Bgv_BuildContext(ctx);
@@ -1066,6 +1137,7 @@ HIFHE_ERROR Bgv_HERotateStep(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
     }
     const BSL_Param *pStep = BSL_PARAM_FindConstParam(param, HIFHE_PARAM_BGV_ROTATE_STEPS);
     if (pStep == NULL || pStep->value == NULL || pStep->valueLen < sizeof(int32_t)) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     uint64_t elt =
@@ -1076,13 +1148,16 @@ HIFHE_ERROR Bgv_HERotateStep(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
 HIFHE_ERROR Bgv_HERotateElt(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
 {
     if (ctx == NULL || param == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (!ctx->bgv.haveGalois) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NO_GALOIS_KEY);
         return HIFHE_NO_GALOIS_KEY;
     }
     const BSL_Param *pElt = BSL_PARAM_FindConstParam(param, HIFHE_PARAM_BGV_GALOIS_ELTS);
     if (pElt == NULL || pElt->value == NULL || pElt->valueLen < sizeof(uint64_t)) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     uint64_t elt = *(const uint64_t *)pElt->value;

@@ -72,11 +72,9 @@ static inline BgvEntropy BgvEntropy_Seeded(const uint8_t *seed, uint32_t seedLen
     return e;
 }
 
-/* Fill `out[0..outLen)` with uniform bytes drawn from the openhitls DRBG. */
+/* Fill `out[0..outLen)` with uniform bytes drawn from the openhitls DRBG the
+ * application installed with CRYPT_EAL_RandInit. */
 HIFHE_ERROR BgvRand_Drbg(uint8_t *out, uint32_t outLen);
-/* Same contract as BgvRand_Drbg, for long outputs: a DRBG-drawn key
- * expanded with AES-256-CTR. */
-HIFHE_ERROR BgvRand_DrbgBulk(uint8_t *out, uint32_t outLen);
 
 /* Fill `out[0..outLen)` from a SHAKE128 stream keyed by the 32-byte
  * `seed`, optionally tagged with `dsLen` bytes of domain-separation. */

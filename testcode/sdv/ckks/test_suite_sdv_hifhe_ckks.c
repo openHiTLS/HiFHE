@@ -14,6 +14,8 @@
 #include <complex.h>
 #include <stdlib.h>
 #include "hifhe_local.h"
+#include "crypt_ckks.h"
+#include "hifhe_err.h"
 #include "crypto_test_util.h"
 #include "test.h"
 /* END_HEADER */
@@ -141,6 +143,60 @@ EXIT:
 /* END_CASE */
 
 /* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_CKKS_ERROR_CODES_ARE_HIFHE_TC001(void)
+{
+    CRYPT_CKKS_Ctx *math = NULL;
+    bool hooked = false;
+    /* Reached below Error() in ckks_object.c, which would otherwise fold any
+     * stray code into HIFHE_INTERNAL and hide it. */
+    CRYPT_CkksPara para = {16, 50, 20, 3.2, 2};
+
+    ASSERT_EQ(CRYPT_CKKS_SetPara(NULL, &para), HIFHE_NULL_INPUT);
+
+    math = CRYPT_CKKS_NewCtx();
+    ASSERT_TRUE(math != NULL);
+    ASSERT_EQ(CRYPT_CKKS_SetPara(math, NULL), HIFHE_NULL_INPUT);
+    ASSERT_EQ(CRYPT_CKKS_SetPara(math, &para), HIFHE_SUCCESS);
+
+    /* Every allocation along SetPara, one at a time. Whatever comes back is
+     * either success or a HiFHE code, never an openhitls one. */
+    g_allocCount = 0;
+    g_allocFailAt = 0;
+    ASSERT_EQ(HIFHE_SetMemFuncs(FailMalloc, free), HIFHE_SUCCESS);
+    hooked = true;
+    CRYPT_CKKS_FreeCtx(math);
+    math = CRYPT_CKKS_NewCtx();
+    ASSERT_TRUE(math != NULL);
+    ASSERT_EQ(CRYPT_CKKS_SetPara(math, &para), HIFHE_SUCCESS);
+    uint32_t allocations = g_allocCount;
+    ASSERT_TRUE(allocations > 0);
+
+    for (uint32_t i = 1; i <= allocations; i++) {
+        CRYPT_CKKS_FreeCtx(math);
+        g_allocCount = 0;
+        g_allocFailAt = 0;
+        math = CRYPT_CKKS_NewCtx();
+        ASSERT_TRUE(math != NULL);
+        g_allocCount = 0;
+        g_allocFailAt = i;
+        int32_t ret = CRYPT_CKKS_SetPara(math, &para);
+        g_allocFailAt = 0;
+        if (ret == HIFHE_SUCCESS) {
+            continue;
+        }
+        ASSERT_TRUE((uint32_t)ret >= 0x39000001u && (uint32_t)ret <= 0x390001ffu);
+    }
+
+EXIT:
+    g_allocFailAt = 0;
+    if (hooked) {
+        (void)HIFHE_SetMemFuncs(NULL, NULL);
+    }
+    CRYPT_CKKS_FreeCtx(math);
+}
+/* END_CASE */
+
+/* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_CKKS_ENCODE_ALLOC_FAILURE_TC001(void)
 {
     HIFHE_Ctx *ctx = HIFHE_New(HIFHE_CKKS);
@@ -152,9 +208,8 @@ void SDV_CRYPTO_HIFHE_CKKS_ENCODE_ALLOC_FAILURE_TC001(void)
     ASSERT_EQ(ConfigureCkks(ctx, 16), HIFHE_SUCCESS);
     g_allocCount = 0;
     g_allocFailAt = 0;
-    ASSERT_EQ(BSL_SAL_CallBack_Ctrl(BSL_SAL_MEM_MALLOC, FailMalloc), 0);
+    ASSERT_EQ(HIFHE_SetMemFuncs(FailMalloc, free), HIFHE_SUCCESS);
     hooked = true;
-    ASSERT_EQ(BSL_SAL_CallBack_Ctrl(BSL_SAL_MEM_FREE, free), 0);
     ASSERT_EQ(EncodeCkks(ctx, input, &plaintext), HIFHE_SUCCESS);
     uint32_t allocations = g_allocCount;
     HIFHE_HETextFree(plaintext);
@@ -174,8 +229,7 @@ void SDV_CRYPTO_HIFHE_CKKS_ENCODE_ALLOC_FAILURE_TC001(void)
 EXIT:
     g_allocFailAt = 0;
     if (hooked) {
-        (void)BSL_SAL_CallBack_Ctrl(BSL_SAL_MEM_MALLOC, BSL_SAL_Malloc);
-        (void)BSL_SAL_CallBack_Ctrl(BSL_SAL_MEM_FREE, BSL_SAL_Free);
+        (void)HIFHE_SetMemFuncs(NULL, NULL);
     }
     HIFHE_HETextFree(plaintext);
     HIFHE_Free(ctx);
@@ -191,9 +245,8 @@ void SDV_CRYPTO_HIFHE_CKKS_CONFIG_ALLOC_FAILURE_TC001(void)
     ASSERT_TRUE(ctx != NULL);
     g_allocCount = 0;
     g_allocFailAt = 0;
-    ASSERT_EQ(BSL_SAL_CallBack_Ctrl(BSL_SAL_MEM_MALLOC, FailMalloc), 0);
+    ASSERT_EQ(HIFHE_SetMemFuncs(FailMalloc, free), HIFHE_SUCCESS);
     hooked = true;
-    ASSERT_EQ(BSL_SAL_CallBack_Ctrl(BSL_SAL_MEM_FREE, free), 0);
     ASSERT_EQ(ConfigureCkks(ctx, 16), HIFHE_SUCCESS);
     uint32_t allocations = g_allocCount;
     ASSERT_TRUE(allocations > 0);
@@ -214,8 +267,7 @@ void SDV_CRYPTO_HIFHE_CKKS_CONFIG_ALLOC_FAILURE_TC001(void)
 EXIT:
     g_allocFailAt = 0;
     if (hooked) {
-        (void)BSL_SAL_CallBack_Ctrl(BSL_SAL_MEM_MALLOC, BSL_SAL_Malloc);
-        (void)BSL_SAL_CallBack_Ctrl(BSL_SAL_MEM_FREE, BSL_SAL_Free);
+        (void)HIFHE_SetMemFuncs(NULL, NULL);
     }
     HIFHE_Free(ctx);
 }
