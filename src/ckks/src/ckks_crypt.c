@@ -121,10 +121,9 @@ static int32_t CKKS_SerializeCiphertext(const CRYPT_CKKS_Poly *c0, const CRYPT_C
     return ret;
 }
 
-static int32_t CKKS_DeserializeCiphertext(uint32_t N, const uint8_t *data, uint32_t dataLen, CRYPT_CKKS_Poly *c0,
-                                          CRYPT_CKKS_Poly *c1)
+static int32_t CKKS_CheckCiphertext(const CRYPT_CKKS_Para *para, const uint8_t *data, uint32_t dataLen)
 {
-    if (data == NULL || c0 == NULL || c1 == NULL || dataLen < 12 || memcmp(data + 8, "CKKS", 4) != 0) {
+    if (dataLen < 12 || memcmp(data + 8, "CKKS", 4) != 0) {
         return HIFHE_DECODE_ERROR;
     }
     uint32_t c0Len = 0;
@@ -134,9 +133,9 @@ static int32_t CKKS_DeserializeCiphertext(uint32_t N, const uint8_t *data, uint3
     if (c0Len > dataLen - 12 || c1Len != dataLen - 12 - c0Len) {
         return HIFHE_DECODE_ERROR;
     }
-    int32_t ret = CKKS_BytesToPoly(data + 12, c0Len, c0->coeffs, N);
+    int32_t ret = CKKS_CheckPolyBytes(data + 12, c0Len, para->N, para->qBits, false);
     if (ret == HIFHE_SUCCESS) {
-        ret = CKKS_BytesToPoly(data + 12 + c0Len, c1Len, c1->coeffs, N);
+        ret = CKKS_CheckPolyBytes(data + 12 + c0Len, c1Len, para->N, para->qBits, false);
     }
     return ret;
 }
@@ -185,14 +184,24 @@ int32_t CRYPT_CKKS_DecryptEx(CRYPT_CKKS_Ctx *ctx, const uint8_t *data, uint32_t 
     if (ctx == NULL || ctx->para == NULL || ctx->prvKey == NULL || data == NULL || output == NULL || slots == NULL) {
         return HIFHE_NULL_INPUT;
     }
+    int32_t ret = CKKS_CheckCiphertext(ctx->para, data, dataLen);
+    if (ret != HIFHE_SUCCESS) {
+        return ret;
+    }
     CRYPT_CKKS_Poly *c0 = CKKS_NewPoly(ctx->para->N);
     CRYPT_CKKS_Poly *c1 = CKKS_NewPoly(ctx->para->N);
     CRYPT_CKKS_Poly *plaintext = CKKS_NewPoly(ctx->para->N);
-    int32_t ret = HIFHE_MEMORY_ERROR;
+    ret = HIFHE_MEMORY_ERROR;
     if (c0 == NULL || c1 == NULL || plaintext == NULL) {
         goto EXIT;
     }
-    ret = CKKS_DeserializeCiphertext(ctx->para->N, data, dataLen, c0, c1);
+    uint32_t c0Len = 0;
+    memcpy(&c0Len, data, sizeof(c0Len));
+    ret = CKKS_BytesToPoly(data + 12, c0Len, c0->coeffs, ctx->para->N, ctx->para->qBits, false);
+    if (ret == HIFHE_SUCCESS) {
+        ret = CKKS_BytesToPoly(data + 12 + c0Len, dataLen - 12 - c0Len, c1->coeffs, ctx->para->N,
+            ctx->para->qBits, false);
+    }
     if (ret == HIFHE_SUCCESS) {
         ret = CKKS_PrvDec(ctx, c0, c1, plaintext);
     }

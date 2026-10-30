@@ -44,13 +44,13 @@ typedef enum {
  * End the parameter array with BSL_PARAM_END.
  */
 #define HIFHE_PARAM_BASE             100000
-/** Ring degree N: a power of two from 8 to 16384. */
+/** Ring degree N: a power of two from 4096 to 16384. */
 #define HIFHE_PARAM_CKKS_N           (HIFHE_PARAM_BASE + 1)
 /** Ciphertext modulus exponent: Q = 2^qBits; qBits is from 30 to 60. */
 #define HIFHE_PARAM_CKKS_Q_BITS      (HIFHE_PARAM_BASE + 2)
 /** Encoding scale exponent: scale = 2^pBits; 0 < pBits < qBits. */
 #define HIFHE_PARAM_CKKS_P_BITS      (HIFHE_PARAM_BASE + 3)
-/** Error-sampling standard deviation multiplied by 1000; must be positive. */
+/** Error-sampling standard deviation multiplied by 1000; must be 3200 (sigma = 3.2). */
 #define HIFHE_PARAM_CKKS_SIGMA_MILLI (HIFHE_PARAM_BASE + 4)
 /** Slot count: a positive power of two no greater than N / 2. */
 #define HIFHE_PARAM_CKKS_SLOTS       (HIFHE_PARAM_BASE + 5)
@@ -96,6 +96,7 @@ typedef enum {
      * text: input ciphertext without a negate flag; value: HIFHE_HEText ** with *value == NULL;
      * valueLen: sizeof(HIFHE_HEText *). Free the result with HIFHE_HETextFree.
      * This does not bootstrap the ciphertext or reset its noise budget.
+     * It does not hide the relation to the input or provide circuit privacy.
      * Provider: args is a BSL_Param array containing CRYPT_PARAM_PKEY_HE_CIPHERTEXT1
      * (input bytes) and CRYPT_PARAM_PKEY_HE_CIPHERTEXT2 (output buffer), both OCTETS,
      * followed by BSL_PARAM_END; pass len = 0. Output useLen receives the actual/required size.

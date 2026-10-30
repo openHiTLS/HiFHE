@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "hifhe_err.h"
+#include "hifhe_err_internal.h"
 
 static void *DefaultMalloc(uint32_t len)
 {
@@ -32,6 +33,7 @@ static HIFHE_FreeFunc g_free = DefaultFree;
 int32_t HIFHE_SetMemFuncs(HIFHE_MallocFunc mallocFunc, HIFHE_FreeFunc freeFunc)
 {
     if ((mallocFunc == NULL) != (freeFunc == NULL)) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     g_malloc = (mallocFunc != NULL) ? mallocFunc : DefaultMalloc;

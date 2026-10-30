@@ -110,7 +110,7 @@ HIFHE_ERROR BGV_Preset_Load(BgvPresetPara *out, int32_t presetId)
             return HIFHE_SUCCESS;
 
         default:
-            HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
-            return HIFHE_PARAM_INVALID;
+            HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_ID_INVALID);
+            return HIFHE_PARAM_ID_INVALID;
     }
 }

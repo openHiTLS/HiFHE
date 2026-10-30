@@ -36,6 +36,7 @@
 #include "hifhe_types.h"
 #include "hifhe_err.h"
 #include "hifhe_err_internal.h"
+#include "basic/rand.h"
 #include "crypto_test_util.h"
 #include "test.h"
 /* END_HEADER */
@@ -104,7 +105,7 @@ void SDV_CRYPTO_HIFHE_BGV_PUBLIC_CACHE_SEED_TC001(void)
     ASSERT_TRUE(a != NULL && b != NULL && c != NULL);
     ASSERT_EQ(HIFHE_Ctrl(a, HIFHE_CTRL_BGV_SET_LUT_CACHE, NULL, &on, sizeof(on)), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_SET_LUT_CACHE, NULL, &on, sizeof(on)), HIFHE_SUCCESS);
-    ASSERT_EQ(HIFHE_SetParaById(a, -1), HIFHE_PARAM_INVALID);
+    ASSERT_EQ(HIFHE_SetParaById(a, -1), HIFHE_PARAM_ID_INVALID);
     ASSERT_EQ(HIFHE_SetParaById(a, HIFHE_BGV_4096_44x2_17BIT), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_SetParaById(b, HIFHE_BGV_4096_44x2_17BIT), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_SetParaById(c, HIFHE_BGV_4096_44x2_17BIT), HIFHE_SUCCESS);

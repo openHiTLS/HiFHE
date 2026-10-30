@@ -566,7 +566,9 @@ static int32_t DumpPtTyped(const Plaintext *pt, uint8_t *buf, uint32_t *bufLen, 
     uint32_t need = BgvSerDes_PlaintextSize(pt);
     if (buf == NULL || *bufLen < need) {
         *bufLen = need;
-        HIFHE_ERR_PUSH_ERROR(HIFHE_BUFFER_TOO_SMALL);
+        if (buf != NULL) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_BUFFER_TOO_SMALL);
+        }
         return HIFHE_BUFFER_TOO_SMALL;
     }
     uint32_t off = 0u;
@@ -591,7 +593,9 @@ static int32_t DumpCtTyped(const Ciphertext *ct, uint8_t *buf, uint32_t *bufLen,
     uint32_t need = BgvSerDes_CiphertextSize(ct);
     if (buf == NULL || *bufLen < need) {
         *bufLen = need;
-        HIFHE_ERR_PUSH_ERROR(HIFHE_BUFFER_TOO_SMALL);
+        if (buf != NULL) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_BUFFER_TOO_SMALL);
+        }
         return HIFHE_BUFFER_TOO_SMALL;
     }
     uint32_t off = 0u;

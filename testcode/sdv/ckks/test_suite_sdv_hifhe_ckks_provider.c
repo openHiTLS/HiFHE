@@ -39,13 +39,21 @@ void SDV_CRYPTO_HIFHE_CKKS_PROVIDER_TC001(void)
     loaded = true;
     ctx = CRYPT_EAL_ProviderPkeyNewCtx(NULL, HIFHE_CKKS, CRYPT_EAL_PKEY_CIPHER_OPERATE, HIFHE_PROVIDER_ATTR);
     ASSERT_TRUE(ctx != NULL);
-    uint32_t n = 16, q = 50, p = 20, sigma = 3200, slots = 4;
+    uint32_t n = 4096, q = 50, p = 20, sigma = 3200, slots = 4;
     BSL_Param values[] = {{HIFHE_PARAM_CKKS_N, BSL_PARAM_TYPE_UINT32, &n, 4, 0},
                           {HIFHE_PARAM_CKKS_Q_BITS, BSL_PARAM_TYPE_UINT32, &q, 4, 0},
                           {HIFHE_PARAM_CKKS_P_BITS, BSL_PARAM_TYPE_UINT32, &p, 4, 0},
                           {HIFHE_PARAM_CKKS_SIGMA_MILLI, BSL_PARAM_TYPE_UINT32, &sigma, 4, 0},
                           {HIFHE_PARAM_CKKS_SLOTS, BSL_PARAM_TYPE_UINT32, &slots, 4, 0},
                           BSL_PARAM_END};
+    n = 8;
+    ASSERT_EQ(CRYPT_EAL_PkeySetParaEx(ctx, values), HIFHE_INVALID_ARGUMENT);
+    n = 4096;
+    sigma = 1;
+    ASSERT_EQ(CRYPT_EAL_PkeySetParaEx(ctx, values), HIFHE_INVALID_ARGUMENT);
+    sigma = UINT32_MAX;
+    ASSERT_EQ(CRYPT_EAL_PkeySetParaEx(ctx, values), HIFHE_INVALID_ARGUMENT);
+    sigma = 3200;
     ASSERT_EQ(CRYPT_EAL_PkeySetParaEx(ctx, values), HIFHE_SUCCESS);
     uint32_t bits = UINT32_MAX;
     ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, CRYPT_CTRL_GET_BITS, &bits, sizeof(bits)), HIFHE_NOT_SUPPORTED);
@@ -56,7 +64,8 @@ void SDV_CRYPTO_HIFHE_CKKS_PROVIDER_TC001(void)
     double complex input[] = {1.25 + 2.5 * I, -3.0 + 0.5 * I};
     uint32_t len = 0;
     double complex invalid = NAN + 0.0 * I;
-    ASSERT_EQ(CRYPT_EAL_PkeyEncrypt(ctx, (const uint8_t *)&invalid, sizeof(invalid), NULL, &len), HIFHE_PARAM_INVALID);
+    ASSERT_EQ(CRYPT_EAL_PkeyEncrypt(ctx, (const uint8_t *)&invalid, sizeof(invalid), NULL, &len),
+        HIFHE_VALUE_OUT_OF_RANGE);
     ASSERT_EQ(CRYPT_EAL_PkeyEncrypt(ctx, (const uint8_t *)input, sizeof(input), NULL, &len), HIFHE_BUFFER_TOO_SMALL);
     cipher = malloc(len);
     ASSERT_TRUE(cipher != NULL);

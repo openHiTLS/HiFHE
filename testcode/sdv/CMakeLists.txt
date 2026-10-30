@@ -35,6 +35,7 @@ target_compile_definitions(SHARED_COMPILE_DEFS INTERFACE
     HITLS_BSL_SAL
     HITLS_BSL_SAL_MEM
     HITLS_CRYPTO_DRBG
+    HITLS_CRYPTO_BN
     HITLS_CRYPTO_DRBG_HASH
     HITLS_CRYPTO_EAL
     HITLS_CRYPTO_MD
@@ -107,6 +108,9 @@ foreach(TEST_SUITE ${TEST_FILES})
         target_include_directories(${SUITE_NAME} PRIVATE
             ${HIFHE_ROOT}/src/common
             ${HIFHE_ROOT}/src/ckks/include
+            ${HIFHE_ROOT}/src/ckks/src
+            ${HITLS_ROOT_DIR}/crypto/bn/include
+            ${HITLS_ROOT_DIR}/bsl/sal/include
             ${HIFHE_ROOT}/src/bgv/include
             ${HIFHE_ROOT}/src/bgv/src
             ${HIFHE_ROOT}/src/bgv/src/include)

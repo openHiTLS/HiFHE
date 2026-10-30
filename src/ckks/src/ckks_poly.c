@@ -98,6 +98,11 @@ int32_t CKKS_SampleGauss(void *libCtx, BN_BigNum **coeffs, uint32_t N, double si
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
+    /* With sigma 3.2 and r2 >= 2^-53, rounded samples fit even a 32-bit long. */
+    if (sigma != CKKS_DEFAULT_SIGMA) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_INVALID_ARGUMENT);
+        return HIFHE_INVALID_ARGUMENT;
+    }
 
     int32_t ret = HIFHE_SUCCESS;
     double r1;
@@ -444,23 +449,57 @@ int32_t CKKS_PolyToBytes(BN_BigNum **coeffs, uint32_t N, uint8_t *out, uint32_t 
     return HIFHE_SUCCESS;
 }
 
-int32_t CKKS_BytesToPoly(const uint8_t *data, uint32_t dataLen, BN_BigNum **coeffs, uint32_t N)
+int32_t CKKS_CheckPolyBytes(const uint8_t *data, uint32_t dataLen, uint32_t N, uint32_t bits, bool allowNegative)
+{
+    if (data == NULL) {
+        return HIFHE_NULL_INPUT;
+    }
+    if (N == 0 || N > CKKS_MAX_N || bits == 0 || bits > CKKS_MAX_LOGQ + 1) {
+        return HIFHE_INVALID_ARGUMENT;
+    }
+    uint32_t width = (bits + 7) / 8;
+    if (dataLen < N * 4 || dataLen > N * (4 + width)) {
+        return HIFHE_DECODE_ERROR;
+    }
+    uint32_t offset = 0;
+    for (uint32_t i = 0; i < N; i++) {
+        if (dataLen - offset < 4) {
+            return HIFHE_DECODE_ERROR;
+        }
+        uint32_t size = (uint32_t)data[offset] | ((uint32_t)data[offset + 1] << 8) |
+            ((uint32_t)data[offset + 2] << 16) | ((uint32_t)data[offset + 3] << 24);
+        offset += 4;
+        bool negative = (size & 0x80000000u) != 0;
+        size &= 0x7fffffffu;
+        if (size > width || size > dataLen - offset || (negative && (!allowNegative || size == 0))) {
+            return HIFHE_DECODE_ERROR;
+        }
+        if (size != 0 && (data[offset] == 0 ||
+            (size == width && bits % 8 != 0 && data[offset] >= (1u << (bits % 8))))) {
+            return HIFHE_DECODE_ERROR;
+        }
+        offset += size;
+    }
+    return offset == dataLen ? HIFHE_SUCCESS : HIFHE_DECODE_ERROR;
+}
+
+int32_t CKKS_BytesToPoly(const uint8_t *data, uint32_t dataLen, BN_BigNum **coeffs, uint32_t N, uint32_t bits,
+    bool allowNegative)
 {
     if (data == NULL || coeffs == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
 
-    int32_t ret = HIFHE_SUCCESS;
+    int32_t ret = CKKS_CheckPolyBytes(data, dataLen, N, bits, allowNegative);
+    if (ret != HIFHE_SUCCESS) {
+        return ret;
+    }
     uint32_t offset = 0;
     uint32_t coeffLen = 0;
     uint32_t i = 0;
 
-    for (i = 0; i < N && offset < dataLen; i++) {
-        if (offset + 4 > dataLen) {
-            return HIFHE_DECODE_ERROR;
-        }
-
+    for (i = 0; i < N; i++) {
         coeffLen = (uint32_t)data[offset] | ((uint32_t)data[offset + 1] << 8) | ((uint32_t)data[offset + 2] << 16) |
                    ((uint32_t)data[offset + 3] << 24);
         offset += 4;
@@ -468,10 +507,6 @@ int32_t CKKS_BytesToPoly(const uint8_t *data, uint32_t dataLen, BN_BigNum **coef
         coeffLen &= 0x7fffffffu;
 
         if (coeffLen > 0) {
-            if (offset + coeffLen > dataLen) {
-                return HIFHE_DECODE_ERROR;
-            }
-
             ret = BN_Bin2Bn(coeffs[i], data + offset, coeffLen);
             if (ret != HIFHE_SUCCESS) {
                 HIFHE_ERR_PUSH_ERROR(ret);
@@ -489,10 +524,6 @@ int32_t CKKS_BytesToPoly(const uint8_t *data, uint32_t dataLen, BN_BigNum **coef
                 return ret;
             }
         }
-    }
-
-    if (i != N || offset != dataLen) {
-        return HIFHE_DECODE_ERROR;
     }
 
     return ret;

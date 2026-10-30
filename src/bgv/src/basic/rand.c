@@ -31,8 +31,8 @@ HIFHE_ERROR BgvRand_Drbg(uint8_t *out, uint32_t outLen)
         return HIFHE_SUCCESS;
     }
     if (CRYPT_EAL_Randbytes(out, outLen) != 0) {
-        HIFHE_ERR_PUSH_ERROR(HIFHE_INTERNAL);
-        return HIFHE_INTERNAL;
+        HIFHE_ERR_PUSH_ERROR(HIFHE_RANDOM_ERROR);
+        return HIFHE_RANDOM_ERROR;
     }
     return HIFHE_SUCCESS;
 }
@@ -49,11 +49,11 @@ static HIFHE_ERROR Shake128(const ShakeChunk *in, uint32_t nIn, uint8_t *out, ui
 {
     CRYPT_EAL_MdCtx *mctx = CRYPT_EAL_MdNewCtx(CRYPT_MD_SHAKE128);
     if (mctx == NULL) {
-        HIFHE_ERR_PUSH_ERROR(HIFHE_INTERNAL);
-        return HIFHE_INTERNAL;
+        HIFHE_ERR_PUSH_ERROR(HIFHE_HASH_ERROR);
+        return HIFHE_HASH_ERROR;
     }
 
-    HIFHE_ERROR ret = HIFHE_INTERNAL;
+    HIFHE_ERROR ret = HIFHE_HASH_ERROR;
     if (CRYPT_EAL_MdInit(mctx) != 0) {
         goto done;
     }
@@ -71,6 +71,9 @@ static HIFHE_ERROR Shake128(const ShakeChunk *in, uint32_t nIn, uint8_t *out, ui
     ret = HIFHE_SUCCESS;
 done:
     CRYPT_EAL_MdFreeCtx(mctx);
+    if (ret != HIFHE_SUCCESS) {
+        HIFHE_ERR_PUSH_ERROR(ret);
+    }
     return ret;
 }
 

@@ -8,7 +8,11 @@
 # MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 # See the Mulan PSL v2 for more details.
 
-hifhe_add_object_library(hifhe_common_objects common/hifhe_mem.c common/hifhe_err_stack.c)
+file(GLOB HIFHE_COMMON_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/common/*.c"
+)
+
+hifhe_add_object_library(hifhe_common_objects ${HIFHE_COMMON_SOURCES})
 
 if(HITLS_PROVIDER)
     add_subdirectory(provider)

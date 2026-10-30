@@ -23,7 +23,7 @@
  *
  * Every component of the input survives in the output, so out - in is a small
  * multiple of t and pairs the two ciphertexts to any holder of both. This
- * refreshes the noise budget; it is not an unlinkability primitive.
+ * consumes noise budget; it is not an unlinkability primitive.
  */
 
 #include <string.h>

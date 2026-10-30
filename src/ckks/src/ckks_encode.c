@@ -18,6 +18,7 @@
 #include "hifhe_mem.h"
 #include "crypt_ckks.h"
 #include "hifhe_err.h"
+#include "hifhe_err_internal.h"
 #include "ckks_local.h"
 
 int32_t CKKS_InitFFTParams(CRYPT_CKKS_Para *para)
@@ -125,6 +126,7 @@ int32_t CKKS_Decode(const CRYPT_CKKS_Ctx *ctx, const CRYPT_CKKS_Poly *plaintext,
                     uint32_t *slots)
 {
     if (ctx == NULL || ctx->para == NULL || plaintext == NULL || output == NULL || slots == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     uint32_t count = *slots < ctx->para->slots ? *slots : ctx->para->slots;

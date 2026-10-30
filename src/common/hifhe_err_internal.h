@@ -24,6 +24,8 @@
 extern "C" {
 #endif
 
+#define HIFHE_ERR_STACK_DEPTH 20u
+
 /* Not in the public surface yet, so not in cmake/hifhe.exports either. */
 void HIFHE_ErrPushError(int32_t error, const char *file, uint32_t line);
 uint32_t HIFHE_ErrDepth(void);
