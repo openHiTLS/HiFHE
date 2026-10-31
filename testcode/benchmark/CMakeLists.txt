@@ -8,10 +8,6 @@
 # MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 # See the Mulan PSL v2 for more details.
 
-if(NOT HIFHE_BGV)
-    message(FATAL_ERROR "The kernel benchmark requires BGV")
-endif()
-
 add_executable(hifhe_benchmark benchmark.c bgv_bench.c ${HIFHE_OBJECTS})
 target_include_directories(hifhe_benchmark PRIVATE
     ${PROJECT_SOURCE_DIR}/src/bgv/include

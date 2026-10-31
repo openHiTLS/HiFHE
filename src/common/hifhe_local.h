@@ -48,8 +48,6 @@ typedef struct {
     int32_t paramId;
     uint32_t slots;
     uint32_t mulDepth;
-    uint32_t ckks[5];
-    bool isCkks;
     bool useLutCache;
 } HifheParamConfig;
 
@@ -104,9 +102,6 @@ struct HifheAlgMethod {
 };
 #ifdef HIFHE_ENABLE_BGV
 extern const HifheAlgMethod g_hifheBgvMethod;
-#endif
-#ifdef HIFHE_ENABLE_CKKS
-extern const HifheAlgMethod g_hifheCkksMethod;
 #endif
 void Hifhe_Put32(uint8_t *out, uint32_t value);
 uint32_t Hifhe_Get32(const uint8_t *in);

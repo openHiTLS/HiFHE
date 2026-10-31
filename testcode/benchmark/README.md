@@ -25,19 +25,13 @@ bash testcode/script/build_benchmark.sh          # build
 bash testcode/script/build_benchmark.sh asan     # build with AddressSanitizer
 bash testcode/script/build_benchmark.sh run      # build, then run everything
 bash testcode/script/build_benchmark.sh clean
-bash testcode/script/build_benchmark.sh --disable bgv   # trim a module set out
+bash testcode/script/build_benchmark.sh --enable bgv
 ```
 
 The script configures the root build and builds only the benchmark target. The binary lands in `testcode/output/`.
 
-Each module belongs to an algorithm and calls it directly, so it is built only
-when that algorithm is in the provider. The switches follow
-`build/include/hifhe_config.h` by default and can be forced either way, as
-CMake options (`-DHIFHE_BGV=OFF`, `-DHIFHE_CKKS=ON`) or through the script
-(`--enable`/`--disable ckks|bgv`), matching `build_hifhe.sh`. Selecting
-nothing is a configuration error rather than an empty binary: there would be
-nothing to measure. `Kernel` and `Bgv` are both BGV modules; CKKS has none
-yet, so `-DHIFHE_CKKS=ON` alone selects nothing.
+Both `Kernel` and `Bgv` require `HIFHE_BGV=ON`; `Bgv` also requires `HITLS_PROVIDER=ON`.
+The script reuses the library configuration unless `--enable bgv` is specified.
 
 It also builds as part of the SDV tree with `-DBUILD_BENCHMARK=ON`, but that
 path pays for the test-suite generation and compiles the suites at `-O0`. The

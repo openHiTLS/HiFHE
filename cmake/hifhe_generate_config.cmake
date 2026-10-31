@@ -10,7 +10,6 @@
 
 set(HIFHE_CONFIG_DIR "${CMAKE_BINARY_DIR}/include")
 file(MAKE_DIRECTORY "${HIFHE_CONFIG_DIR}")
-set(HIFHE_ENABLE_CKKS ${HIFHE_CKKS})
 set(HIFHE_ENABLE_BGV ${HIFHE_BGV})
 configure_file(
     "${CMAKE_CURRENT_LIST_DIR}/hifhe_config.h.in"

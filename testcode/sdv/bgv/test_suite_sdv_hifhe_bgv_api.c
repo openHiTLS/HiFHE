@@ -145,7 +145,7 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_CONTEXT_CTRL_API_TC001(int cmd)
 {
-    HIFHE_Ctx *ctx = NULL, *other = NULL;
+    HIFHE_Ctx *ctx = NULL;
     HIFHE_HEText *pt = NULL, *ct = NULL, *decoded = NULL;
     uint8_t seed[32] = {1};
     uint32_t value = 1, count = 4096;
@@ -176,10 +176,6 @@ void SDV_CRYPTO_HIFHE_BGV_CONTEXT_CTRL_API_TC001(int cmd)
         ASSERT_EQ(HIFHE_SetParaById(ctx, HIFHE_BGV_4096_44x2_17BIT), HIFHE_SUCCESS);
         ASSERT_EQ(HIFHE_Ctrl(ctx, cmd, NULL, arg, argLen), HIFHE_BAD_STATE);
     }
-    other = HIFHE_New(HIFHE_CKKS);
-    if (other != NULL) {
-        ASSERT_EQ(HIFHE_Ctrl(other, cmd, NULL, arg, argLen), HIFHE_NOT_SUPPORTED);
-    }
     ASSERT_EQ(HIFHE_KeyGen(ctx), HIFHE_SUCCESS);
     if (cmd == HIFHE_CTRL_BGV_SET_SEED) {
         ASSERT_EQ(HIFHE_Ctrl(ctx, cmd, NULL, arg, argLen), HIFHE_BAD_STATE);
@@ -209,7 +205,6 @@ EXIT:
     HIFHE_HETextFree(ct);
     HIFHE_HETextFree(decoded);
     HIFHE_Free(ctx);
-    HIFHE_Free(other);
     CRYPT_EAL_Cleanup(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND);
 }
 /* END_CASE */

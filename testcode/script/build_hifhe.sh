@@ -8,7 +8,6 @@ HIFHE_ENABLE_ASAN=OFF
 HIFHE_ENABLE_GCOV=OFF
 HIFHE_BUILD_SHARED=ON
 HIFHE_BUILD_STATIC=ON
-HIFHE_CKKS=ON
 HIFHE_BGV=ON
 HIFHE_PROVIDER_FEATURE=""
 HITLS_ROOT_PATH=""
@@ -27,8 +26,13 @@ while [[ $# -gt 0 ]]; do
             [[ $# -ge 2 ]] || { echo "Missing algorithm" >&2; exit 1; }
             [[ "$1" == "--enable" ]] && STATE=ON || STATE=OFF
             case "${2,,}" in
-                ckks) HIFHE_CKKS=${STATE} ;;
-                bgv) HIFHE_BGV=${STATE} ;;
+                bgv)
+                    if [[ "${STATE}" == OFF ]]; then
+                        echo "BGV is the only algorithm and cannot be disabled" >&2
+                        exit 1
+                    fi
+                    HIFHE_BGV=${STATE}
+                    ;;
                 provider) HIFHE_PROVIDER_FEATURE=${STATE} ;;
                 *) echo "Unknown algorithm: $2" >&2; exit 1 ;;
             esac
@@ -45,7 +49,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -h|--help)
-            echo "Usage: $0 [debug] [asan] [gcov] [shared|static] [--enable ckks|bgv|provider] [--disable ckks|bgv|provider]"
+            echo "Usage: $0 [debug] [asan] [gcov] [shared|static] [--enable bgv|provider] [--disable provider]"
             echo "          [--hitls_dir PATH] [--build_args FLAGS]"
             exit 0
             ;;
@@ -78,7 +82,6 @@ cmake -S "${HIFHE_ROOT_DIR}" -B "${HIFHE_ROOT_DIR}/build" \
     -DHIFHE_ENABLE_GCOV="${HIFHE_ENABLE_GCOV}" \
     -DHIFHE_BUILD_SHARED="${HIFHE_BUILD_SHARED}" \
     -DHIFHE_BUILD_STATIC="${HIFHE_BUILD_STATIC}" \
-    -DHIFHE_CKKS="${HIFHE_CKKS}" \
     -DHIFHE_BGV="${HIFHE_BGV}" \
     "${CMAKE_FEATURE_ARGS[@]}" \
     -DHITLS_ROOT_PATH="${HITLS_ROOT_PATH}"

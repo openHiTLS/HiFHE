@@ -88,22 +88,17 @@ CMake 配置：
 | `HITLS_LIB_DIR` | `${HITLS_ROOT_PATH}/build` | `hitls_crypto`、`hitls_bsl` 库目录 |
 | `HIFHE_BUILD_SHARED` | `ON` | 生成 `libhifhe.so` |
 | `HIFHE_BUILD_STATIC` | `ON` | 生成 `libhifhe.a` |
-| `HIFHE_BGV` | `ON` | 将 BGV 编译进 HiFHE 库 |
+| `HIFHE_BGV` | `ON` | 必须启用；关闭时配置报错 |
 | `HITLS_PROVIDER` | `ON` | 启用 openHiTLS Provider 接入 |
 | `HIFHE_BUILD_TESTS` | `OFF` | 构建原生接口及内核白盒用例 |
 | `HIFHE_ENABLE_ASAN` | `OFF` | 启用 AddressSanitizer |
 | `HIFHE_ENABLE_GCOV` | `OFF` | 启用覆盖率 |
 
-至少启用一种库类型。BGV 和 Provider 接入支持按需裁剪：
+至少启用一种库类型。BGV 是唯一算法，不能关闭。仅使用原生接口时，可以关闭 Provider：
 
 ```sh
-bash testcode/script/build_hifhe.sh --enable bgv
-bash testcode/script/build_hifhe.sh --disable bgv
 bash testcode/script/build_hifhe.sh --disable provider
 ```
-
-`HIFHE_BGV=OFF` 会排除 BGV 算法源码，并将结果
-写入生成的 `build/include/hifhe_config.h`。
 
 安装命令：`cmake --install build --prefix /path/to/prefix`。
 

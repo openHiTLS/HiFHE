@@ -101,23 +101,18 @@ CMake options:
 | `HITLS_LIB_DIR` | `${HITLS_ROOT_PATH}/build` | `hitls_crypto` and `hitls_bsl` directory |
 | `HIFHE_BUILD_SHARED` | `ON` | Build `libhifhe.so` |
 | `HIFHE_BUILD_STATIC` | `ON` | Build `libhifhe.a` |
-| `HIFHE_BGV` | `ON` | Compile BGV into the HiFHE library |
+| `HIFHE_BGV` | `ON` | Required; disabling BGV is a configuration error |
 | `HITLS_PROVIDER` | `ON` | Build openHiTLS Provider integration |
 | `HIFHE_BUILD_TESTS` | `OFF` | Build native tests and internal regressions |
 | `HIFHE_ENABLE_ASAN` | `OFF` | Enable AddressSanitizer |
 | `HIFHE_ENABLE_GCOV` | `OFF` | Enable coverage |
 
-At least one library type must be enabled. BGV and Provider integration can be selected
-independently:
+At least one library type must be enabled. BGV is the only algorithm and cannot be
+disabled. For native API use, Provider integration can be disabled:
 
 ```sh
-bash testcode/script/build_hifhe.sh --enable bgv
-bash testcode/script/build_hifhe.sh --disable bgv
 bash testcode/script/build_hifhe.sh --disable provider
 ```
-
-`HIFHE_BGV=OFF` excludes BGV sources and
-records the result in the generated `build/include/hifhe_config.h`.
 
 Install with `cmake --install build --prefix /path/to/prefix`.
 
