@@ -14,7 +14,7 @@
  */
 
 #include <string.h>
-#include "bsl_sal.h"
+#include "hifhe_err_internal.h"
 #include "bgv/bgv.h"
 #include "rlwe/rlwe.h"
 
@@ -22,6 +22,7 @@ HIFHE_ERROR BGV_BGVParameter_Create(BGVParameter *out, Modulus plainMod, uint64_
                                     uint32_t defaultCiphertextSize, uint32_t polyDegree, const ModulusVector *cipherMod)
 {
     if (out == NULL || cipherMod == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     memset(out, 0, sizeof(*out));
@@ -37,6 +38,7 @@ HIFHE_ERROR BGV_BGVParameter_Create(BGVParameter *out, Modulus plainMod, uint64_
 HIFHE_ERROR BGV_BGVParameter_Destroy(BGVParameter *self)
 {
     if (self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     RLWE_RlweParameter_Destroy(&self->rlweParameter);
@@ -48,6 +50,7 @@ HIFHE_ERROR BGV_BGVParameter_Destroy(BGVParameter *self)
 HIFHE_ERROR BGV_BGVParameter_Copy(BGVParameter *dst, const BGVParameter *src)
 {
     if (dst == NULL || src == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     BGV_BGVParameter_Destroy(dst);

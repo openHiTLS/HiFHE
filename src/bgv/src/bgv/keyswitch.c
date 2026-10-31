@@ -25,7 +25,8 @@
 
 #include <stdbool.h>
 #include <string.h>
-#include "bsl_sal.h"
+#include "hifhe_mem.h"
+#include "hifhe_err_internal.h"
 #include "bgv/keyswitch.h"
 #include "bgv/params_check.h"
 #include "bgv/keys.h"
@@ -128,12 +129,15 @@ HIFHE_ERROR BGV_KeySwitch_GadgetFactor(uint64_t *out, const RnsBase *base, uint3
                                        uint32_t logT)
 {
     if (out == NULL || base == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (limbIndex >= base->size) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     if (logT == 0u || logT >= 64u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     for (uint32_t l = 0; l < base->size; ++l) {
@@ -165,9 +169,11 @@ HIFHE_ERROR BGV_KeySwitch_Run(Ciphertext *out, const CrtPoly *polyNtt, const Cip
                               uint32_t digits, BGVContext *ctx)
 {
     if (out == NULL || polyNtt == NULL || kswPieces == NULL || ctx == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (out->config.ciphertextSize != 2u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_CT_DEGREE_MISMATCH);
         return HIFHE_CT_DEGREE_MISMATCH;
     }
 
@@ -177,23 +183,28 @@ HIFHE_ERROR BGV_KeySwitch_Run(Ciphertext *out, const CrtPoly *polyNtt, const Cip
     /* The gadget bakes in qhat_i for a fixed chain, so relinearize / rotate
      * before mod-switching. */
     if (rnsSize != L || digits == 0u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     if (polyNtt->config.rnsbase.size != L) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     if (out->config.crtConfig.rnsbase.size != L) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
     const BarrettConst *bcs[HIFHE_BGV_MAX_CHAIN_LEN];
     uint64_t limit = UINT64_MAX;
     if (L > HIFHE_BGV_MAX_CHAIN_LEN) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     for (uint32_t l = 0; l < L; ++l) {
         bcs[l] = RLWE_RlweContext_GetBarrettByModulus(&ctx->rlweContext, base->data[l]);
         if (bcs[l] == NULL) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_INTERNAL);
             return HIFHE_INTERNAL;
         }
         uint64_t lim = LazyTermLimit(base->data[l]);
@@ -202,11 +213,13 @@ HIFHE_ERROR BGV_KeySwitch_Run(Ciphertext *out, const CrtPoly *polyNtt, const Cip
         }
     }
     if (limit == 0u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_INTERNAL);
         return HIFHE_INTERNAL;
     }
 
     uint32_t logT = BGV_KeySwitch_LogT(base, digits);
     if (logT == 0u || logT >= 64u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     const uint64_t digitMask = (1ull << logT) - 1u;
@@ -252,11 +265,12 @@ HIFHE_ERROR BGV_KeySwitch_Run(Ciphertext *out, const CrtPoly *polyNtt, const Cip
 
     /* acc[0] and acc[1] for out.c0 / out.c1, limb-major like the ciphertext. */
     size_t accWords = (size_t)2u * L * N;
-    ModulusWide *acc = (ModulusWide *)BSL_SAL_Calloc((uint32_t)accWords, (uint32_t)sizeof(ModulusWide));
+    ModulusWide *acc = (ModulusWide *)HifheCalloc((uint32_t)accWords, (uint32_t)sizeof(ModulusWide));
     if (acc == NULL) {
         Uint64Vector_Destroy(&lifted);
         RLWE_CrtPoly_Destroy(&digitPoly);
         RLWE_CrtPoly_Destroy(&polyCoeff);
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     uint64_t pending = 0u; /* products added since the last fold */
@@ -338,7 +352,7 @@ HIFHE_ERROR BGV_KeySwitch_Run(Ciphertext *out, const CrtPoly *polyNtt, const Cip
         }
     }
 
-    BSL_SAL_Free(acc);
+    HifheFree(acc);
     Uint64Vector_Destroy(&lifted);
     RLWE_CrtPoly_Destroy(&digitPoly);
     RLWE_CrtPoly_Destroy(&polyCoeff);

@@ -12,10 +12,10 @@
 
 #include <string.h>
 
-#include "bsl_err_internal.h"
+#include "hifhe_err_internal.h"
 #include "bsl_sal.h"
+#include "hifhe_mem.h"
 #include "crypt_ckks.h"
-#include "crypt_errno.h"
 #include "hifhe_err.h"
 #include "hifhe_types.h"
 #include "ckks_local.h"
@@ -30,13 +30,13 @@ static void CKKS_FreeKeys(CRYPT_CKKS_Ctx *ctx)
 
 CRYPT_CKKS_Ctx *CRYPT_CKKS_NewCtx(void)
 {
-    CRYPT_CKKS_Ctx *ctx = BSL_SAL_Calloc(1, sizeof(CRYPT_CKKS_Ctx));
+    CRYPT_CKKS_Ctx *ctx = HifheCalloc(1, sizeof(CRYPT_CKKS_Ctx));
     if (ctx == NULL) {
-        BSL_ERR_PUSH_ERROR(CRYPT_MEM_ALLOC_FAIL);
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return NULL;
     }
     if (BSL_SAL_ReferencesInit(&ctx->references) != 0) {
-        BSL_SAL_Free(ctx);
+        HifheFree(ctx);
         return NULL;
     }
     return ctx;
@@ -98,7 +98,7 @@ CRYPT_CKKS_Para *CRYPT_CKKS_DupPara(const CRYPT_CKKS_Para *para)
     if (para == NULL) {
         return NULL;
     }
-    CRYPT_CKKS_Para *copy = BSL_SAL_Calloc(1, sizeof(CRYPT_CKKS_Para));
+    CRYPT_CKKS_Para *copy = HifheCalloc(1, sizeof(CRYPT_CKKS_Para));
     if (copy == NULL) {
         return NULL;
     }
@@ -110,8 +110,8 @@ CRYPT_CKKS_Para *CRYPT_CKKS_DupPara(const CRYPT_CKKS_Para *para)
     copy->Q = BN_Dup(para->Q);
     copy->P = BN_Dup(para->P);
     uint32_t rootCount = (para->N << 1) + 1;
-    copy->ksiPows = BSL_SAL_Malloc(rootCount * sizeof(double complex));
-    copy->rotGroup = BSL_SAL_Malloc((para->N >> 1) * sizeof(uint32_t));
+    copy->ksiPows = HifheMalloc(rootCount * sizeof(double complex));
+    copy->rotGroup = HifheMalloc((para->N >> 1) * sizeof(uint32_t));
     if (copy->Q == NULL || copy->P == NULL || copy->ksiPows == NULL || copy->rotGroup == NULL) {
         CRYPT_CKKS_FreePara(copy);
         return NULL;
@@ -168,30 +168,32 @@ void CRYPT_CKKS_FreeCtx(CRYPT_CKKS_Ctx *ctx)
     BSL_SAL_ReferencesFree(&ctx->references);
     CKKS_FreeKeys(ctx);
     CRYPT_CKKS_FreePara(ctx->para);
-    BSL_SAL_Free(ctx);
+    HifheFree(ctx);
 }
 
 static int32_t CKKS_CheckPara(const CRYPT_CkksPara *para)
 {
     if (para == NULL) {
-        return CRYPT_NULL_INPUT;
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
+        return HIFHE_NULL_INPUT;
     }
     if (para->N < CKKS_MIN_N || para->N > CKKS_MAX_N || (para->N & (para->N - 1)) != 0 || para->qBits < CKKS_MIN_LOGQ ||
-        para->qBits > CKKS_MAX_LOGQ || para->pBits == 0 || para->pBits >= para->qBits || para->sigma <= 0.0 ||
+        para->qBits > CKKS_MAX_LOGQ || para->pBits == 0 || para->pBits >= para->qBits ||
+        para->sigma != CKKS_DEFAULT_SIGMA ||
         para->slots == 0 || para->slots > para->N / 2 || (para->slots & (para->slots - 1)) != 0) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_INVALID_ARGUMENT);
         return HIFHE_INVALID_ARGUMENT;
     }
-    return CRYPT_SUCCESS;
+    return HIFHE_SUCCESS;
 }
 
 CRYPT_CKKS_Para *CRYPT_CKKS_NewPara(const CRYPT_CkksPara *para)
 {
     int32_t ret = CKKS_CheckPara(para);
-    if (ret != CRYPT_SUCCESS) {
-        BSL_ERR_PUSH_ERROR(ret);
+    if (ret != HIFHE_SUCCESS) {
         return NULL;
     }
-    CRYPT_CKKS_Para *result = BSL_SAL_Calloc(1, sizeof(CRYPT_CKKS_Para));
+    CRYPT_CKKS_Para *result = HifheCalloc(1, sizeof(CRYPT_CKKS_Para));
     if (result == NULL) {
         return NULL;
     }
@@ -202,8 +204,8 @@ CRYPT_CKKS_Para *CRYPT_CKKS_NewPara(const CRYPT_CkksPara *para)
     result->slots = para->slots;
     result->Q = BN_Create(para->qBits + 1);
     result->P = BN_Create(para->pBits + 1);
-    if (result->Q == NULL || result->P == NULL || BN_SetBit(result->Q, para->qBits) != CRYPT_SUCCESS ||
-        BN_SetBit(result->P, para->pBits) != CRYPT_SUCCESS || CKKS_InitFFTParams(result) != CRYPT_SUCCESS) {
+    if (result->Q == NULL || result->P == NULL || BN_SetBit(result->Q, para->qBits) != HIFHE_SUCCESS ||
+        BN_SetBit(result->P, para->pBits) != HIFHE_SUCCESS || CKKS_InitFFTParams(result) != HIFHE_SUCCESS) {
         CRYPT_CKKS_FreePara(result);
         return NULL;
     }
@@ -217,28 +219,29 @@ void CRYPT_CKKS_FreePara(CRYPT_CKKS_Para *para)
     }
     BN_Destroy(para->Q);
     BN_Destroy(para->P);
-    BSL_SAL_Free(para->ksiPows);
-    BSL_SAL_Free(para->rotGroup);
-    BSL_SAL_Free(para);
+    HifheFree(para->ksiPows);
+    HifheFree(para->rotGroup);
+    HifheFree(para);
 }
 
 int32_t CRYPT_CKKS_SetPara(CRYPT_CKKS_Ctx *ctx, const CRYPT_CkksPara *para)
 {
     if (ctx == NULL || para == NULL) {
-        return CRYPT_NULL_INPUT;
+        return HIFHE_NULL_INPUT;
     }
     int32_t ret = CKKS_CheckPara(para);
-    if (ret != CRYPT_SUCCESS) {
+    if (ret != HIFHE_SUCCESS) {
         return ret;
     }
     CRYPT_CKKS_Para *newPara = CRYPT_CKKS_NewPara(para);
     if (newPara == NULL) {
-        return CRYPT_MEM_ALLOC_FAIL;
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
+        return HIFHE_MEMORY_ERROR;
     }
     CKKS_FreeKeys(ctx);
     CRYPT_CKKS_FreePara(ctx->para);
     ctx->para = newPara;
-    return CRYPT_SUCCESS;
+    return HIFHE_SUCCESS;
 }
 
 #ifdef HITLS_PROVIDER
@@ -249,21 +252,21 @@ static int32_t CKKS_GetUint32(const BSL_Param *params, int32_t key, uint32_t *va
     if (param == NULL || BSL_PARAM_GetValue(param, key, BSL_PARAM_TYPE_UINT32, value, &len) != 0) {
         return HIFHE_INVALID_ARGUMENT;
     }
-    return CRYPT_SUCCESS;
+    return HIFHE_SUCCESS;
 }
 
 int32_t CRYPT_CKKS_SetParaEx(CRYPT_CKKS_Ctx *ctx, const BSL_Param *params)
 {
     if (ctx == NULL || params == NULL) {
-        return CRYPT_NULL_INPUT;
+        return HIFHE_NULL_INPUT;
     }
     CRYPT_CkksPara para = {0};
     uint32_t sigmaMilli = 0;
-    if (CKKS_GetUint32(params, HIFHE_PARAM_CKKS_N, &para.N) != CRYPT_SUCCESS ||
-        CKKS_GetUint32(params, HIFHE_PARAM_CKKS_Q_BITS, &para.qBits) != CRYPT_SUCCESS ||
-        CKKS_GetUint32(params, HIFHE_PARAM_CKKS_P_BITS, &para.pBits) != CRYPT_SUCCESS ||
-        CKKS_GetUint32(params, HIFHE_PARAM_CKKS_SIGMA_MILLI, &sigmaMilli) != CRYPT_SUCCESS ||
-        CKKS_GetUint32(params, HIFHE_PARAM_CKKS_SLOTS, &para.slots) != CRYPT_SUCCESS) {
+    if (CKKS_GetUint32(params, HIFHE_PARAM_CKKS_N, &para.N) != HIFHE_SUCCESS ||
+        CKKS_GetUint32(params, HIFHE_PARAM_CKKS_Q_BITS, &para.qBits) != HIFHE_SUCCESS ||
+        CKKS_GetUint32(params, HIFHE_PARAM_CKKS_P_BITS, &para.pBits) != HIFHE_SUCCESS ||
+        CKKS_GetUint32(params, HIFHE_PARAM_CKKS_SIGMA_MILLI, &sigmaMilli) != HIFHE_SUCCESS ||
+        CKKS_GetUint32(params, HIFHE_PARAM_CKKS_SLOTS, &para.slots) != HIFHE_SUCCESS) {
         return HIFHE_INVALID_ARGUMENT;
     }
     para.sigma = (double)sigmaMilli / 1000.0;
@@ -279,12 +282,12 @@ uint32_t CRYPT_CKKS_GetBits(const CRYPT_CKKS_Ctx *ctx)
 
 CRYPT_CKKS_PrvKey *CKKS_NewPrvKey(uint32_t N)
 {
-    CRYPT_CKKS_PrvKey *key = BSL_SAL_Calloc(1, sizeof(CRYPT_CKKS_PrvKey));
+    CRYPT_CKKS_PrvKey *key = HifheCalloc(1, sizeof(CRYPT_CKKS_PrvKey));
     if (key == NULL) {
         return NULL;
     }
     key->N = N;
-    key->sx = BSL_SAL_Calloc(N, sizeof(BN_BigNum *));
+    key->sx = HifheCalloc(N, sizeof(BN_BigNum *));
     if (key->sx == NULL) {
         CKKS_FreePrvKey(key);
         return NULL;
@@ -301,13 +304,13 @@ CRYPT_CKKS_PrvKey *CKKS_NewPrvKey(uint32_t N)
 
 CRYPT_CKKS_PubKey *CKKS_NewPubKey(uint32_t N)
 {
-    CRYPT_CKKS_PubKey *key = BSL_SAL_Calloc(1, sizeof(CRYPT_CKKS_PubKey));
+    CRYPT_CKKS_PubKey *key = HifheCalloc(1, sizeof(CRYPT_CKKS_PubKey));
     if (key == NULL) {
         return NULL;
     }
     key->N = N;
-    key->ax = BSL_SAL_Calloc(N, sizeof(BN_BigNum *));
-    key->bx = BSL_SAL_Calloc(N, sizeof(BN_BigNum *));
+    key->ax = HifheCalloc(N, sizeof(BN_BigNum *));
+    key->bx = HifheCalloc(N, sizeof(BN_BigNum *));
     if (key->ax == NULL || key->bx == NULL) {
         CKKS_FreePubKey(key);
         return NULL;
@@ -333,8 +336,8 @@ void CKKS_FreePrvKey(CRYPT_CKKS_PrvKey *key)
             BN_Destroy(key->sx[i]);
         }
     }
-    BSL_SAL_Free(key->sx);
-    BSL_SAL_Free(key);
+    HifheFree(key->sx);
+    HifheFree(key);
 }
 
 void CKKS_FreePubKey(CRYPT_CKKS_PubKey *key)
@@ -350,18 +353,18 @@ void CKKS_FreePubKey(CRYPT_CKKS_PubKey *key)
             BN_Destroy(key->bx[i]);
         }
     }
-    BSL_SAL_Free(key->ax);
-    BSL_SAL_Free(key->bx);
-    BSL_SAL_Free(key);
+    HifheFree(key->ax);
+    HifheFree(key->bx);
+    HifheFree(key);
 }
 
 int32_t CRYPT_CKKS_Gen(CRYPT_CKKS_Ctx *ctx)
 {
     if (ctx == NULL || ctx->para == NULL) {
-        return CRYPT_NULL_INPUT;
+        return HIFHE_NULL_INPUT;
     }
     uint32_t N = ctx->para->N;
-    int32_t ret = CRYPT_MEM_ALLOC_FAIL;
+    int32_t ret = HIFHE_MEMORY_ERROR;
     CRYPT_CKKS_PrvKey *prv = CKKS_NewPrvKey(N);
     CRYPT_CKKS_PubKey *pub = CKKS_NewPubKey(N);
     CRYPT_CKKS_Poly *error = CKKS_NewPoly(N);
@@ -371,12 +374,12 @@ int32_t CRYPT_CKKS_Gen(CRYPT_CKKS_Ctx *ctx)
         goto EXIT;
     }
     BN_OptimizerSetLibCtx(ctx->libCtx, optimizer);
-    if ((ret = CKKS_SampleTernary(ctx->libCtx, prv->sx, N)) != CRYPT_SUCCESS ||
-        (ret = CKKS_SampleUniform(ctx->libCtx, pub->ax, N, ctx->para->Q)) != CRYPT_SUCCESS ||
+    if ((ret = CKKS_SampleTernary(ctx->libCtx, prv->sx, N)) != HIFHE_SUCCESS ||
+        (ret = CKKS_SampleUniform(ctx->libCtx, pub->ax, N, ctx->para->Q)) != HIFHE_SUCCESS ||
         (ret = CKKS_SampleGauss(ctx->libCtx, error->coeffs, N, ctx->para->sigma, ctx->para->Q, optimizer)) !=
-            CRYPT_SUCCESS ||
-        (ret = CKKS_PolyMult(product->coeffs, pub->ax, prv->sx, N, ctx->para->Q, optimizer)) != CRYPT_SUCCESS ||
-        (ret = CKKS_PolySub(pub->bx, error->coeffs, product->coeffs, N, ctx->para->Q, optimizer)) != CRYPT_SUCCESS) {
+            HIFHE_SUCCESS ||
+        (ret = CKKS_PolyMult(product->coeffs, pub->ax, prv->sx, N, ctx->para->Q, optimizer)) != HIFHE_SUCCESS ||
+        (ret = CKKS_PolySub(pub->bx, error->coeffs, product->coeffs, N, ctx->para->Q, optimizer)) != HIFHE_SUCCESS) {
         goto EXIT;
     }
     CKKS_FreeKeys(ctx);
@@ -403,13 +406,13 @@ static int32_t CKKS_GetConstOctets(const BSL_Param *params, int32_t key, const u
     }
     *data = param->value;
     *len = param->valueLen;
-    return CRYPT_SUCCESS;
+    return HIFHE_SUCCESS;
 }
 
 int32_t CRYPT_CKKS_GetPrvKeyEx(const CRYPT_CKKS_Ctx *ctx, BSL_Param *params)
 {
     if (ctx == NULL || params == NULL) {
-        return CRYPT_NULL_INPUT;
+        return HIFHE_NULL_INPUT;
     }
     if (ctx->prvKey == NULL) {
         return HIFHE_KEY_NOT_SET;
@@ -427,7 +430,7 @@ int32_t CRYPT_CKKS_GetPrvKeyEx(const CRYPT_CKKS_Ctx *ctx, BSL_Param *params)
 int32_t CRYPT_CKKS_GetPubKeyEx(const CRYPT_CKKS_Ctx *ctx, BSL_Param *params)
 {
     if (ctx == NULL || params == NULL) {
-        return CRYPT_NULL_INPUT;
+        return HIFHE_NULL_INPUT;
     }
     if (ctx->pubKey == NULL) {
         return HIFHE_KEY_NOT_SET;
@@ -449,7 +452,7 @@ int32_t CRYPT_CKKS_GetPubKeyEx(const CRYPT_CKKS_Ctx *ctx, BSL_Param *params)
     memcpy(out, &aLen, sizeof(aLen));
     uint32_t capacity = aLen;
     int32_t ret = CKKS_PolyToBytes(ctx->pubKey->ax, ctx->pubKey->N, out + sizeof(aLen), &capacity);
-    if (ret == CRYPT_SUCCESS) {
+    if (ret == HIFHE_SUCCESS) {
         capacity = bLen;
         ret = CKKS_PolyToBytes(ctx->pubKey->bx, ctx->pubKey->N, out + sizeof(aLen) + aLen, &capacity);
     }
@@ -459,7 +462,7 @@ int32_t CRYPT_CKKS_GetPubKeyEx(const CRYPT_CKKS_Ctx *ctx, BSL_Param *params)
 int32_t CRYPT_CKKS_SetPrvKeyEx(CRYPT_CKKS_Ctx *ctx, const BSL_Param *params)
 {
     if (ctx == NULL || params == NULL) {
-        return CRYPT_NULL_INPUT;
+        return HIFHE_NULL_INPUT;
     }
     if (ctx->para == NULL) {
         return HIFHE_INVALID_ARGUMENT;
@@ -467,27 +470,31 @@ int32_t CRYPT_CKKS_SetPrvKeyEx(CRYPT_CKKS_Ctx *ctx, const BSL_Param *params)
     const uint8_t *data = NULL;
     uint32_t len = 0;
     int32_t ret = CKKS_GetConstOctets(params, HIFHE_PARAM_CKKS_PRVKEY, &data, &len);
-    if (ret != CRYPT_SUCCESS) {
+    if (ret != HIFHE_SUCCESS) {
+        return ret;
+    }
+    ret = CKKS_CheckPolyBytes(data, len, ctx->para->N, 1, true);
+    if (ret != HIFHE_SUCCESS) {
         return ret;
     }
     CRYPT_CKKS_PrvKey *key = CKKS_NewPrvKey(ctx->para->N);
     if (key == NULL) {
-        return CRYPT_MEM_ALLOC_FAIL;
+        return HIFHE_MEMORY_ERROR;
     }
-    ret = CKKS_BytesToPoly(data, len, key->sx, key->N);
-    if (ret != CRYPT_SUCCESS) {
+    ret = CKKS_BytesToPoly(data, len, key->sx, key->N, 1, true);
+    if (ret != HIFHE_SUCCESS) {
         CKKS_FreePrvKey(key);
         return ret;
     }
     CKKS_FreePrvKey(ctx->prvKey);
     ctx->prvKey = key;
-    return CRYPT_SUCCESS;
+    return HIFHE_SUCCESS;
 }
 
 int32_t CRYPT_CKKS_SetPubKeyEx(CRYPT_CKKS_Ctx *ctx, const BSL_Param *params)
 {
     if (ctx == NULL || params == NULL) {
-        return CRYPT_NULL_INPUT;
+        return HIFHE_NULL_INPUT;
     }
     if (ctx->para == NULL) {
         return HIFHE_INVALID_ARGUMENT;
@@ -495,7 +502,7 @@ int32_t CRYPT_CKKS_SetPubKeyEx(CRYPT_CKKS_Ctx *ctx, const BSL_Param *params)
     const uint8_t *data = NULL;
     uint32_t len = 0;
     int32_t ret = CKKS_GetConstOctets(params, HIFHE_PARAM_CKKS_PUBKEY, &data, &len);
-    if (ret != CRYPT_SUCCESS || len < sizeof(uint32_t)) {
+    if (ret != HIFHE_SUCCESS || len < sizeof(uint32_t)) {
         return HIFHE_DECODE_ERROR;
     }
     uint32_t aLen = 0;
@@ -503,20 +510,29 @@ int32_t CRYPT_CKKS_SetPubKeyEx(CRYPT_CKKS_Ctx *ctx, const BSL_Param *params)
     if (aLen > len - sizeof(aLen)) {
         return HIFHE_DECODE_ERROR;
     }
+    ret = CKKS_CheckPolyBytes(data + sizeof(aLen), aLen, ctx->para->N, ctx->para->qBits + 1, false);
+    if (ret == HIFHE_SUCCESS) {
+        ret = CKKS_CheckPolyBytes(data + sizeof(aLen) + aLen, len - sizeof(aLen) - aLen, ctx->para->N,
+            ctx->para->qBits, false);
+    }
+    if (ret != HIFHE_SUCCESS) {
+        return ret;
+    }
     CRYPT_CKKS_PubKey *key = CKKS_NewPubKey(ctx->para->N);
     if (key == NULL) {
-        return CRYPT_MEM_ALLOC_FAIL;
+        return HIFHE_MEMORY_ERROR;
     }
-    ret = CKKS_BytesToPoly(data + sizeof(aLen), aLen, key->ax, key->N);
-    if (ret == CRYPT_SUCCESS) {
-        ret = CKKS_BytesToPoly(data + sizeof(aLen) + aLen, len - sizeof(aLen) - aLen, key->bx, key->N);
+    ret = CKKS_BytesToPoly(data + sizeof(aLen), aLen, key->ax, key->N, ctx->para->qBits + 1, false);
+    if (ret == HIFHE_SUCCESS) {
+        ret = CKKS_BytesToPoly(data + sizeof(aLen) + aLen, len - sizeof(aLen) - aLen, key->bx, key->N,
+            ctx->para->qBits, false);
     }
-    if (ret != CRYPT_SUCCESS) {
+    if (ret != HIFHE_SUCCESS) {
         CKKS_FreePubKey(key);
         return ret;
     }
     CKKS_FreePubKey(ctx->pubKey);
     ctx->pubKey = key;
-    return CRYPT_SUCCESS;
+    return HIFHE_SUCCESS;
 }
 #endif

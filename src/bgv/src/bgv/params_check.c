@@ -13,6 +13,7 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "hifhe_err_internal.h"
 #include "bgv/params_check.h"
 #include "bgv/bgv.h"
 
@@ -105,6 +106,7 @@ HIFHE_ERROR BGV_Params_Validate(uint32_t polyDegree, uint32_t plainModBit, const
                                 uint32_t chainLen, uint32_t securityLevel)
 {
     if (cipherModBit == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (securityLevel == 0u) {
@@ -112,15 +114,19 @@ HIFHE_ERROR BGV_Params_Validate(uint32_t polyDegree, uint32_t plainModBit, const
     }
 
     if (!BGV_Params_IsPolyDegreeSupported(polyDegree)) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     if (!BGV_Params_IsSecurityLevelSupported(securityLevel)) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     if (!BGV_Params_IsPlainModBitSupported(plainModBit)) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     if (!BGV_Params_IsChainLenSupported(chainLen)) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
@@ -131,6 +137,7 @@ HIFHE_ERROR BGV_Params_Validate(uint32_t polyDegree, uint32_t plainModBit, const
         logN++;
     }
     if (plainModBit < logN + 2u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
@@ -138,9 +145,11 @@ HIFHE_ERROR BGV_Params_Validate(uint32_t polyDegree, uint32_t plainModBit, const
     uint32_t minCipherBits = HIFHE_BGV_MAX_CIPHER_BITS;
     for (uint32_t i = 0; i < chainLen; ++i) {
         if (!BGV_Params_IsCipherModBitSupported(cipherModBit[i])) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
             return HIFHE_PARAM_INVALID;
         }
         if (cipherModBit[i] < logN + 2u) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
             return HIFHE_PARAM_INVALID;
         }
         total += cipherModBit[i];
@@ -150,11 +159,13 @@ HIFHE_ERROR BGV_Params_Validate(uint32_t polyDegree, uint32_t plainModBit, const
     }
     /* Every limb must leave room above plainMod. */
     if (plainModBit >= minCipherBits) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
     uint32_t maxBits = BGV_Params_HEMaxBitsTernaryClassical(polyDegree, securityLevel);
     if (maxBits == 0u || total > maxBits) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 

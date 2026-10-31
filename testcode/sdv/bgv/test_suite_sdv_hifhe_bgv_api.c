@@ -11,11 +11,13 @@
  */
 
 /* BEGIN_HEADER */
+#include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include "hifhe.h"
 #include "crypt_eal_init.h"
+#include "crypt_eal_rand.h"
 #include "test.h"
 /* END_HEADER */
 
@@ -56,6 +58,90 @@ static void Put32(uint8_t *out, uint32_t value)
     }
 }
 
+static void *ErrorPeekWorker(void *arg)
+{
+    const int *options = arg;
+    int32_t (*peek)(const char **, uint32_t *) = options[0] == 0 ? HIFHE_ErrPeekError : HIFHE_ErrPeekLastError;
+    HIFHE_Ctx *ctx = NULL;
+    uint32_t previousLine = 0;
+    const char sentinel[] = "unchanged";
+
+    /* A new thread starts with an empty stack without using internal APIs. */
+    for (uint32_t phase = 0; phase < 4; phase++) {
+        if (phase == 1) {
+            ASSERT_EQ(HIFHE_KeyGen(NULL), HIFHE_NULL_INPUT);
+        } else if (phase == 2) {
+            ASSERT_EQ(HIFHE_SetMemFuncs(NULL, free), HIFHE_PARAM_INVALID);
+        } else if (phase == 3) {
+            ctx = HIFHE_New(HIFHE_BGV);
+            ASSERT_TRUE(ctx != NULL);
+            HIFHE_Free(ctx);
+            ctx = NULL;
+        }
+        int32_t expected = phase == 0 ? HIFHE_SUCCESS : HIFHE_NULL_INPUT;
+        const char *expectedFile = "hifhe_api.c";
+        if (options[0] != 0 && phase >= 2) {
+            expected = HIFHE_PARAM_INVALID;
+            expectedFile = "hifhe_mem.c";
+        }
+        for (uint32_t repeat = 0; repeat < 3; repeat++) {
+            const char *file = sentinel;
+            uint32_t line = UINT32_MAX;
+            ASSERT_EQ(peek((options[1] & 1) != 0 ? &file : NULL, (options[1] & 2) != 0 ? &line : NULL), expected);
+            if (phase == 0 || (options[1] & 1) == 0) {
+                ASSERT_TRUE(file == sentinel);
+            } else {
+                ASSERT_TRUE(file != NULL);
+                ASSERT_EQ(strcmp(file, expectedFile), 0);
+            }
+            if (phase == 0 || (options[1] & 2) == 0) {
+                ASSERT_EQ(line, UINT32_MAX);
+            } else {
+                ASSERT_TRUE(line > 0 && line < UINT32_MAX);
+                if (repeat != 0 || phase == 3 || (phase == 2 && options[0] == 0)) {
+                    ASSERT_EQ(line, previousLine);
+                }
+                previousLine = line;
+            }
+        }
+    }
+EXIT:
+    HIFHE_Free(ctx);
+    return NULL;
+}
+
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_ERROR_PEEK_API_TC001(int last, int outputs)
+{
+    pthread_t worker;
+    int started = 0;
+    int options[] = {last, outputs};
+    const char *firstFile = NULL, *lastFile = NULL, *file = NULL;
+    uint32_t firstLine = 0, lastLine = 0, line = 0;
+
+    ASSERT_EQ(HIFHE_KeyGen(NULL), HIFHE_NULL_INPUT);
+    int32_t firstError = HIFHE_ErrPeekError(&firstFile, &firstLine);
+    int32_t lastError = HIFHE_ErrPeekLastError(&lastFile, &lastLine);
+    ASSERT_TRUE(firstFile != NULL && lastFile != NULL);
+    ASSERT_EQ(pthread_create(&worker, NULL, ErrorPeekWorker, options), 0);
+    started = 1;
+    ASSERT_EQ(pthread_join(worker, NULL), 0);
+    started = 0;
+    ASSERT_EQ(HIFHE_ErrPeekError(&file, &line), firstError);
+    ASSERT_TRUE(file != NULL);
+    ASSERT_EQ(strcmp(file, firstFile), 0);
+    ASSERT_EQ(line, firstLine);
+    ASSERT_EQ(HIFHE_ErrPeekLastError(&file, &line), lastError);
+    ASSERT_TRUE(file != NULL);
+    ASSERT_EQ(strcmp(file, lastFile), 0);
+    ASSERT_EQ(line, lastLine);
+EXIT:
+    if (started != 0) {
+        (void)pthread_join(worker, NULL);
+    }
+}
+/* END_CASE */
+
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_CONTEXT_CTRL_API_TC001(int cmd)
 {
@@ -77,16 +163,16 @@ void SDV_CRYPTO_HIFHE_BGV_CONTEXT_CTRL_API_TC001(int cmd)
     ASSERT_EQ(HIFHE_Ctrl(ctx, cmd, NULL, arg, argLen), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_Ctrl(NULL, cmd, NULL, arg, argLen), HIFHE_NULL_INPUT);
     ASSERT_EQ(HIFHE_Ctrl(ctx, cmd, NULL, NULL, argLen), HIFHE_NULL_INPUT);
-    ASSERT_EQ(HIFHE_Ctrl(ctx, cmd, NULL, arg, argLen - 1), HIFHE_PARAM_INVALID);
-    ASSERT_EQ(HIFHE_Ctrl(ctx, cmd, NULL, arg, argLen + 1), HIFHE_PARAM_INVALID);
+    ASSERT_EQ(HIFHE_Ctrl(ctx, cmd, NULL, arg, argLen - 1), HIFHE_INVALID_LENGTH);
+    ASSERT_EQ(HIFHE_Ctrl(ctx, cmd, NULL, arg, argLen + 1), HIFHE_INVALID_LENGTH);
     if (cmd == HIFHE_CTRL_BGV_SET_LUT_CACHE) {
         value = 2;
-        ASSERT_EQ(HIFHE_Ctrl(ctx, cmd, NULL, arg, argLen), HIFHE_PARAM_INVALID);
+        ASSERT_EQ(HIFHE_Ctrl(ctx, cmd, NULL, arg, argLen), HIFHE_VALUE_OUT_OF_RANGE);
         value = 0;
         ASSERT_EQ(HIFHE_Ctrl(ctx, cmd, NULL, arg, argLen), HIFHE_SUCCESS);
         value = 1;
         ASSERT_EQ(HIFHE_Ctrl(ctx, cmd, NULL, arg, argLen), HIFHE_SUCCESS);
-        ASSERT_EQ(HIFHE_SetParaById(ctx, -1), HIFHE_PARAM_INVALID);
+        ASSERT_EQ(HIFHE_SetParaById(ctx, -1), HIFHE_PARAM_ID_INVALID);
         ASSERT_EQ(HIFHE_SetParaById(ctx, HIFHE_BGV_4096_44x2_17BIT), HIFHE_SUCCESS);
         ASSERT_EQ(HIFHE_Ctrl(ctx, cmd, NULL, arg, argLen), HIFHE_BAD_STATE);
     }
@@ -102,7 +188,7 @@ void SDV_CRYPTO_HIFHE_BGV_CONTEXT_CTRL_API_TC001(int cmd)
     uint32_t actual = 0;
     ASSERT_EQ(HIFHE_Encode(ctx, &message, 1, &pt), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_Encrypt(ctx, pt, &ct), HIFHE_SUCCESS);
-    ASSERT_EQ(HIFHE_Ctrl(ctx, cmd, pt, arg, argLen), HIFHE_PARAM_INVALID);
+    ASSERT_EQ(HIFHE_Ctrl(ctx, cmd, pt, arg, argLen), HIFHE_INVALID_ARGUMENT);
     if (cmd == HIFHE_CTRL_BGV_GET_POLY_DEGREE) {
         ASSERT_EQ(value, 4096);
     } else if (cmd == HIFHE_CTRL_BGV_GET_PLAINTEXT_LEN) {
@@ -142,7 +228,7 @@ void SDV_CRYPTO_HIFHE_BGV_WORKFLOW_API_TC001(void)
     a = Configured();
     b = Configured();
     ASSERT_TRUE(a != NULL && b != NULL);
-    ASSERT_TRUE(HIFHE_SetParaById(a, HIFHE_BGV_4096_44x2_17BIT) == HIFHE_BAD_STATE);
+    ASSERT_TRUE(HIFHE_SetParaById(a, HIFHE_BGV_4096_44x2_17BIT) == HIFHE_PARAM_REPEATED_SET);
     ASSERT_EQ(HIFHE_KeyGen(a), HIFHE_SUCCESS);
     uint64_t query[] = {1, 2, 3, 4}, bucket[] = {1, 4, 2, 6}, mask[] = {2, 3, 4, 5};
     ASSERT_EQ(HIFHE_Encode(a, query, 4, &p), HIFHE_SUCCESS);
@@ -243,12 +329,12 @@ void SDV_CRYPTO_HIFHE_BGV_OUTPUT_OVERLAP_API_TC001(void)
     ASSERT_TRUE(bytes != NULL);
     uint32_t *outLen = (uint32_t *)bytes;
     *outLen = len;
-    ASSERT_TRUE(HIFHE_Serialize(ctx, pt, bytes, outLen) == HIFHE_PARAM_INVALID);
+    ASSERT_TRUE(HIFHE_Serialize(ctx, pt, bytes, outLen) == HIFHE_BUFFER_OVERLAP);
     values = calloc(4096, sizeof(*values));
     ASSERT_TRUE(values != NULL);
     uint32_t *count = (uint32_t *)(values + 4095);
     *count = 4096;
-    ASSERT_EQ(HIFHE_Decode(ctx, pt, values, count), HIFHE_PARAM_INVALID);
+    ASSERT_EQ(HIFHE_Decode(ctx, pt, values, count), HIFHE_BUFFER_OVERLAP);
     ASSERT_EQ(*count, 4096);
 EXIT:
     HIFHE_HETextFree(pt);
@@ -273,7 +359,7 @@ void SDV_CRYPTO_HIFHE_BGV_UINT64_API_TC001(void)
     ctx = Configured();
     ASSERT_TRUE(ctx != NULL);
     for (uint32_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
-        ASSERT_EQ(HIFHE_Encode(ctx, &invalid[i], 1, &pt), HIFHE_PARAM_INVALID);
+        ASSERT_EQ(HIFHE_Encode(ctx, &invalid[i], 1, &pt), HIFHE_VALUE_OUT_OF_RANGE);
         ASSERT_TRUE(pt == NULL);
     }
     ASSERT_EQ(HIFHE_Encode(ctx, values, 4, &pt), HIFHE_SUCCESS);
@@ -313,16 +399,16 @@ void SDV_CRYPTO_HIFHE_BGV_PRESET_API_TC001(void)
     ASSERT_TRUE(HIFHE_New(0) == NULL);
     a = HIFHE_New(HIFHE_BGV);
     ASSERT_TRUE(a != NULL);
-    ASSERT_TRUE(HIFHE_SetParaById(a, -1) == HIFHE_PARAM_INVALID);
+    ASSERT_TRUE(HIFHE_SetParaById(a, -1) == HIFHE_PARAM_ID_INVALID);
     ASSERT_EQ(HIFHE_SetParaById(a, HIFHE_BGV_4096_44x2_17BIT), HIFHE_SUCCESS);
-    ASSERT_TRUE(HIFHE_SetParaById(a, HIFHE_BGV_8192_44x4_17BIT) == HIFHE_BAD_STATE);
+    ASSERT_TRUE(HIFHE_SetParaById(a, HIFHE_BGV_8192_44x4_17BIT) == HIFHE_PARAM_REPEATED_SET);
     b = HIFHE_New(HIFHE_BGV);
     ASSERT_TRUE(b != NULL);
     ASSERT_EQ(HIFHE_SetParaById(b, HIFHE_BGV_8192_44x4_17BIT), HIFHE_SUCCESS);
     uint64_t input = 8;
     ASSERT_EQ(HIFHE_Encode(a, &input, 1, &pt), HIFHE_SUCCESS);
     uint32_t len = 0;
-    ASSERT_TRUE(HIFHE_Serialize(b, pt, NULL, &len) == HIFHE_CONTEXT_MISMATCH);
+    ASSERT_TRUE(HIFHE_Serialize(b, pt, NULL, &len) == HIFHE_PARAM_MISMATCH);
 EXIT:
     HIFHE_Free(a);
     HIFHE_Free(b);
@@ -353,26 +439,26 @@ void SDV_CRYPTO_HIFHE_BGV_CTRL_API_TC001(void)
     ASSERT_TRUE(before != NULL && after != NULL);
     ASSERT_EQ(HIFHE_Serialize(a, ct, before, &len), HIFHE_SUCCESS);
     ASSERT_TRUE(HIFHE_Ctrl(a, (int32_t)0x6A02, ct, NULL, 0) == HIFHE_NOT_SUPPORTED);
-    ASSERT_TRUE(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_SET_NEGATE, ct, &control, sizeof(control)) == HIFHE_PARAM_INVALID);
+    ASSERT_TRUE(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_SET_NEGATE, ct, &control, sizeof(control)) == HIFHE_INVALID_ARGUMENT);
     ASSERT_TRUE(HIFHE_Ctrl(NULL, HIFHE_CTRL_BGV_SET_NEGATE, ct, NULL, 0) == HIFHE_NULL_INPUT);
     ASSERT_TRUE(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_SET_NEGATE, NULL, NULL, 0) == HIFHE_NULL_INPUT);
-    ASSERT_TRUE(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_SET_NEGATE, ct, NULL, 1) == HIFHE_PARAM_INVALID);
-    ASSERT_TRUE(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_SET_NEGATE, pt, NULL, 0) == HIFHE_PARAM_INVALID);
+    ASSERT_TRUE(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_SET_NEGATE, ct, NULL, 1) == HIFHE_INVALID_LENGTH);
+    ASSERT_TRUE(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_SET_NEGATE, pt, NULL, 0) == HIFHE_TEXT_TYPE_MISMATCH);
     ASSERT_EQ(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_SET_NEGATE, ct, NULL, 0), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_SET_NEGATE, ct, NULL, 0), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_Add(b, ct, pt, &result), HIFHE_SUCCESS);
     uint32_t untouched = len;
     ASSERT_TRUE(HIFHE_Serialize(a, ct, after, &untouched) == HIFHE_BAD_STATE);
     ASSERT_TRUE(untouched == len);
-    ASSERT_TRUE(HIFHE_Add(b, ct, pt, &result) == HIFHE_BAD_STATE);
+    ASSERT_TRUE(HIFHE_Add(b, ct, pt, &result) == HIFHE_OUTPUT_NOT_EMPTY);
     ASSERT_TRUE(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_RERANDOMIZE, ct, &noise, sizeof(noise)) == HIFHE_BAD_STATE);
     ASSERT_TRUE(noise == NULL);
     ASSERT_EQ(HIFHE_Deserialize(a, before, len, &copy), HIFHE_SUCCESS);
     ASSERT_TRUE(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_RERANDOMIZE, copy, NULL, sizeof(noise)) == HIFHE_NULL_INPUT);
-    ASSERT_TRUE(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_RERANDOMIZE, copy, &noise, 0) == HIFHE_PARAM_INVALID);
-    ASSERT_TRUE(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_RERANDOMIZE, pt, &noise, sizeof(noise)) == HIFHE_PARAM_INVALID);
+    ASSERT_TRUE(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_RERANDOMIZE, copy, &noise, 0) == HIFHE_INVALID_LENGTH);
+    ASSERT_TRUE(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_RERANDOMIZE, pt, &noise, sizeof(noise)) == HIFHE_TEXT_TYPE_MISMATCH);
     ASSERT_TRUE(noise == NULL);
-    ASSERT_TRUE(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_RERANDOMIZE, copy, &result, sizeof(result)) == HIFHE_BAD_STATE);
+    ASSERT_TRUE(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_RERANDOMIZE, copy, &result, sizeof(result)) == HIFHE_OUTPUT_NOT_EMPTY);
     ASSERT_EQ(HIFHE_Serialize(a, copy, after, &len), HIFHE_SUCCESS);
     ASSERT_TRUE(memcmp(before, after, len) == 0);
 EXIT:

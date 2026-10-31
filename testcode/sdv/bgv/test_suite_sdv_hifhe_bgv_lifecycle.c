@@ -14,6 +14,7 @@
  */
 
 /* BEGIN_HEADER */
+#include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -34,6 +35,8 @@
 #include "bgv_adapter_types.h"
 #include "hifhe_types.h"
 #include "hifhe_err.h"
+#include "hifhe_err_internal.h"
+#include "basic/rand.h"
 #include "crypto_test_util.h"
 #include "test.h"
 /* END_HEADER */
@@ -42,6 +45,25 @@
  * loading, key generation, duplication and release. Encryption, the HE
  * operations, key marshalling and serdes are covered by
  * test_suite_sdv_hifhe_bgv_ops. */
+
+/* Runs on a second thread for ERROR_STACK_PER_THREAD_TC001. Returns 0 when
+ * everything it saw of the error stack was its own. */
+static void *ErrStackWorker(void *arg)
+{
+    (void)arg;
+    if (HIFHE_ErrDepth() != 0u) {
+        return (void *)(intptr_t)1;
+    }
+    HIFHE_ErrPushError(HIFHE_INTERNAL, "worker.c", 7u);
+    HIFHE_ErrPushError(HIFHE_INTERNAL, "worker.c", 8u);
+    const char *file = NULL;
+    uint32_t line = 0u;
+    if (HIFHE_ErrDepth() != 2u || HIFHE_ErrPeekError(&file, &line) != HIFHE_INTERNAL || line != 7u) {
+        return (void *)(intptr_t)2;
+    }
+    HIFHE_ErrClearError();
+    return (void *)(intptr_t)0;
+}
 
 static CRYPT_BGV_Ctx *BgvNewCtx(int withPreset)
 {
@@ -83,7 +105,7 @@ void SDV_CRYPTO_HIFHE_BGV_PUBLIC_CACHE_SEED_TC001(void)
     ASSERT_TRUE(a != NULL && b != NULL && c != NULL);
     ASSERT_EQ(HIFHE_Ctrl(a, HIFHE_CTRL_BGV_SET_LUT_CACHE, NULL, &on, sizeof(on)), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_SET_LUT_CACHE, NULL, &on, sizeof(on)), HIFHE_SUCCESS);
-    ASSERT_EQ(HIFHE_SetParaById(a, -1), HIFHE_PARAM_INVALID);
+    ASSERT_EQ(HIFHE_SetParaById(a, -1), HIFHE_PARAM_ID_INVALID);
     ASSERT_EQ(HIFHE_SetParaById(a, HIFHE_BGV_4096_44x2_17BIT), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_SetParaById(b, HIFHE_BGV_4096_44x2_17BIT), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_SetParaById(c, HIFHE_BGV_4096_44x2_17BIT), HIFHE_SUCCESS);
@@ -368,5 +390,196 @@ void SDV_CRYPTO_HIFHE_BGV_INHERITED_PRIMES_TC001(void)
     ASSERT_EQ(level, 4u);
 EXIT:
     CRYPT_BGV_FreeCtx(ctx);
+}
+/* END_CASE */
+
+/* @
+* @test  SDV_CRYPTO_HIFHE_BGV_ERROR_REPORTED_TC001
+* @title  A failed call leaves the location that decided it on the error stack.
+* @brief  Loads an out-of-range preset id. The code is already the return
+*         value, so the code alone proves nothing; what this pins is that the
+*         stack holds the file and line inside the library that decided the
+*         call had failed, and that the entry outlives the call.
+* @auto  TRUE
+@ */
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_ERROR_REPORTED_TC001(void)
+{
+    CRYPT_BGV_Ctx *ctx = NULL;
+    int32_t badPreset = 0x7ffffff0;
+    const char *originFile = NULL;
+    uint32_t originLine = 0u;
+
+    TestMemInit();
+    TestRandInit();
+
+    ctx = CRYPT_BGV_NewCtx(HIFHE_BGV);
+    ASSERT_TRUE(ctx != NULL);
+
+    HIFHE_ErrClearError();
+    ASSERT_EQ(HIFHE_ErrDepth(), 0u);
+    int32_t r = CRYPT_BGV_Ctrl(ctx, CRYPT_CTRL_SET_PARA_BY_ID, &badPreset, sizeof(badPreset));
+    ASSERT_TRUE(r != HIFHE_SUCCESS);
+
+    /* One push per origin, so the oldest entry and the newest are the same
+     * one here. Peek, so neither read consumes the other's entry. */
+    ASSERT_EQ(HIFHE_ErrDepth(), 1u);
+    ASSERT_EQ(HIFHE_ErrPeekError(&originFile, &originLine), r);
+    ASSERT_EQ(HIFHE_ErrPeekLastError(NULL, NULL), r);
+    ASSERT_TRUE(originFile != NULL);
+    ASSERT_TRUE(originLine > 0u);
+    /* The frame is inside the library, not in this file. */
+    ASSERT_TRUE(strstr(originFile, "test_suite") == NULL);
+
+    HIFHE_ErrClearError();
+    ASSERT_EQ(HIFHE_ErrDepth(), 0u);
+    ASSERT_EQ(HIFHE_ErrPeekError(NULL, NULL), HIFHE_SUCCESS);
+
+EXIT:
+    HIFHE_ErrClearError();
+    CRYPT_BGV_FreeCtx(ctx);
+}
+/* END_CASE */
+
+/* @
+* @test  SDV_CRYPTO_HIFHE_BGV_ERROR_STACK_WRAP_TC001
+* @title  The error stack keeps the newest HIFHE_ERR_STACK_DEPTH entries.
+* @brief  A stack nobody cleared must not hide what is failing now, so a push
+*         onto a full stack drops the oldest entry rather than itself. Also
+*         covers the mark, which is what brackets a call whose failure is an
+*         answer rather than a fault.
+* @auto  TRUE
+@ */
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_ERROR_STACK_WRAP_TC001(void)
+{
+    const char *file = NULL;
+    uint32_t line = 0u;
+
+    HIFHE_ErrClearError();
+    for (uint32_t i = 1; i <= HIFHE_ERR_STACK_DEPTH + 5u; ++i) {
+        HIFHE_ErrPushError(HIFHE_INTERNAL, "wrap.c", i);
+    }
+    ASSERT_EQ(HIFHE_ErrDepth(), HIFHE_ERR_STACK_DEPTH);
+    ASSERT_EQ(HIFHE_ErrPeekError(&file, &line), HIFHE_INTERNAL);
+    ASSERT_EQ(line, 6u);
+    ASSERT_EQ(HIFHE_ErrPeekLastError(&file, &line), HIFHE_INTERNAL);
+    ASSERT_EQ(line, HIFHE_ERR_STACK_DEPTH + 5u);
+
+    /* A success is not an error and is not recorded. */
+    HIFHE_ErrClearError();
+    HIFHE_ErrPushError(HIFHE_SUCCESS, "wrap.c", 1u);
+    ASSERT_EQ(HIFHE_ErrDepth(), 0u);
+
+    /* Whatever the bracketed call pushed is gone, and what was there before
+     * it stays. */
+    HIFHE_ErrPushError(HIFHE_PARAM_INVALID, "wrap.c", 11u);
+    HIFHE_ErrSetMark();
+    HIFHE_ErrPushError(HIFHE_INTERNAL, "wrap.c", 12u);
+    HIFHE_ErrPushError(HIFHE_INTERNAL, "wrap.c", 13u);
+    HIFHE_ErrPopToMark();
+    ASSERT_EQ(HIFHE_ErrDepth(), 1u);
+    ASSERT_EQ(HIFHE_ErrPeekLastError(&file, &line), HIFHE_PARAM_INVALID);
+    ASSERT_EQ(line, 11u);
+
+EXIT:
+    HIFHE_ErrClearError();
+}
+/* END_CASE */
+
+/* @
+* @test  SDV_CRYPTO_HIFHE_BGV_ERROR_STACK_PER_THREAD_TC001
+* @title  One error stack per thread, with nothing shared between them.
+* @brief  The stack is thread-local, which is what lets it hold no lock. Two
+*         threads report at the same time and neither sees the other: the
+*         second thread starts empty although the first has already pushed,
+*         and the first is unchanged when the second has filled its own.
+* @auto  TRUE
+@ */
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_ERROR_STACK_PER_THREAD_TC001(void)
+{
+    pthread_t worker;
+    int started = 0;
+
+    HIFHE_ErrClearError();
+    HIFHE_ErrPushError(HIFHE_PARAM_INVALID, "main.c", 1u);
+    ASSERT_EQ(HIFHE_ErrDepth(), 1u);
+
+    ASSERT_EQ(pthread_create(&worker, NULL, ErrStackWorker, NULL), 0);
+    started = 1;
+    void *result = NULL;
+    ASSERT_EQ(pthread_join(worker, &result), 0);
+    started = 0;
+    /* The worker reports what it saw of its own stack. */
+    ASSERT_EQ((intptr_t)result, 0);
+
+    /* Its pushes did not land here. */
+    const char *file = NULL;
+    uint32_t line = 0u;
+    ASSERT_EQ(HIFHE_ErrDepth(), 1u);
+    ASSERT_EQ(HIFHE_ErrPeekLastError(&file, &line), HIFHE_PARAM_INVALID);
+    ASSERT_EQ(line, 1u);
+
+EXIT:
+    if (started) {
+        (void)pthread_join(worker, NULL);
+    }
+    HIFHE_ErrClearError();
+}
+/* END_CASE */
+
+/* @
+* @test  SDV_CRYPTO_HIFHE_BGV_ERROR_STACK_CLEAN_TC001
+* @title  A call that succeeds reports nothing.
+* @brief  The error stack is never cleared on its own, so a code pushed on a
+*         path that worked stays there and is read back as the outcome of a
+*         later, unrelated call. Both context builds run here: the one that
+*         derives the modulus chain by probing prime candidates, where a
+*         rejection means "try the next one" rather than a failure, and the
+*         one that takes the moduli pinned in a preset.
+* @auto  TRUE
+@ */
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_ERROR_STACK_CLEAN_TC001(void)
+{
+    CRYPT_BGV_Ctx *ctx = NULL;
+    CRYPT_BGV_Ctx *preset = NULL;
+    uint32_t polyDegreeIn = 2048u;
+    uint32_t plainModBit = 17u;
+    uint32_t relinDnum = 1u;
+    uint32_t cipherModBits[] = {48u};
+
+    BSL_Param params[] = {
+        {HIFHE_PARAM_BGV_POLY_DEGREE, BSL_PARAM_TYPE_UINT32, &polyDegreeIn, sizeof(polyDegreeIn), 0},
+        {HIFHE_PARAM_BGV_PLAIN_MOD_BIT, BSL_PARAM_TYPE_UINT32, &plainModBit, sizeof(plainModBit), 0},
+        {HIFHE_PARAM_BGV_RELIN_DNUM, BSL_PARAM_TYPE_UINT32, &relinDnum, sizeof(relinDnum), 0},
+        {HIFHE_PARAM_BGV_CIPHER_MOD_BITS, BSL_PARAM_TYPE_OCTETS, cipherModBits, sizeof(cipherModBits), 0},
+        BSL_PARAM_END};
+
+    TestMemInit();
+    TestRandInit();
+
+    ctx = CRYPT_BGV_NewCtx(HIFHE_BGV);
+    ASSERT_TRUE(ctx != NULL);
+
+    HIFHE_ErrClearError();
+    ASSERT_EQ(CRYPT_BGV_SetParaEx(ctx, params), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_ErrPeekLastError(NULL, NULL), 0);
+    ASSERT_EQ(CRYPT_BGV_Gen(ctx), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_ErrPeekLastError(NULL, NULL), 0);
+
+    /* The same through a preset, whose moduli are pinned and so take the
+     * other branch of the context build. */
+    preset = BgvNewCtx(1);
+    ASSERT_TRUE(preset != NULL);
+    ASSERT_EQ(HIFHE_ErrPeekLastError(NULL, NULL), 0);
+    ASSERT_EQ(CRYPT_BGV_Gen(preset), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_ErrPeekLastError(NULL, NULL), 0);
+
+EXIT:
+    HIFHE_ErrClearError();
+    CRYPT_BGV_FreeCtx(ctx);
+    CRYPT_BGV_FreeCtx(preset);
 }
 /* END_CASE */

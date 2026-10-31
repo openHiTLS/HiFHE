@@ -24,7 +24,7 @@
  */
 
 #include <string.h>
-#include "bsl_sal.h"
+#include "hifhe_err_internal.h"
 #include "bgv/evaluator.h"
 #include "bgv/ciphertext.h"
 #include "rlwe/crt_ops.h"
@@ -33,29 +33,36 @@
 HIFHE_ERROR BGV_Evaluator_MulCtCt(Ciphertext *out, const Ciphertext *a, const Ciphertext *b, const Evaluator *self)
 {
     if (out == NULL || a == NULL || b == NULL || self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (a->context != b->context) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     uint32_t ma = a->config.ciphertextSize;
     uint32_t mb = b->config.ciphertextSize;
     if (ma < 2u || mb < 2u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_CT_DEGREE_MISMATCH);
         return HIFHE_CT_DEGREE_MISMATCH;
     }
     if (a->config.crtConfig.dtype != HIFHE_NTT || b->config.crtConfig.dtype != HIFHE_NTT) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     uint32_t L = a->config.crtConfig.rnsbase.size;
     if (L != b->config.crtConfig.rnsbase.size) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     if (ma > HIFHE_BGV_MAX_CIPHERTEXT_SIZE || mb > HIFHE_BGV_MAX_CIPHERTEXT_SIZE) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_CT_DEGREE_MISMATCH);
         return HIFHE_CT_DEGREE_MISMATCH;
     }
     uint32_t mOut = ma + mb - 1u;
     /* Relinearize first: the product would exceed what decryption accepts. */
     if (mOut > HIFHE_BGV_MAX_CIPHERTEXT_SIZE) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_CT_DEGREE_MISMATCH);
         return HIFHE_CT_DEGREE_MISMATCH;
     }
 

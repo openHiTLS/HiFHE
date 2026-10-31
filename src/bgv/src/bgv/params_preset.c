@@ -17,6 +17,7 @@
  * returns pointers into them (loader-owned, do not free). */
 
 #include <stddef.h>
+#include "hifhe_err_internal.h"
 #include "hifhe_types.h"
 #include "hifhe_err.h"
 #include "bgv/params_preset.h"
@@ -39,6 +40,7 @@ static const uint32_t kCipherBits_8192_44x4[] = {43u, 43u, 44u, 44u};
 HIFHE_ERROR BGV_Preset_Load(BgvPresetPara *out, int32_t presetId)
 {
     if (out == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     /* Zero the struct so callers reading un-set fields see 0. */
@@ -108,6 +110,7 @@ HIFHE_ERROR BGV_Preset_Load(BgvPresetPara *out, int32_t presetId)
             return HIFHE_SUCCESS;
 
         default:
-            return HIFHE_PARAM_INVALID;
+            HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_ID_INVALID);
+            return HIFHE_PARAM_ID_INVALID;
     }
 }

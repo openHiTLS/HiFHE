@@ -12,6 +12,7 @@
 
 #include <limits.h>
 #include "hifhe_local.h"
+#include "hifhe_err_internal.h"
 #include "bgv_local.h"
 #include "bgv/encoder.h"
 #include "bgv/encryptor.h"
@@ -38,7 +39,7 @@ static void BgvTextFree(void *data)
     } else {
         BGV_Ciphertext_Destroy(&t->value.ciphertext);
     }
-    BSL_SAL_Free(t);
+    HifheFree(t);
 }
 
 static int32_t FinishText(HifheBgvText *text, int32_t ret, void **out)
@@ -70,10 +71,12 @@ static void *BgvCtxDup(void *data, void *libCtx)
 static int32_t BgvCtxNew(HifheParamSnapshot *p, void *libCtx, void **out)
 {
     if (p->config.isCkks) {
-        return HIFHE_CONTEXT_MISMATCH;
+        HIFHE_ERR_PUSH_ERROR(HIFHE_ALG_MISMATCH);
+        return HIFHE_ALG_MISMATCH;
     }
     CRYPT_BGV_Ctx *math = CRYPT_BGV_NewCtx(HIFHE_BGV);
     if (math == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     p->math = math;
@@ -125,14 +128,15 @@ static int32_t RawDump(uint32_t kind, const void *value, uint8_t **bytes, uint32
     if (ret != HIFHE_BUFFER_TOO_SMALL) {
         return ret;
     }
-    *bytes = BSL_SAL_Malloc(n);
+    *bytes = HifheMalloc(n);
     if (*bytes == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     ret = (kind == HIFHE_TEXT_PLAIN) ? BgvSerDes_DumpPlaintext(value, *bytes, &n, HIFHE_BGV) :
                                        BgvSerDes_DumpCiphertext(value, *bytes, &n, HIFHE_BGV);
     if (ret != HIFHE_SUCCESS) {
-        BSL_SAL_Free(*bytes);
+        HifheFree(*bytes);
         *bytes = NULL;
         return ret;
     }
@@ -143,10 +147,12 @@ static int32_t RawDump(uint32_t kind, const void *value, uint8_t **bytes, uint32
 static int32_t LoadBody(uint32_t kind, const uint8_t *in, uint32_t len, void *value, BGVContext *ctx)
 {
     if (len > HIFHE_MAX_WIRE - 12) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_LIMIT_EXCEEDED);
         return HIFHE_LIMIT_EXCEEDED;
     }
-    uint8_t *raw = BSL_SAL_Calloc(1, len + 12);
+    uint8_t *raw = HifheCalloc(1, len + 12);
     if (raw == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     Hifhe_Put32(raw, HIFHE_SERDES_MAGIC);
@@ -161,10 +167,11 @@ static int32_t LoadBody(uint32_t kind, const uint8_t *in, uint32_t len, void *va
             type == HIFHE_SERDES_TYPE_PLAINTEXT ? BgvSerDes_PlaintextSize(value) : BgvSerDes_CiphertextSize(value);
         if (expected != len + 12) {
             ret = HIFHE_SERDES_FAIL;
+            HIFHE_ERR_PUSH_ERROR(ret);
         }
     }
-    BSL_SAL_CleanseData(raw, len + 12);
-    BSL_SAL_Free(raw);
+    HifheCleanse(raw, len + 12);
+    HifheFree(raw);
     return ret;
 }
 
@@ -174,17 +181,19 @@ static int32_t BgvEncode(const HIFHE_Ctx *ctx, const void *values, uint32_t coun
     uint32_t n = math->bgv.params.rlweParameter.polyDegree;
     for (uint32_t i = 0; i < count; i++) {
         if (((const uint64_t *)values)[i] >= math->bgv.params.plainMod) {
-            return HIFHE_PARAM_INVALID;
+            HIFHE_ERR_PUSH_ERROR(HIFHE_VALUE_OUT_OF_RANGE);
+            return HIFHE_VALUE_OUT_OF_RANGE;
         }
     }
     if (out == NULL) {
         return 0;
     }
-    uint64_t *msg = BSL_SAL_Calloc(n, sizeof(*msg));
-    HifheBgvText *t = BSL_SAL_Calloc(1, sizeof(*t));
+    uint64_t *msg = HifheCalloc(n, sizeof(*msg));
+    HifheBgvText *t = HifheCalloc(1, sizeof(*t));
     if (msg == NULL || t == NULL) {
-        BSL_SAL_Free(msg);
-        BSL_SAL_Free(t);
+        HifheFree(msg);
+        HifheFree(t);
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     t->meta.kind = HIFHE_TEXT_PLAIN;
@@ -192,8 +201,8 @@ static int32_t BgvEncode(const HIFHE_Ctx *ctx, const void *values, uint32_t coun
     Encoder enc;
     BGV_Encoder_Create(&enc, &math->bgv.context);
     int32_t ret = BGV_Encoder_Encode(&t->value.plaintext, msg, n, &enc);
-    BSL_SAL_CleanseData(msg, n * sizeof(*msg));
-    BSL_SAL_Free(msg);
+    HifheCleanse(msg, n * sizeof(*msg));
+    HifheFree(msg);
     return FinishText(t, ret, out);
 }
 
@@ -202,8 +211,9 @@ static int32_t BgvDecode(const HIFHE_Ctx *ctx, const void *data, void *values, u
     const HifheBgvText *t = data;
     CRYPT_BGV_Ctx *math = ctx->params->math;
     uint32_t n = math->bgv.params.rlweParameter.polyDegree;
-    uint64_t *msg = BSL_SAL_Calloc(n, sizeof(*msg));
+    uint64_t *msg = HifheCalloc(n, sizeof(*msg));
     if (msg == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     Plaintext view = t->value.plaintext;
@@ -215,14 +225,14 @@ static int32_t BgvDecode(const HIFHE_Ctx *ctx, const void *data, void *values, u
         memcpy(values, msg, (size_t)n * sizeof(*msg));
         *count = ctx->params->config.slots;
     }
-    BSL_SAL_CleanseData(msg, n * sizeof(*msg));
-    BSL_SAL_Free(msg);
+    HifheCleanse(msg, n * sizeof(*msg));
+    HifheFree(msg);
     return ret;
 }
 
 static HifheBgvText *CiphertextNew(const HIFHE_Ctx *ctx, const HifheBgvText *input)
 {
-    HifheBgvText *text = BSL_SAL_Calloc(1, sizeof(*text));
+    HifheBgvText *text = HifheCalloc(1, sizeof(*text));
     if (text == NULL) {
         return NULL;
     }
@@ -238,6 +248,7 @@ static int32_t BgvEncrypt(const HIFHE_Ctx *ctx, const void *data, void **out)
     CRYPT_BGV_Ctx *runtime = ctx->data;
     HifheBgvText *text = CiphertextNew(ctx, NULL);
     if (text == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     Plaintext view = plaintext->value.plaintext;
@@ -252,8 +263,9 @@ static int32_t BgvDecrypt(const HIFHE_Ctx *ctx, const void *data, void **out)
 {
     const HifheBgvText *ciphertext = data;
     CRYPT_BGV_Ctx *runtime = ctx->data;
-    HifheBgvText *text = BSL_SAL_Calloc(1, sizeof(*text));
+    HifheBgvText *text = HifheCalloc(1, sizeof(*text));
     if (text == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     text->meta.kind = HIFHE_TEXT_PLAIN;
@@ -272,6 +284,7 @@ static int32_t BgvAdd(const HIFHE_Ctx *ctx, const void *para1, const void *para2
     BGVContext *math = &runtime->bgv.context;
     HifheBgvText *text = CiphertextNew(ctx, a);
     if (text == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     Ciphertext av = a->value.ciphertext, negative = {0};
@@ -309,12 +322,14 @@ static int32_t BgvMul(const HIFHE_Ctx *ctx, const void *para1, const void *para2
 {
     const HifheBgvText *a = para1, *b = para2;
     if (b->meta.kind != HIFHE_TEXT_PLAIN) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NOT_SUPPORTED);
         return HIFHE_NOT_SUPPORTED;
     }
     CRYPT_BGV_Ctx *runtime = ctx->data;
     BGVContext *math = &runtime->bgv.context;
     HifheBgvText *text = CiphertextNew(ctx, a);
     if (text == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     Ciphertext av = a->value.ciphertext;
@@ -333,6 +348,7 @@ static int32_t BgvRerandomize(const HIFHE_Ctx *ctx, const void *data, void **out
     CRYPT_BGV_Ctx *runtime = ctx->data;
     HifheBgvText *text = CiphertextNew(ctx, ciphertext);
     if (text == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     Ciphertext view = ciphertext->value.ciphertext;
@@ -360,6 +376,9 @@ static int32_t BgvSerialize(const HIFHE_Ctx *ctx, const void *data, uint8_t *out
     uint32_t need = rawLen - 12 + 8;
     if (out == NULL || *len < need) {
         *len = need;
+        if (out != NULL) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_BUFFER_TOO_SMALL);
+        }
         return HIFHE_BUFFER_TOO_SMALL;
     }
     uint8_t *raw = NULL;
@@ -370,8 +389,8 @@ static int32_t BgvSerialize(const HIFHE_Ctx *ctx, const void *data, uint8_t *out
     Hifhe_Put32(out, t->meta.depth);
     Hifhe_Put32(out + 4, caps);
     memcpy(out + 8, raw + 12, rawLen - 12);
-    BSL_SAL_CleanseData(raw, rawLen);
-    BSL_SAL_Free(raw);
+    HifheCleanse(raw, rawLen);
+    HifheFree(raw);
     *len = need;
     return 0;
 }
@@ -379,15 +398,18 @@ static int32_t BgvSerialize(const HIFHE_Ctx *ctx, const void *data, uint8_t *out
 static int32_t BgvDeserialize(const HIFHE_Ctx *ctx, uint32_t kind, const uint8_t *in, uint32_t len, void **out)
 {
     if (len < 8) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     uint32_t depth = Hifhe_Get32(in), caps = Hifhe_Get32(in + 4);
     if (depth > ctx->params->config.mulDepth || (kind == HIFHE_TEXT_PLAIN && depth != 0) || caps != HIFHE_CAP_LUT) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
     CRYPT_BGV_Ctx *math = ctx->params->math;
-    HifheBgvText *t = BSL_SAL_Calloc(1, sizeof(*t));
+    HifheBgvText *t = HifheCalloc(1, sizeof(*t));
     if (t == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     t->meta.kind = kind;
@@ -406,6 +428,7 @@ static int32_t BgvDeserialize(const HIFHE_Ctx *ctx, uint32_t kind, const uint8_t
         if (ret == HIFHE_SUCCESS &&
             Kernel_ModInv(pt->config.scaleFactor % math->bgv.params.plainMod, math->bgv.params.plainMod) == 0) {
             ret = HIFHE_SERDES_FAIL;
+            HIFHE_ERR_PUSH_ERROR(ret);
         }
     } else if (ret == HIFHE_SUCCESS) {
         Ciphertext *ct = &t->value.ciphertext;
@@ -421,6 +444,7 @@ static int32_t BgvDeserialize(const HIFHE_Ctx *ctx, uint32_t kind, const uint8_t
         if (ret == HIFHE_SUCCESS &&
             Kernel_ModInv(ct->config.correctionFactor % math->bgv.params.plainMod, math->bgv.params.plainMod) == 0) {
             ret = HIFHE_SERDES_FAIL;
+            HIFHE_ERR_PUSH_ERROR(ret);
         }
     }
     return FinishText(t, ret, out);
@@ -467,18 +491,23 @@ static int32_t BgvCheckCtrlArgs(const HIFHE_Ctx *ctx, int32_t cmd, const HIFHE_H
         case HIFHE_CTRL_BGV_GET_CIPHERTEXT_LEN:
             break;
         default:
+            HIFHE_ERR_PUSH_ERROR(HIFHE_NOT_SUPPORTED);
             return HIFHE_NOT_SUPPORTED;
     }
     if (cmd != HIFHE_CTRL_GET_OUTPUT_LEN && text != NULL) {
-        return HIFHE_PARAM_INVALID;
+        HIFHE_ERR_PUSH_ERROR(HIFHE_INVALID_ARGUMENT);
+        return HIFHE_INVALID_ARGUMENT;
     }
     if (value == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (valueLen != expectedLen) {
-        return HIFHE_PARAM_INVALID;
+        HIFHE_ERR_PUSH_ERROR(HIFHE_INVALID_LENGTH);
+        return HIFHE_INVALID_LENGTH;
     }
     if (cmd != HIFHE_CTRL_BGV_SET_LUT_CACHE && ctx->params == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_NOT_SET);
         return HIFHE_PARAM_NOT_SET;
     }
     return HIFHE_SUCCESS;
@@ -496,6 +525,7 @@ static int32_t BgvCtrl(HIFHE_Ctx *ctx, int32_t cmd, const HIFHE_HEText *text, vo
         case HIFHE_CTRL_GET_OUTPUT_LEN: {
             HifheOutputLen *query = value;
             if (query->op > HIFHE_OP_NOISE) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                 return HIFHE_PARAM_INVALID;
             }
             return BgvGetOutputSize(ctx, query->op, text != NULL ? text->data : NULL, &query->len);
@@ -504,9 +534,11 @@ static int32_t BgvCtrl(HIFHE_Ctx *ctx, int32_t cmd, const HIFHE_HEText *text, vo
             uint32_t enabled;
             memcpy(&enabled, value, sizeof(enabled));
             if (enabled > 1) {
-                return HIFHE_PARAM_INVALID;
+                HIFHE_ERR_PUSH_ERROR(HIFHE_VALUE_OUT_OF_RANGE);
+                return HIFHE_VALUE_OUT_OF_RANGE;
             }
             if (ctx->params != NULL) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_BAD_STATE);
                 return HIFHE_BAD_STATE;
             }
             ctx->useLutCache = enabled != 0;
@@ -514,6 +546,7 @@ static int32_t BgvCtrl(HIFHE_Ctx *ctx, int32_t cmd, const HIFHE_HEText *text, vo
         }
         case HIFHE_CTRL_BGV_SET_SEED: {
             if (ctx->keyMask != 0) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_BAD_STATE);
                 return HIFHE_BAD_STATE;
             }
             CRYPT_BGV_Ctx *runtime = ctx->data;
@@ -533,6 +566,7 @@ static int32_t BgvCtrl(HIFHE_Ctx *ctx, int32_t cmd, const HIFHE_HEText *text, vo
             return ret;
         }
         default:
+            HIFHE_ERR_PUSH_ERROR(HIFHE_NOT_SUPPORTED);
             return HIFHE_NOT_SUPPORTED;
     }
 }

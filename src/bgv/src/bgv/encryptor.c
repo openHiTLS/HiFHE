@@ -21,7 +21,8 @@
  */
 
 #include <string.h>
-#include "bsl_sal.h"
+#include "hifhe_mem.h"
+#include "hifhe_err_internal.h"
 #include "bgv/encryptor.h"
 #include "bgv/encoder.h"
 #include "bgv/params_check.h"
@@ -80,24 +81,24 @@ static HIFHE_ERROR SampleSmallCrtNtt(CrtPoly *out, BGVContext *ctx, const BgvEnt
     Int64Vector scratch;
     r = Int64Vector_Create(&scratch, NULL, N);
     if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_CleanseDestroy(out);
+        RLWE_CrtPoly_Destroy(out);
         return r;
     }
     r = ternary ? Kernel_Sampler_Ternary(scratch.data, N, src) : Kernel_Sampler_CBD(scratch.data, N, 2u, src);
     if (r != HIFHE_SUCCESS) {
         Int64Vector_Cleanse(&scratch);
-        RLWE_CrtPoly_CleanseDestroy(out);
+        RLWE_CrtPoly_Destroy(out);
         return r;
     }
     r = RLWE_CrtPoly_SetSigned(out, scratch.data);
     Int64Vector_Cleanse(&scratch);
     if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_CleanseDestroy(out);
+        RLWE_CrtPoly_Destroy(out);
         return r;
     }
     r = RLWE_CrtPoly_ToNtt(out);
     if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_CleanseDestroy(out);
+        RLWE_CrtPoly_Destroy(out);
         return r;
     }
     return HIFHE_SUCCESS;
@@ -108,6 +109,7 @@ static HIFHE_ERROR SampleSmallCrtNtt(CrtPoly *out, BGVContext *ctx, const BgvEnt
 HIFHE_ERROR BGV_Encryptor_CreateFromSecret(Encryptor *self, const SecretKey *sk, BGVContext *ctx)
 {
     if (self == NULL || sk == NULL || ctx == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     self->context = ctx;
@@ -119,6 +121,7 @@ HIFHE_ERROR BGV_Encryptor_CreateFromSecret(Encryptor *self, const SecretKey *sk,
 HIFHE_ERROR BGV_Encryptor_CreateFromPublic(Encryptor *self, const PublicKey *pk, const SecretKey *sk, BGVContext *ctx)
 {
     if (self == NULL || pk == NULL || ctx == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     self->context = ctx;
@@ -130,6 +133,7 @@ HIFHE_ERROR BGV_Encryptor_CreateFromPublic(Encryptor *self, const PublicKey *pk,
 HIFHE_ERROR BGV_Encryptor_Destroy(Encryptor *self)
 {
     if (self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     self->context = NULL;
@@ -202,6 +206,7 @@ err:
 HIFHE_ERROR BGV_Encryptor_EncryptZeroSymmetric(Ciphertext *out, const SecretKey *sk, const Encryptor *self)
 {
     if (out == NULL || sk == NULL || self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     /* Never the context seed: it would repeat `a` and fix the ciphertext.
@@ -226,7 +231,7 @@ HIFHE_ERROR BGV_Encryptor_EncryptZeroSymmetric(Ciphertext *out, const SecretKey 
     }
     r = SymCoreFromAE(out, &a, &e, &sk_view, self->context);
     RLWE_CrtPoly_Destroy(&a);
-    RLWE_CrtPoly_CleanseDestroy(&e);
+    RLWE_CrtPoly_Destroy(&e);
     RLWE_CrtPoly_Destroy(&sk_view);
     return r;
 }
@@ -281,6 +286,7 @@ err:
 HIFHE_ERROR BGV_Encryptor_EncryptZeroAsymmetric(Ciphertext *out, const PublicKey *pk, const Encryptor *self)
 {
     if (out == NULL || pk == NULL || self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     /* DRBG: under one seed u, e0 and e1 would come back identical. */
@@ -292,13 +298,13 @@ HIFHE_ERROR BGV_Encryptor_EncryptZeroAsymmetric(Ciphertext *out, const PublicKey
     }
     r = SampleSmallCrtNtt(&e0, self->context, &src, false);
     if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_CleanseDestroy(&u);
+        RLWE_CrtPoly_Destroy(&u);
         return r;
     }
     r = SampleSmallCrtNtt(&e1, self->context, &src, false);
     if (r != HIFHE_SUCCESS) {
-        RLWE_CrtPoly_CleanseDestroy(&u);
-        RLWE_CrtPoly_CleanseDestroy(&e0);
+        RLWE_CrtPoly_Destroy(&u);
+        RLWE_CrtPoly_Destroy(&e0);
         return r;
     }
     r = BGV_Ciphertext_GetCrtPolyAt(&pk0, 0u, pk);
@@ -311,9 +317,9 @@ HIFHE_ERROR BGV_Encryptor_EncryptZeroAsymmetric(Ciphertext *out, const PublicKey
     }
     r = AsymCoreFromNoise(out, &pk0, &pk1, &u, &e0, &e1, self->context);
 done:
-    RLWE_CrtPoly_CleanseDestroy(&u);
-    RLWE_CrtPoly_CleanseDestroy(&e0);
-    RLWE_CrtPoly_CleanseDestroy(&e1);
+    RLWE_CrtPoly_Destroy(&u);
+    RLWE_CrtPoly_Destroy(&e0);
+    RLWE_CrtPoly_Destroy(&e1);
     return r;
 }
 
@@ -322,6 +328,7 @@ done:
 static HIFHE_ERROR AddPtToC0(Ciphertext *ct, const Plaintext *pt)
 {
     if (pt->config.crtConfig.rnsbase.size != ct->config.crtConfig.rnsbase.size) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     uint32_t N = ct->context->rlweContext.parameter->polyDegree;
@@ -347,6 +354,7 @@ static HIFHE_ERROR AddPtToC0(Ciphertext *ct, const Plaintext *pt)
 HIFHE_ERROR BGV_Encryptor_EncryptSymmetric(Ciphertext *out, const Plaintext *pt, const Encryptor *self)
 {
     if (out == NULL || pt == NULL || self == NULL || self->sk == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     int32_t r = BGV_Encryptor_EncryptZeroSymmetric(out, self->sk, self);
@@ -364,6 +372,7 @@ HIFHE_ERROR BGV_Encryptor_EncryptSymmetric(Ciphertext *out, const Plaintext *pt,
 HIFHE_ERROR BGV_Encryptor_EncryptAsymmetric(Ciphertext *out, const Plaintext *pt, const Encryptor *self)
 {
     if (out == NULL || pt == NULL || self == NULL || self->pk == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     int32_t r = BGV_Encryptor_EncryptZeroAsymmetric(out, self->pk, self);
@@ -406,20 +415,24 @@ static void HornerStep(uint64_t *acc, const uint64_t *ck, const uint64_t *sp, co
 HIFHE_ERROR BGV_Encryptor_Decrypt(Plaintext *out, const Ciphertext *ct, const Encryptor *self)
 {
     if (out == NULL || ct == NULL || self == NULL || self->sk == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     uint32_t N = self->context->rlweContext.parameter->polyDegree;
     uint32_t L = ct->config.crtConfig.rnsbase.size;
     uint32_t sz = ct->config.ciphertextSize;
     if (sz < 2u || sz > HIFHE_BGV_MAX_CIPHERTEXT_SIZE) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_CT_DEGREE_MISMATCH);
         return HIFHE_CT_DEGREE_MISMATCH;
     }
     /* Both operands are multiplied as NTT values below. A coefficient-form
      * input would decrypt to nonsense and still report success. */
     if (ct->config.crtConfig.dtype != HIFHE_NTT || self->sk->config.crtConfig.dtype != HIFHE_NTT) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     if (L == 0u || L > HIFHE_BGV_MAX_CHAIN_LEN) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
@@ -430,6 +443,7 @@ HIFHE_ERROR BGV_Encryptor_Decrypt(Plaintext *out, const Ciphertext *ct, const En
         bc[i] = RLWE_RlweContext_GetBarrettByModulus(&self->context->rlweContext, q);
         tbl[i] = RLWE_RlweContext_GetNttTablesByModulus(&self->context->rlweContext, q);
         if (bc[i] == NULL || tbl[i] == NULL) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_INTERNAL);
             return HIFHE_INTERNAL;
         }
     }
@@ -454,9 +468,10 @@ HIFHE_ERROR BGV_Encryptor_Decrypt(Plaintext *out, const Ciphertext *ct, const En
     }
 
     size_t phaseWords = (size_t)L * N;
-    uint64_t *phase = (uint64_t *)BSL_SAL_Malloc((uint32_t)(phaseWords * sizeof(uint64_t)));
+    uint64_t *phase = (uint64_t *)HifheMalloc((uint32_t)(phaseWords * sizeof(uint64_t)));
     if (phase == NULL) {
         BGV_Plaintext_Destroy(out);
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
 
@@ -493,10 +508,10 @@ HIFHE_ERROR BGV_Encryptor_Decrypt(Plaintext *out, const Ciphertext *ct, const En
     for (uint32_t i = 0; i < L && rc == HIFHE_SUCCESS; ++i) {
         rc = Kernel_Ntt_Forward(out->data + (size_t)i * N, tbl[i]);
     }
-    BSL_SAL_CleanseData(phase, (uint32_t)(phaseWords * sizeof(uint64_t)));
-    BSL_SAL_Free(phase);
+    HifheCleanse(phase, (uint32_t)(phaseWords * sizeof(uint64_t)));
+    HifheFree(phase);
     if (rc != HIFHE_SUCCESS) {
-        BSL_SAL_CleanseData(out->data, out->dataSize * (uint32_t)sizeof(uint64_t));
+        HifheCleanse(out->data, out->dataSize * (uint32_t)sizeof(uint64_t));
         BGV_Plaintext_Destroy(out);
         return rc;
     }

@@ -27,8 +27,12 @@
  * multiplications and a subtraction. Coefficients stay in [0, 4q) between
  * layers and are reduced in one closing pass. Both require q < 2^62;
  * Kernel_Prime_FindProth caps bits at 62.
+ *
+ * Coefficients are secret. Every reduction here goes through
+ * Kernel_CondSubInl, which selects by mask and not by branch.
  */
 
+#include "hifhe_err_internal.h"
 #include "kernel/ntt.h"
 #include "kernel/modulus.h"
 #include "kernel/prime.h"
@@ -98,9 +102,11 @@ static HIFHE_ERROR FillStruct(NttTables *tbl, const uint64_t *buf, Modulus q, ui
 HIFHE_ERROR Kernel_Ntt_AttachTables(NttTables *tbl, const uint64_t *buf, Modulus q, uint32_t polyDegree)
 {
     if (tbl == NULL || buf == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (polyDegree == 0u || (polyDegree & (polyDegree - 1u)) != 0u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     return FillStruct(tbl, buf, q, polyDegree);
@@ -109,14 +115,19 @@ HIFHE_ERROR Kernel_Ntt_AttachTables(NttTables *tbl, const uint64_t *buf, Modulus
 HIFHE_ERROR Kernel_Ntt_BuildTables(NttTables *tbl, uint64_t *buf, Modulus q, uint32_t polyDegree)
 {
     if (tbl == NULL || buf == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (polyDegree == 0u || (polyDegree & (polyDegree - 1u)) != 0u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     uint64_t psi = 0u;
+    /* The root search answers without reporting, since most of its callers are
+     * probing. Here a modulus without a root is a failure, so report it. */
     int32_t ret = Kernel_Prime_PrimitiveRoot2N(&psi, q, polyDegree);
     if (ret != HIFHE_SUCCESS) {
+        HIFHE_ERR_PUSH_ERROR(ret);
         return ret;
     }
     uint64_t psiInv = InvMod(psi, q);
@@ -140,9 +151,9 @@ HIFHE_ERROR Kernel_Ntt_BuildTables(NttTables *tbl, uint64_t *buf, Modulus q, uin
     powInv[0] = 1u % q;
     for (uint32_t j = 1; j < polyDegree; ++j) {
         uint64_t v = ShoupMulLazy(pow[j - 1u], psi, psiQuot, q);
-        pow[j] = (v >= q) ? v - q : v;
+        pow[j] = Kernel_CondSubInl(v, q);
         v = ShoupMulLazy(powInv[j - 1u], psiInv, psiInvQuot, q);
-        powInv[j] = (v >= q) ? v - q : v;
+        powInv[j] = Kernel_CondSubInl(v, q);
     }
     /* Incremental bit reversal: add 1 at the top bit, propagating the carry
      * downwards. */
@@ -174,6 +185,7 @@ HIFHE_ERROR Kernel_Ntt_BuildTables(NttTables *tbl, uint64_t *buf, Modulus q, uin
 HIFHE_ERROR Kernel_Ntt_Forward(uint64_t *a, const NttTables *tbl)
 {
     if (a == NULL || tbl == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     Modulus q = tbl->q;
@@ -189,10 +201,7 @@ HIFHE_ERROR Kernel_Ntt_Forward(uint64_t *a, const NttTables *tbl)
             uint64_t w = tbl->roots[m + i];
             uint64_t wq = tbl->rootsQuot[m + i];
             for (uint32_t j = j1; j < j2; ++j) {
-                uint64_t x = a[j];
-                if (x >= q2) {
-                    x -= q2;
-                }
+                uint64_t x = Kernel_CondSubInl(a[j], q2);
                 uint64_t y = ShoupMulLazy(a[j + t], w, wq, q);
                 a[j] = x + y;
                 a[j + t] = x - y + q2;
@@ -204,37 +213,16 @@ HIFHE_ERROR Kernel_Ntt_Forward(uint64_t *a, const NttTables *tbl)
     if (N >= 2u) {
         for (uint32_t i = 0; i < mLast; ++i) {
             uint32_t j = 2u * i;
-            uint64_t x = a[j];
-            if (x >= q2) {
-                x -= q2;
-            }
+            uint64_t x = Kernel_CondSubInl(a[j], q2);
             uint64_t y = ShoupMulLazy(a[j + 1u], tbl->roots[mLast + i], tbl->rootsQuot[mLast + i], q);
-            uint64_t u = x + y;
-            uint64_t v = x - y + q2;
-            if (u >= q2) {
-                u -= q2;
-            }
-            if (u >= q) {
-                u -= q;
-            }
-            if (v >= q2) {
-                v -= q2;
-            }
-            if (v >= q) {
-                v -= q;
-            }
-            a[j] = u;
-            a[j + 1u] = v;
+            uint64_t u = Kernel_CondSubInl(x + y, q2);
+            uint64_t v = Kernel_CondSubInl(x - y + q2, q2);
+            a[j] = Kernel_CondSubInl(u, q);
+            a[j + 1u] = Kernel_CondSubInl(v, q);
         }
     } else {
-        uint64_t v = a[0];
-        if (v >= q2) {
-            v -= q2;
-        }
-        if (v >= q) {
-            v -= q;
-        }
-        a[0] = v;
+        uint64_t v = Kernel_CondSubInl(a[0], q2);
+        a[0] = Kernel_CondSubInl(v, q);
     }
     return HIFHE_SUCCESS;
 }
@@ -247,6 +235,7 @@ HIFHE_ERROR Kernel_Ntt_Forward(uint64_t *a, const NttTables *tbl)
 HIFHE_ERROR Kernel_Ntt_Inverse(uint64_t *a, const NttTables *tbl)
 {
     if (a == NULL || tbl == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     Modulus q = tbl->q;
@@ -256,7 +245,7 @@ HIFHE_ERROR Kernel_Ntt_Inverse(uint64_t *a, const NttTables *tbl)
 
     if (N == 1u) {
         uint64_t v = ShoupMulLazy(a[0], nInv, nInvQ, q);
-        a[0] = (v >= q) ? v - q : v;
+        a[0] = Kernel_CondSubInl(v, q);
         return HIFHE_SUCCESS;
     }
 
@@ -270,11 +259,7 @@ HIFHE_ERROR Kernel_Ntt_Inverse(uint64_t *a, const NttTables *tbl)
             uint64_t wq = tbl->invRootsQuot[h + i];
             for (uint32_t j = j1; j < j2; ++j) {
                 uint64_t x = a[j], y = a[j + t];
-                uint64_t u = x + y;
-                if (u >= q2) {
-                    u -= q2;
-                }
-                a[j] = u;
+                a[j] = Kernel_CondSubInl(x + y, q2);
                 a[j + t] = ShoupMulLazy(x - y + q2, w, wq, q);
             }
             j1 = j1 + 2u * t;
@@ -289,23 +274,11 @@ HIFHE_ERROR Kernel_Ntt_Inverse(uint64_t *a, const NttTables *tbl)
     uint64_t wq = tbl->lastInvScaledQuot;
     for (uint32_t j = 0; j < t; ++j) {
         uint64_t x = a[j], y = a[j + t];
-        uint64_t u = x + y;
-        if (u >= q2) {
-            u -= q2;
-        }
+        uint64_t u = Kernel_CondSubInl(x + y, q2);
         uint64_t v = x - y + q2;
 
-        uint64_t ru = ShoupMulLazy(u, nInv, nInvQ, q);
-        if (ru >= q) {
-            ru -= q;
-        }
-        uint64_t rv = ShoupMulLazy(v, w, wq, q);
-        if (rv >= q) {
-            rv -= q;
-        }
-
-        a[j] = ru;
-        a[j + t] = rv;
+        a[j] = Kernel_CondSubInl(ShoupMulLazy(u, nInv, nInvQ, q), q);
+        a[j + t] = Kernel_CondSubInl(ShoupMulLazy(v, w, wq, q), q);
     }
     return HIFHE_SUCCESS;
 }

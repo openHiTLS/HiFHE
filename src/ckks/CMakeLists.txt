@@ -18,14 +18,12 @@ target_include_directories(hifhe_ckks_objects PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${HITLS_ROOT_PATH}/config/macro_config
     ${HITLS_ROOT_PATH}/conf/macro_config
-    ${HITLS_ROOT_PATH}/bsl/err/include
     ${HITLS_ROOT_PATH}/bsl/include
     ${HITLS_ROOT_PATH}/bsl/sal/include
     ${HITLS_ROOT_PATH}/crypto/bn/include
     ${HITLS_ROOT_PATH}/crypto/include
 )
 target_compile_definitions(hifhe_ckks_objects PRIVATE
-    HITLS_BSL_ERR
     HITLS_BSL_SAL
     HITLS_BSL_SAL_MEM
     HITLS_CRYPTO_BN

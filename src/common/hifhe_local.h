@@ -18,7 +18,7 @@
 #include <string.h>
 #include "hifhe.h"
 #include "hifhe_config.h"
-#include "bsl_sal.h"
+#include "hifhe_mem.h"
 #define HIFHE_WIRE_HEADER 76u
 #define HIFHE_MAX_WIRE    (64u * 1024u * 1024u)
 #define HIFHE_TEXT_PLAIN  4u

@@ -12,16 +12,25 @@
 
 #include <math.h>
 #include "hifhe_local.h"
+#include "hifhe_err_internal.h"
+#include "crypt_errno.h"
 #include "ckks_local.h"
 #include "crypt_ckks.h"
-#include "crypt_errno.h"
 
 static int32_t Error(int32_t ret)
 {
     if (ret == HIFHE_SUCCESS || ((uint32_t)ret >= 0x39000001u && (uint32_t)ret <= 0x390001ffu)) {
         return ret;
     }
-    return ret == CRYPT_MEM_ALLOC_FAIL ? HIFHE_MEMORY_ERROR : HIFHE_INTERNAL;
+    if (ret == CRYPT_MEM_ALLOC_FAIL) {
+        ret = HIFHE_MEMORY_ERROR;
+    } else if (ret == CRYPT_NULL_INPUT) {
+        ret = HIFHE_NULL_INPUT;
+    } else {
+        ret = HIFHE_INTERNAL;
+    }
+    HIFHE_ERR_PUSH_ERROR(ret);
+    return ret;
 }
 
 typedef struct {
@@ -56,7 +65,7 @@ static void CkksTextFree(void *data)
         CKKS_FreePoly(t->value.ciphertext.c0);
         CKKS_FreePoly(t->value.ciphertext.c1);
     }
-    BSL_SAL_Free(t);
+    HifheFree(t);
 }
 
 static void CkksCtxFree(void *data)
@@ -76,18 +85,20 @@ static void *CkksCtxDup(void *data, void *libCtx)
 static int32_t CkksCtxNew(HifheParamSnapshot *p, void *libCtx, void **out)
 {
     if (!p->config.isCkks) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NOT_SUPPORTED);
         return HIFHE_NOT_SUPPORTED;
     }
     const uint32_t *v = p->config.ckks;
     CRYPT_CkksPara config = {v[0], v[1], v[2], (double)v[3] / 1000.0, v[4]};
     CRYPT_CKKS_Ctx *math = CRYPT_CKKS_NewCtx();
     if (math == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     p->math = math;
     int32_t ret = CRYPT_CKKS_SetPara(math, &config);
     if (ret != HIFHE_SUCCESS) {
-        return ret == CRYPT_MEM_ALLOC_FAIL ? HIFHE_MEMORY_ERROR : HIFHE_PARAM_INVALID;
+        return Error(ret);
     }
     uint8_t canonical[24] = {0};
     Hifhe_Put32(canonical, HIFHE_CKKS);
@@ -99,7 +110,11 @@ static int32_t CkksCtxNew(HifheParamSnapshot *p, void *libCtx, void **out)
         return ret;
     }
     *out = CkksCtxDup(p->math, libCtx);
-    return *out == NULL ? HIFHE_MEMORY_ERROR : HIFHE_SUCCESS;
+    if (*out == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
+        return HIFHE_MEMORY_ERROR;
+    }
+    return HIFHE_SUCCESS;
 }
 
 static int32_t CkksKeyGen(void *data)
@@ -112,6 +127,7 @@ static int32_t WriteCoeffs(BN_BigNum **coeffs, uint32_t n, uint32_t width, uint8
     for (uint32_t i = 0; i < n; i++) {
         out[0] = BN_IsNegative(coeffs[i]) != 0 ? 1 : 0;
         if (BN_Bn2BinFixZero(coeffs[i], out + 1, width) != 0) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
             return HIFHE_PARAM_INVALID;
         }
         out += width + 1;
@@ -124,12 +140,15 @@ static int32_t ReadCoeffs(BN_BigNum **coeffs, uint32_t n, uint32_t bits, const u
     uint32_t width = (bits + 7) / 8;
     for (uint32_t i = 0; i < n; i++) {
         if (in[0] > 1 || BN_Bin2Bn(coeffs[i], in + 1, width) != 0 || BN_Bits(coeffs[i]) > bits) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
             return HIFHE_SERDES_FAIL;
         }
         if (in[0] != 0 && BN_IsZero(coeffs[i]) != 0) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
             return HIFHE_SERDES_FAIL;
         }
         if (BN_SetSign(coeffs[i], in[0] != 0) != 0) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
             return HIFHE_SERDES_FAIL;
         }
         in += width + 1;
@@ -142,7 +161,8 @@ static int32_t CkksEncode(const HIFHE_Ctx *ctx, const void *values, uint32_t cou
     CRYPT_CKKS_Ctx *math = ctx->params->math;
     uint32_t slots = math->para->slots;
     if (count == 0 || count > slots) {
-        return HIFHE_PARAM_INVALID;
+        HIFHE_ERR_PUSH_ERROR(HIFHE_INVALID_LENGTH);
+        return HIFHE_INVALID_LENGTH;
     }
     for (uint32_t i = 0; i < count; i++) {
         double complex value = ((const double complex *)values)[i];
@@ -150,17 +170,19 @@ static int32_t CkksEncode(const HIFHE_Ctx *ctx, const void *values, uint32_t cou
         double im = ldexp(cimag(value), (int)math->para->pBits);
         double limit = ldexp(1.0, (int)math->para->qBits - 1);
         if (isfinite(re) == 0 || isfinite(im) == 0 || fabs(re) >= limit || fabs(im) >= limit) {
-            return HIFHE_PARAM_INVALID;
+            HIFHE_ERR_PUSH_ERROR(HIFHE_VALUE_OUT_OF_RANGE);
+            return HIFHE_VALUE_OUT_OF_RANGE;
         }
     }
     if (out == NULL) {
         return 0;
     }
-    double complex *padded = BSL_SAL_Calloc(slots, sizeof(*padded));
-    HifheCkksText *t = BSL_SAL_Calloc(1, sizeof(*t));
+    double complex *padded = HifheCalloc(slots, sizeof(*padded));
+    HifheCkksText *t = HifheCalloc(1, sizeof(*t));
     if (padded == NULL || t == NULL) {
-        BSL_SAL_Free(padded);
-        BSL_SAL_Free(t);
+        HifheFree(padded);
+        HifheFree(t);
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     t->meta.kind = HIFHE_TEXT_PLAIN;
@@ -172,8 +194,8 @@ static int32_t CkksEncode(const HIFHE_Ctx *ctx, const void *values, uint32_t cou
         memcpy(padded, values, (size_t)count * sizeof(*padded));
         ret = CKKS_Encode(math, padded, slots, t->value.plaintext);
     }
-    BSL_SAL_CleanseData(padded, slots * sizeof(*padded));
-    BSL_SAL_Free(padded);
+    HifheCleanse(padded, slots * sizeof(*padded));
+    HifheFree(padded);
     if (ret != HIFHE_SUCCESS) {
         CkksTextFree(t);
         return Error(ret);
@@ -185,15 +207,16 @@ static int32_t CkksEncode(const HIFHE_Ctx *ctx, const void *values, uint32_t cou
 static int32_t CkksDecode(const HIFHE_Ctx *ctx, const void *data, void *out, uint32_t *count)
 {
     const HifheCkksText *t = data;
-    return CKKS_Decode(ctx->params->math, t->value.plaintext, out, count) == 0 ? 0 : HIFHE_DECODE_ERROR;
+    return Error(CKKS_Decode(ctx->params->math, t->value.plaintext, out, count));
 }
 
 static int32_t CkksEncrypt(const HIFHE_Ctx *ctx, const void *data, void **out)
 {
     const HifheCkksText *input = data;
     CRYPT_CKKS_Ctx *runtime = ctx->data;
-    HifheCkksText *text = BSL_SAL_Calloc(1, sizeof(*text));
+    HifheCkksText *text = HifheCalloc(1, sizeof(*text));
     if (text == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     text->meta.kind = HIFHE_TEXT_CIPHER;
@@ -218,8 +241,9 @@ static int32_t CkksDecrypt(const HIFHE_Ctx *ctx, const void *data, void **out)
 {
     const HifheCkksText *input = data;
     CRYPT_CKKS_Ctx *runtime = ctx->data;
-    HifheCkksText *text = BSL_SAL_Calloc(1, sizeof(*text));
+    HifheCkksText *text = HifheCalloc(1, sizeof(*text));
     if (text == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     text->meta.kind = HIFHE_TEXT_PLAIN;
@@ -246,6 +270,9 @@ static int32_t CkksSerialize(const HIFHE_Ctx *ctx, const void *data, uint8_t *ou
     uint32_t one = n * (width + 1), need = 8 + one * (t->meta.kind == HIFHE_TEXT_CIPHER ? 2 : 1);
     if (out == NULL || *len < need) {
         *len = need;
+        if (out != NULL) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_BUFFER_TOO_SMALL);
+        }
         return HIFHE_BUFFER_TOO_SMALL;
     }
     Hifhe_Put32(out, t->scaleBits);
@@ -267,10 +294,12 @@ static int32_t CkksDeserialize(const HIFHE_Ctx *ctx, uint32_t kind, const uint8_
     uint32_t n = math->para->N, bits = math->para->qBits;
     uint32_t one = n * ((bits + 7) / 8 + 1), need = 8 + one * (kind == HIFHE_TEXT_CIPHER ? 2 : 1);
     if (len != need || Hifhe_Get32(in) != math->para->pBits || Hifhe_Get32(in + 4) != math->para->slots) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
-    HifheCkksText *t = BSL_SAL_Calloc(1, sizeof(*t));
+    HifheCkksText *t = HifheCalloc(1, sizeof(*t));
     if (t == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     t->meta.kind = kind;
@@ -300,19 +329,24 @@ static int32_t CkksCtrl(HIFHE_Ctx *ctx, int32_t cmd, const HIFHE_HEText *text, v
 {
     (void)text;
     if (cmd != HIFHE_CTRL_GET_OUTPUT_LEN) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NOT_SUPPORTED);
         return HIFHE_NOT_SUPPORTED;
     }
     if (value == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (valueLen != sizeof(HifheOutputLen)) {
-        return HIFHE_PARAM_INVALID;
+        HIFHE_ERR_PUSH_ERROR(HIFHE_INVALID_LENGTH);
+        return HIFHE_INVALID_LENGTH;
     }
     if (ctx->params == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_NOT_SET);
         return HIFHE_PARAM_NOT_SET;
     }
     HifheOutputLen *query = value;
     if (query->op > HIFHE_OP_NOISE) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     CRYPT_CKKS_Ctx *math = ctx->params->math;

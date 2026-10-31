@@ -78,7 +78,7 @@ void SDV_CRYPTO_HIFHE_BGV_CONTEXT_CTRL_PROVIDER_TC001(int cmd)
     }
     ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, cmd, arg, argLen), HIFHE_SUCCESS);
     ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, cmd, NULL, argLen), HIFHE_NULL_INPUT);
-    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, cmd, arg, argLen - 1), HIFHE_PARAM_INVALID);
+    ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, cmd, arg, argLen - 1), HIFHE_INVALID_LENGTH);
     if (cmd == HIFHE_CTRL_BGV_SET_LUT_CACHE) {
         ASSERT_EQ(CRYPT_EAL_PkeySetParaById(ctx, (CRYPT_PKEY_ParaId)HIFHE_BGV_4096_44x2_17BIT), HIFHE_SUCCESS);
         ASSERT_EQ(CRYPT_EAL_PkeyCtrl(ctx, cmd, arg, argLen), HIFHE_BAD_STATE);
@@ -178,11 +178,11 @@ void SDV_CRYPTO_HIFHE_BGV_PROVIDER_TC001(void)
     BSL_Param encode[] = {{HIFHE_PARAM_BGV_MSG, BSL_PARAM_TYPE_OCTETS, bucket, sizeof(bucket), 0}, BSL_PARAM_END};
     uint64_t invalid = 65537;
     BSL_Param bad[] = {{HIFHE_PARAM_BGV_MSG, BSL_PARAM_TYPE_OCTETS, &invalid, sizeof(invalid), 0}, BSL_PARAM_END};
-    ASSERT_TRUE(CRYPT_EAL_PkeyHEMsgEncode(b, bad, NULL, &ptLen) == HIFHE_PARAM_INVALID);
+    ASSERT_TRUE(CRYPT_EAL_PkeyHEMsgEncode(b, bad, NULL, &ptLen) == HIFHE_VALUE_OUT_OF_RANGE);
     invalid = (UINT64_C(1) << 32) + 1;
-    ASSERT_EQ(CRYPT_EAL_PkeyHEMsgEncode(b, bad, NULL, &ptLen), HIFHE_PARAM_INVALID);
+    ASSERT_EQ(CRYPT_EAL_PkeyHEMsgEncode(b, bad, NULL, &ptLen), HIFHE_VALUE_OUT_OF_RANGE);
     invalid = UINT64_MAX;
-    ASSERT_EQ(CRYPT_EAL_PkeyHEMsgEncode(b, bad, NULL, &ptLen), HIFHE_PARAM_INVALID);
+    ASSERT_EQ(CRYPT_EAL_PkeyHEMsgEncode(b, bad, NULL, &ptLen), HIFHE_VALUE_OUT_OF_RANGE);
     ASSERT_TRUE(CRYPT_EAL_PkeyHEMsgEncode(b, encode, NULL, &ptLen) == HIFHE_BUFFER_TOO_SMALL);
     ptWire = malloc(ptLen);
     ASSERT_TRUE(ptWire != NULL);
@@ -190,7 +190,7 @@ void SDV_CRYPTO_HIFHE_BGV_PROVIDER_TC001(void)
     BSL_Param wrongKind[] = {{CRYPT_PARAM_PKEY_HE_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ptWire, ptLen, 0},
                              {HIFHE_PARAM_BGV_PLAINTEXT, BSL_PARAM_TYPE_OCTETS, ptWire, ptLen, 0},
                              BSL_PARAM_END};
-    ASSERT_TRUE(CRYPT_EAL_PkeyHEAdd(b, wrongKind, NULL, &resultLen) == HIFHE_PARAM_INVALID);
+    ASSERT_TRUE(CRYPT_EAL_PkeyHEAdd(b, wrongKind, NULL, &resultLen) == HIFHE_TEXT_TYPE_MISMATCH);
     uint8_t negative = 1;
     BSL_Param input[] = {{CRYPT_PARAM_PKEY_HE_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ctWire, ctLen, 0},
                          {HIFHE_PARAM_BGV_PLAINTEXT, BSL_PARAM_TYPE_OCTETS, ptWire, ptLen, 0},

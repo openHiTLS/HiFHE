@@ -27,7 +27,6 @@ target_include_directories(hifhe_bgv_objects PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src/include
     ${HITLS_ROOT_PATH}/config/macro_config
     ${HITLS_ROOT_PATH}/conf/macro_config
-    ${HITLS_ROOT_PATH}/bsl/err/include
     ${HITLS_ROOT_PATH}/bsl/include
     ${HITLS_ROOT_PATH}/bsl/sal/include
     ${HITLS_ROOT_PATH}/crypto/bn/include
@@ -35,7 +34,6 @@ target_include_directories(hifhe_bgv_objects PRIVATE
     ${HITLS_ROOT_PATH}/crypto/include
 )
 target_compile_definitions(hifhe_bgv_objects PRIVATE
-    HITLS_BSL_ERR
     HITLS_BSL_SAL
     HITLS_BSL_SAL_MEM
     HITLS_CRYPTO_BGV

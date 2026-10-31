@@ -1085,7 +1085,8 @@ EXIT:
 /* @
 * @test  SDV_CRYPTO_HIFHE_BGV_PARAM_CHECK_TC001
 * @title  Parameter admissibility checks reject a non-power-of-two ring, an
-*         over-long RNS chain, and a modulus budget past the security limit.
+*         over-long RNS chain, a modulus budget past the security limit, and
+*         an incomplete set, all at the call that supplied them.
 * @auto  TRUE
 @ */
 /* BEGIN_CASE */
@@ -1117,19 +1118,44 @@ void SDV_CRYPTO_HIFHE_BGV_PARAM_CHECK_TC001(void)
                       BSL_PARAM_END};
     ASSERT_EQ(CRYPT_BGV_SetParaEx(ctx, p2), HIFHE_PARAM_INVALID);
 
-    /* Accepted at SetPara, rejected at context build: 4 x 44 = 176 bits is
-     * far past the 54-bit budget for N = 2048 at 128-bit security. */
+    /* 4 x 44 = 176 bits is far past the 54-bit budget for N = 2048 at
+     * 128-bit security. */
     uint32_t small = 2048u;
     uint32_t bits4[4] = {44u, 44u, 44u, 44u};
     BSL_Param p3[] = {{HIFHE_PARAM_BGV_POLY_DEGREE, BSL_PARAM_TYPE_UINT32, &small, sizeof(small), 0},
                       {HIFHE_PARAM_BGV_PLAIN_MOD_BIT, BSL_PARAM_TYPE_UINT32, &plainBits, sizeof(plainBits), 0},
                       {HIFHE_PARAM_BGV_CIPHER_MOD_BITS, BSL_PARAM_TYPE_OCTETS, bits4, sizeof(bits4), 0},
                       BSL_PARAM_END};
-    ASSERT_EQ(CRYPT_BGV_SetParaEx(ctx, p3), HIFHE_SUCCESS);
+
+    ASSERT_EQ(CRYPT_BGV_SetParaEx(ctx, p3), HIFHE_PARAM_INVALID);
+
+    /* No chain, and no plaintext modulus: both are needed to build a
+     * context, and neither has a default. */
+    BSL_Param p4[] = {{HIFHE_PARAM_BGV_POLY_DEGREE, BSL_PARAM_TYPE_UINT32, &small, sizeof(small), 0},
+                      {HIFHE_PARAM_BGV_PLAIN_MOD_BIT, BSL_PARAM_TYPE_UINT32, &plainBits, sizeof(plainBits), 0},
+                      BSL_PARAM_END};
+    ASSERT_EQ(CRYPT_BGV_SetParaEx(ctx, p4), HIFHE_PARAM_INVALID);
+
+    uint32_t bits1b[1] = {48u};
+    BSL_Param p5[] = {{HIFHE_PARAM_BGV_POLY_DEGREE, BSL_PARAM_TYPE_UINT32, &small, sizeof(small), 0},
+                      {HIFHE_PARAM_BGV_CIPHER_MOD_BITS, BSL_PARAM_TYPE_OCTETS, bits1b, sizeof(bits1b), 0},
+                      BSL_PARAM_END};
+    ASSERT_EQ(CRYPT_BGV_SetParaEx(ctx, p5), HIFHE_PARAM_INVALID);
+
+    /* A rejected set leaves nothing behind. */
     uint32_t degOut = 0u;
+    ASSERT_EQ(CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &degOut, sizeof(degOut)), HIFHE_PARAM_NOT_SET);
+    ASSERT_EQ(CRYPT_BGV_Gen(ctx), HIFHE_PARAM_NOT_SET);
+
+    /* And an admissible set goes through. */
+    BSL_Param p6[] = {{HIFHE_PARAM_BGV_POLY_DEGREE, BSL_PARAM_TYPE_UINT32, &small, sizeof(small), 0},
+                      {HIFHE_PARAM_BGV_PLAIN_MOD_BIT, BSL_PARAM_TYPE_UINT32, &plainBits, sizeof(plainBits), 0},
+                      {HIFHE_PARAM_BGV_CIPHER_MOD_BITS, BSL_PARAM_TYPE_OCTETS, bits1b, sizeof(bits1b), 0},
+                      BSL_PARAM_END};
+    ASSERT_EQ(CRYPT_BGV_SetParaEx(ctx, p6), HIFHE_SUCCESS);
     ASSERT_EQ(CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &degOut, sizeof(degOut)), HIFHE_SUCCESS);
     ASSERT_EQ(degOut, 2048u);
-    ASSERT_EQ(CRYPT_BGV_Gen(ctx), HIFHE_PARAM_INVALID);
+    ASSERT_EQ(CRYPT_BGV_Gen(ctx), HIFHE_SUCCESS);
 EXIT:
     CRYPT_BGV_FreeCtx(ctx);
 }
@@ -3048,9 +3074,9 @@ void SDV_CRYPTO_HIFHE_BGV_CONFIG_COPY_OOM_TC001(void)
     src.dtype = HIFHE_NTT;
 
     TestMemInit();
-    ASSERT_EQ(BSL_SAL_CallBack_Ctrl(BSL_SAL_MEM_MALLOC, NoMalloc), BSL_SUCCESS);
+    ASSERT_EQ(HIFHE_SetMemFuncs(NoMalloc, free), HIFHE_SUCCESS);
     r = RLWE_CrtPolyConfig_Copy(&dst, &src);
-    (void)BSL_SAL_CallBack_Ctrl(BSL_SAL_MEM_MALLOC, NULL);
+    (void)HIFHE_SetMemFuncs(NULL, NULL);
     ASSERT_EQ(r, HIFHE_MEMORY_ERROR);
     ASSERT_EQ(dst.rnsbase.size, 0u);
 
@@ -3058,7 +3084,7 @@ void SDV_CRYPTO_HIFHE_BGV_CONFIG_COPY_OOM_TC001(void)
     ASSERT_EQ(dst.rnsbase.size, 2u);
     ASSERT_EQ(dst.rnsbase.data[1], 193u);
 EXIT:
-    (void)BSL_SAL_CallBack_Ctrl(BSL_SAL_MEM_MALLOC, NULL);
+    (void)HIFHE_SetMemFuncs(NULL, NULL);
     RLWE_CrtPolyConfig_Destroy(&dst);
 }
 /* END_CASE */
@@ -4702,6 +4728,125 @@ void SDV_CRYPTO_HIFHE_BGV_SEEDED_GADGET_LABEL_TC001(void)
     ASSERT_TRUE(memcmp(a3, inner->bgv.relinKeys.pieces[1].data + (size_t)L * n, n * sizeof(uint64_t)) == 0);
 EXIT:
     BSL_SAL_Free(a3);
+    CRYPT_BGV_FreeCtx(ctx);
+}
+/* END_CASE */
+
+/* @
+* @test  SDV_CRYPTO_HIFHE_BGV_HE_OPERAND_COUNT_TC001
+* @title  HEAdd and HEMul take one second operand and refuse a set that names more than one.
+* @brief  Both pick their operation from the parameters present. A set naming
+*         several of them has no single meaning, so it is rejected instead of
+*         served by whichever the dispatch reaches first.
+* @auto  TRUE
+@ */
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_HE_OPERAND_COUNT_TC001(void)
+{
+    CRYPT_BGV_Ctx *ctx = NULL;
+    uint64_t *msg = NULL;
+    uint8_t *pt = NULL, *ct1 = NULL, *ct2 = NULL, *out = NULL;
+    uint8_t marker = 1u;
+    uint64_t scalar = 3u;
+
+    TestMemInit();
+    TestRandInit();
+    ctx = BgvNewCtx(HIFHE_BGV_2048_48_17BIT);
+    ASSERT_TRUE(ctx != NULL);
+    ASSERT_EQ(CRYPT_BGV_Gen(ctx), HIFHE_SUCCESS);
+
+    BgvDims d;
+    ASSERT_EQ(BgvDimsGet(ctx, &d), 0);
+    msg = (uint64_t *)BSL_SAL_Malloc(d.msgLen);
+    pt = (uint8_t *)BSL_SAL_Malloc(d.ptLen);
+    ct1 = (uint8_t *)BSL_SAL_Malloc(d.ctLen);
+    ct2 = (uint8_t *)BSL_SAL_Malloc(d.ctLen);
+    out = (uint8_t *)BSL_SAL_Malloc(d.ctLen);
+    ASSERT_TRUE(msg && pt && ct1 && ct2 && out);
+    for (uint32_t i = 0; i < d.n; ++i) {
+        msg[i] = (i + 1u) % d.t;
+    }
+    uint32_t ptL = 0u;
+    ASSERT_EQ(BgvEncode(ctx, msg, d.msgLen, pt, d.ptLen, &ptL), 0);
+    uint32_t len = d.ctLen;
+    ASSERT_EQ(CRYPT_BGV_Encrypt(ctx, pt, ptL, ct1, &len), HIFHE_SUCCESS);
+    uint32_t ct1L = len;
+    len = d.ctLen;
+    ASSERT_EQ(CRYPT_BGV_Encrypt(ctx, pt, ptL, ct2, &len), HIFHE_SUCCESS);
+    uint32_t ct2L = len;
+
+    /* Negate plus a second ciphertext: the negation alone used to be
+     * returned, reporting success. */
+    BSL_Param negAndCt[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
+                            {HIFHE_PARAM_BGV_CIPHERTEXT2, BSL_PARAM_TYPE_OCTETS, ct2, ct2L, 0},
+                            {HIFHE_PARAM_BGV_NEGATE, BSL_PARAM_TYPE_OCTETS, &marker, 1u, 0},
+                            BSL_PARAM_END};
+    len = d.ctLen;
+    ASSERT_EQ(CRYPT_BGV_HEAdd(ctx, negAndCt, out, &len), HIFHE_PARAM_INVALID);
+
+    BSL_Param negAndPt[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
+                            {HIFHE_PARAM_BGV_PLAINTEXT, BSL_PARAM_TYPE_OCTETS, pt, ptL, 0},
+                            {HIFHE_PARAM_BGV_NEGATE, BSL_PARAM_TYPE_OCTETS, &marker, 1u, 0},
+                            BSL_PARAM_END};
+    len = d.ctLen;
+    ASSERT_EQ(CRYPT_BGV_HEAdd(ctx, negAndPt, out, &len), HIFHE_PARAM_INVALID);
+
+    BSL_Param ctAndPt[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
+                           {HIFHE_PARAM_BGV_CIPHERTEXT2, BSL_PARAM_TYPE_OCTETS, ct2, ct2L, 0},
+                           {HIFHE_PARAM_BGV_PLAINTEXT, BSL_PARAM_TYPE_OCTETS, pt, ptL, 0},
+                           BSL_PARAM_END};
+    len = d.ctLen;
+    ASSERT_EQ(CRYPT_BGV_HEAdd(ctx, ctAndPt, out, &len), HIFHE_PARAM_INVALID);
+    len = d.ctLen;
+    ASSERT_EQ(CRYPT_BGV_HEMul(ctx, ctAndPt, out, &len), HIFHE_PARAM_INVALID);
+
+    BSL_Param ptAndConst[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
+                              {HIFHE_PARAM_BGV_PLAINTEXT, BSL_PARAM_TYPE_OCTETS, pt, ptL, 0},
+                              {HIFHE_PARAM_BGV_CONSTANT, BSL_PARAM_TYPE_OCTETS, &scalar, sizeof(scalar), 0},
+                              BSL_PARAM_END};
+    len = d.ctLen;
+    ASSERT_EQ(CRYPT_BGV_HEMul(ctx, ptAndConst, out, &len), HIFHE_PARAM_INVALID);
+
+    /* No second operand at all. */
+    BSL_Param ctOnly[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0}, BSL_PARAM_END};
+    len = d.ctLen;
+    ASSERT_EQ(CRYPT_BGV_HEAdd(ctx, ctOnly, out, &len), HIFHE_PARAM_INVALID);
+    len = d.ctLen;
+    ASSERT_EQ(CRYPT_BGV_HEMul(ctx, ctOnly, out, &len), HIFHE_PARAM_INVALID);
+
+    /* Each operation on its own still runs. */
+    BSL_Param negOnly[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
+                           {HIFHE_PARAM_BGV_NEGATE, BSL_PARAM_TYPE_OCTETS, &marker, 1u, 0},
+                           BSL_PARAM_END};
+    len = d.ctLen;
+    ASSERT_EQ(CRYPT_BGV_HEAdd(ctx, negOnly, out, &len), HIFHE_SUCCESS);
+
+    BSL_Param twoCt[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
+                         {HIFHE_PARAM_BGV_CIPHERTEXT2, BSL_PARAM_TYPE_OCTETS, ct2, ct2L, 0},
+                         BSL_PARAM_END};
+    len = d.ctLen;
+    ASSERT_EQ(CRYPT_BGV_HEAdd(ctx, twoCt, out, &len), HIFHE_SUCCESS);
+
+    BSL_Param ctPt[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
+                        {HIFHE_PARAM_BGV_PLAINTEXT, BSL_PARAM_TYPE_OCTETS, pt, ptL, 0},
+                        BSL_PARAM_END};
+    len = d.ctLen;
+    ASSERT_EQ(CRYPT_BGV_HEAdd(ctx, ctPt, out, &len), HIFHE_SUCCESS);
+    len = d.ctLen;
+    ASSERT_EQ(CRYPT_BGV_HEMul(ctx, ctPt, out, &len), HIFHE_SUCCESS);
+
+    BSL_Param ctConst[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct1, ct1L, 0},
+                           {HIFHE_PARAM_BGV_CONSTANT, BSL_PARAM_TYPE_OCTETS, &scalar, sizeof(scalar), 0},
+                           BSL_PARAM_END};
+    len = d.ctLen;
+    ASSERT_EQ(CRYPT_BGV_HEMul(ctx, ctConst, out, &len), HIFHE_SUCCESS);
+
+EXIT:
+    BSL_SAL_Free(msg);
+    BSL_SAL_Free(pt);
+    BSL_SAL_Free(ct1);
+    BSL_SAL_Free(ct2);
+    BSL_SAL_Free(out);
     CRYPT_BGV_FreeCtx(ctx);
 }
 /* END_CASE */

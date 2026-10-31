@@ -15,7 +15,8 @@
 
 #include <stdbool.h>
 #include <string.h>
-#include "bsl_sal.h"
+#include "hifhe_mem.h"
+#include "hifhe_err_internal.h"
 #include "bgv/ciphertext.h"
 #include "rlwe/rlwe.h"
 #include "rlwe/crt_ops.h"
@@ -25,10 +26,12 @@ HIFHE_ERROR BGV_CiphertextConfig_Create(CiphertextConfig *out, uint32_t cipherte
                                         const RnsBase *rnsBase)
 {
     if (out == NULL || rnsBase == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     memset(out, 0, sizeof(*out));
     if (ciphertextSize < 2u || ciphertextSize > HIFHE_BGV_MAX_CIPHERTEXT_SIZE) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_CT_DEGREE_MISMATCH);
         return HIFHE_CT_DEGREE_MISMATCH;
     }
     int32_t r = Uint64Vector_Create(&out->crtConfig.rnsbase, rnsBase->data, rnsBase->size);
@@ -44,6 +47,7 @@ HIFHE_ERROR BGV_CiphertextConfig_Create(CiphertextConfig *out, uint32_t cipherte
 HIFHE_ERROR BGV_CiphertextConfig_Destroy(CiphertextConfig *self)
 {
     if (self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     RLWE_CrtPolyConfig_Destroy(&self->crtConfig);
@@ -57,6 +61,7 @@ HIFHE_ERROR BGV_CiphertextConfig_Destroy(CiphertextConfig *self)
 HIFHE_ERROR BGV_CiphertextConfig_Copy(CiphertextConfig *dst, const CiphertextConfig *src)
 {
     if (dst == NULL || src == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     BGV_CiphertextConfig_Destroy(dst);
@@ -74,6 +79,7 @@ HIFHE_ERROR BGV_CiphertextConfig_Copy(CiphertextConfig *dst, const CiphertextCon
 static HIFHE_ERROR CiphertextCreateImpl(Ciphertext *out, const CiphertextConfig *cfg, BGVContext *ctx, bool zeroed)
 {
     if (out == NULL || cfg == NULL || ctx == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     memset(out, 0, sizeof(*out));
@@ -83,10 +89,11 @@ static HIFHE_ERROR CiphertextCreateImpl(Ciphertext *out, const CiphertextConfig 
     }
     out->context = ctx;
     out->dataSize = BGV_Ciphertext_CalDataSize(cfg, ctx);
-    out->data = zeroed ? (uint64_t *)BSL_SAL_Calloc(out->dataSize, (uint32_t)sizeof(uint64_t)) :
-                         (uint64_t *)BSL_SAL_Malloc(out->dataSize * (uint32_t)sizeof(uint64_t));
+    out->data = zeroed ? (uint64_t *)HifheCalloc(out->dataSize, (uint32_t)sizeof(uint64_t)) :
+                         (uint64_t *)HifheMalloc(out->dataSize * (uint32_t)sizeof(uint64_t));
     if (out->data == NULL) {
         BGV_CiphertextConfig_Destroy(&out->config);
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     out->ownsData = 1u;
@@ -108,6 +115,7 @@ HIFHE_ERROR BGV_Ciphertext_CreateSize2Ntt(Ciphertext *out, uint64_t correctionFa
                                           BGVContext *ctx)
 {
     if (out == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     /* Zeroed up front so a failure here still leaves `out` safe to destroy. */
@@ -126,9 +134,11 @@ HIFHE_ERROR BGV_Ciphertext_CreateSize2Ntt(Ciphertext *out, uint64_t correctionFa
 HIFHE_ERROR BGV_Ciphertext_Copy(Ciphertext *dst, const Ciphertext *src)
 {
     if (dst == NULL || src == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (src->context == NULL || src->data == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
 
@@ -139,6 +149,7 @@ HIFHE_ERROR BGV_Ciphertext_Copy(Ciphertext *dst, const Ciphertext *src)
     }
     if (fresh.dataSize != src->dataSize) {
         BGV_Ciphertext_Destroy(&fresh);
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     memcpy(fresh.data, src->data, src->dataSize * sizeof(uint64_t));
@@ -151,10 +162,11 @@ HIFHE_ERROR BGV_Ciphertext_Copy(Ciphertext *dst, const Ciphertext *src)
 HIFHE_ERROR BGV_Ciphertext_Destroy(Ciphertext *self)
 {
     if (self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (self->ownsData && self->data != NULL) {
-        BSL_SAL_Free(self->data);
+        HifheFree(self->data);
     }
     BGV_CiphertextConfig_Destroy(&self->config);
     self->data = NULL;
@@ -168,9 +180,11 @@ HIFHE_ERROR BGV_Ciphertext_Destroy(Ciphertext *self)
 HIFHE_ERROR BGV_Ciphertext_GetCrtPolyAt(CrtPoly *out, uint32_t index, const Ciphertext *self)
 {
     if (out == NULL || self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (index >= self->config.ciphertextSize) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     uint32_t sliceSz = RLWE_CrtPoly_CalDataSize(&self->config.crtConfig, &self->context->rlweContext);
@@ -190,13 +204,16 @@ static HIFHE_ERROR ForEachComponent(Ciphertext *out, const Ciphertext *a, const 
                                     HIFHE_ERROR (*op)(CrtPoly *, const CrtPoly *, const CrtPoly *))
 {
     if (out == NULL || a == NULL || b == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     uint32_t K = a->config.ciphertextSize;
     if (b->config.ciphertextSize != K) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_CT_DEGREE_MISMATCH);
         return HIFHE_CT_DEGREE_MISMATCH;
     }
     if (out->config.ciphertextSize != K) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_CT_DEGREE_MISMATCH);
         return HIFHE_CT_DEGREE_MISMATCH;
     }
     for (uint32_t k = 0; k < K; ++k) {
@@ -231,9 +248,11 @@ HIFHE_ERROR BGV_Ciphertext_Add(Ciphertext *out, const Ciphertext *a, const Ciphe
 HIFHE_ERROR BGV_Ciphertext_Neg(Ciphertext *out, const Ciphertext *a)
 {
     if (out == NULL || a == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (out->config.ciphertextSize != a->config.ciphertextSize) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_CT_DEGREE_MISMATCH);
         return HIFHE_CT_DEGREE_MISMATCH;
     }
     for (uint32_t k = 0; k < a->config.ciphertextSize; ++k) {
@@ -259,9 +278,11 @@ HIFHE_ERROR BGV_Ciphertext_Neg(Ciphertext *out, const Ciphertext *a)
 HIFHE_ERROR BGV_Ciphertext_MulScalar(Ciphertext *out, const Ciphertext *a, uint64_t x)
 {
     if (out == NULL || a == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (out->config.ciphertextSize != a->config.ciphertextSize) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_CT_DEGREE_MISMATCH);
         return HIFHE_CT_DEGREE_MISMATCH;
     }
     for (uint32_t k = 0; k < a->config.ciphertextSize; ++k) {
@@ -287,9 +308,11 @@ HIFHE_ERROR BGV_Ciphertext_MulScalar(Ciphertext *out, const Ciphertext *a, uint6
 HIFHE_ERROR BGV_Ciphertext_MulCrtPoly(Ciphertext *out, const Ciphertext *a, const CrtPoly *p)
 {
     if (out == NULL || a == NULL || p == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (out->config.ciphertextSize != a->config.ciphertextSize) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_CT_DEGREE_MISMATCH);
         return HIFHE_CT_DEGREE_MISMATCH;
     }
     for (uint32_t k = 0; k < a->config.ciphertextSize; ++k) {
@@ -315,6 +338,7 @@ HIFHE_ERROR BGV_Ciphertext_MulCrtPoly(Ciphertext *out, const Ciphertext *a, cons
 HIFHE_ERROR BGV_Ciphertext_AddCrtPolyAt(Ciphertext *self, uint32_t index, const CrtPoly *p)
 {
     if (self == NULL || p == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     CrtPoly v;
@@ -328,6 +352,7 @@ HIFHE_ERROR BGV_Ciphertext_AddCrtPolyAt(Ciphertext *self, uint32_t index, const 
 HIFHE_ERROR BGV_Ciphertext_SetCrtPolyAt(Ciphertext *self, uint32_t index, const CrtPoly *p)
 {
     if (self == NULL || p == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     CrtPoly v;

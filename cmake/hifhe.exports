@@ -1,5 +1,8 @@
 HIFHE_1.0 {
     global:
+        HIFHE_ErrPeekError;
+        HIFHE_ErrPeekLastError;
+        HIFHE_SetMemFuncs;
         HIFHE_New;
         HIFHE_Free;
         HIFHE_SetParaById;

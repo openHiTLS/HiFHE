@@ -14,7 +14,8 @@
  */
 
 #include <string.h>
-#include "bsl_sal.h"
+#include "hifhe_mem.h"
+#include "hifhe_err_internal.h"
 #include "basic/context.h"
 
 void BgvContext_Init(BgvContext *ctx)
@@ -28,6 +29,7 @@ void BgvContext_Init(BgvContext *ctx)
 HIFHE_ERROR BgvContext_SetSeed(BgvContext *ctx, const uint8_t *seed, uint32_t seedLen)
 {
     if (ctx == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (seed == NULL) {
@@ -35,6 +37,7 @@ HIFHE_ERROR BgvContext_SetSeed(BgvContext *ctx, const uint8_t *seed, uint32_t se
         return HIFHE_SUCCESS;
     }
     if (seedLen != HIFHE_CTX_SEED_LEN) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     memcpy(ctx->seed, seed, HIFHE_CTX_SEED_LEN);
@@ -47,6 +50,6 @@ void BgvContext_ClearSeed(BgvContext *ctx)
     if (ctx == NULL) {
         return;
     }
-    BSL_SAL_CleanseData(ctx->seed, HIFHE_CTX_SEED_LEN);
+    HifheCleanse(ctx->seed, HIFHE_CTX_SEED_LEN);
     ctx->hasSeed = 0u;
 }

@@ -25,7 +25,7 @@ extern "C" {
 #endif
 
 #define CKKS_MAX_N         16384
-#define CKKS_MIN_N         8
+#define CKKS_MIN_N         4096
 #define CKKS_MAX_LOGQ      60
 #define CKKS_MIN_LOGQ      30
 #define CKKS_DEFAULT_SIGMA 3.2

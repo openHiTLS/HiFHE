@@ -78,7 +78,9 @@ int32_t CKKS_PolySub(BN_BigNum **result, BN_BigNum **a, BN_BigNum **b, uint32_t 
 int32_t CKKS_PolyMult(BN_BigNum **result, BN_BigNum **a, BN_BigNum **b, uint32_t N, const BN_BigNum *Q,
                       BN_Optimizer *optimizer);
 int32_t CKKS_PolyToBytes(BN_BigNum **coeffs, uint32_t N, uint8_t *out, uint32_t *outLen);
-int32_t CKKS_BytesToPoly(const uint8_t *data, uint32_t dataLen, BN_BigNum **coeffs, uint32_t N);
+int32_t CKKS_CheckPolyBytes(const uint8_t *data, uint32_t dataLen, uint32_t N, uint32_t bits, bool allowNegative);
+int32_t CKKS_BytesToPoly(const uint8_t *data, uint32_t dataLen, BN_BigNum **coeffs, uint32_t N, uint32_t bits,
+    bool allowNegative);
 
 int32_t CKKS_InitFFTParams(CRYPT_CKKS_Para *para);
 int32_t CKKS_Encode(const CRYPT_CKKS_Ctx *ctx, const double complex *input, uint32_t slots, CRYPT_CKKS_Poly *pt);

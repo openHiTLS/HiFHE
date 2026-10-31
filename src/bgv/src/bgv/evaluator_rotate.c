@@ -27,7 +27,8 @@
  */
 
 #include <string.h>
-#include "bsl_sal.h"
+#include "hifhe_mem.h"
+#include "hifhe_err_internal.h"
 #include "bgv/evaluator.h"
 #include "bgv/ciphertext.h"
 #include "bgv/keys.h"
@@ -97,16 +98,20 @@ static void PermuteComponentNtt(uint64_t *comp, uint64_t *scratch, const uint32_
 HIFHE_ERROR BGV_Evaluator_RotateByElt(Ciphertext *out, const Ciphertext *in, uint64_t galoisElt, const Evaluator *self)
 {
     if (out == NULL || in == NULL || self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (self->galoisKeys == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NO_GALOIS_KEY);
         return HIFHE_NO_GALOIS_KEY;
     }
     if (in->config.ciphertextSize != 2u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_CT_DEGREE_MISMATCH);
         return HIFHE_CT_DEGREE_MISMATCH;
     }
     const GaloisKeyPiece *gk = BGV_GaloisKeys_GetByElt(self->galoisKeys, galoisElt);
     if (gk == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NO_GALOIS_KEY);
         return HIFHE_NO_GALOIS_KEY;
     }
 
@@ -115,21 +120,25 @@ HIFHE_ERROR BGV_Evaluator_RotateByElt(Ciphertext *out, const Ciphertext *in, uin
     uint32_t N = ctx->rlweContext.parameter->polyDegree;
     /* Same level constraint as relinearize. */
     if (L != gk->rnsSize) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
     if (in->config.crtConfig.dtype != HIFHE_NTT) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     if ((galoisElt & 1u) == 0u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
-    uint32_t *perm = (uint32_t *)BSL_SAL_Malloc(N * (uint32_t)sizeof(uint32_t));
-    uint64_t *scratch = (uint64_t *)BSL_SAL_Malloc(N * (uint32_t)sizeof(uint64_t));
+    uint32_t *perm = (uint32_t *)HifheMalloc(N * (uint32_t)sizeof(uint32_t));
+    uint64_t *scratch = (uint64_t *)HifheMalloc(N * (uint32_t)sizeof(uint64_t));
     if (perm == NULL || scratch == NULL) {
-        BSL_SAL_Free(perm);
-        BSL_SAL_Free(scratch);
+        HifheFree(perm);
+        HifheFree(scratch);
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
     (void)BuildNttPermutation(perm, N, galoisElt);
@@ -144,8 +153,8 @@ HIFHE_ERROR BGV_Evaluator_RotateByElt(Ciphertext *out, const Ciphertext *in, uin
             PermuteComponentNtt(out->data + (size_t)k * L * N, scratch, perm, L, N);
         }
     }
-    BSL_SAL_Free(perm);
-    BSL_SAL_Free(scratch);
+    HifheFree(perm);
+    HifheFree(scratch);
     if (r != HIFHE_SUCCESS) {
         return r;
     }
@@ -191,6 +200,7 @@ HIFHE_ERROR BGV_Evaluator_RotateByElt(Ciphertext *out, const Ciphertext *in, uin
 HIFHE_ERROR BGV_Evaluator_RotateByStep(Ciphertext *out, const Ciphertext *in, int32_t steps, const Evaluator *self)
 {
     if (in == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     uint32_t N = in->context->rlweContext.parameter->polyDegree;

@@ -14,7 +14,7 @@
  */
 
 #include <string.h>
-#include "bsl_sal.h"
+#include "hifhe_err_internal.h"
 #include "crypt_types.h"
 
 #include "bgv_local.h"
@@ -23,12 +23,14 @@
 int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t valLen)
 {
     if (ctx == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
 
     switch (cmd) {
         case CRYPT_CTRL_SET_PARA_BY_ID: {
             if (val == NULL || valLen != sizeof(int32_t)) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                 return HIFHE_PARAM_INVALID;
             }
             int32_t presetId = *(const int32_t *)val;
@@ -43,9 +45,11 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
 
         case HIFHE_CTRL_BGV_GET_POLY_DEGREE: {
             if (val == NULL || valLen != sizeof(uint32_t)) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                 return HIFHE_PARAM_INVALID;
             }
             if (!ctx->para.set) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_NOT_SET);
                 return HIFHE_PARAM_NOT_SET;
             }
             *(uint32_t *)val = ctx->para.polyDegree;
@@ -54,9 +58,11 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
 
         case HIFHE_CTRL_BGV_GET_PLAIN_MOD: {
             if (val == NULL || valLen != sizeof(uint64_t)) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                 return HIFHE_PARAM_INVALID;
             }
             if (!ctx->para.set) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_NOT_SET);
                 return HIFHE_PARAM_NOT_SET;
             }
             if (ctx->para.plainMod != 0ull) {
@@ -73,6 +79,7 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
 
         case HIFHE_CTRL_BGV_GET_INNER_CTX: {
             if (val == NULL || valLen != sizeof(CRYPT_BGV_Ctx *)) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                 return HIFHE_PARAM_INVALID;
             }
             *(CRYPT_BGV_Ctx **)val = ctx;
@@ -81,30 +88,35 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
 
         case HIFHE_CTRL_BGV_GET_PUBKEY_LEN: {
             if (val == NULL || valLen != sizeof(uint32_t)) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                 return HIFHE_PARAM_INVALID;
             }
             return Bgv_GetPubKeyLen(ctx, (uint32_t *)val);
         }
         case HIFHE_CTRL_BGV_GET_PRVKEY_LEN: {
             if (val == NULL || valLen != sizeof(uint32_t)) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                 return HIFHE_PARAM_INVALID;
             }
             return Bgv_GetPrvKeyLen(ctx, (uint32_t *)val);
         }
         case HIFHE_CTRL_BGV_GET_CIPHERTEXT_LEN: {
             if (val == NULL || valLen != sizeof(uint32_t)) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                 return HIFHE_PARAM_INVALID;
             }
             return Bgv_GetCiphertextLen(ctx, (uint32_t *)val);
         }
         case HIFHE_CTRL_BGV_GET_PLAINTEXT_LEN: {
             if (val == NULL || valLen != sizeof(uint32_t)) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                 return HIFHE_PARAM_INVALID;
             }
             return Bgv_GetPlaintextLen(ctx, (uint32_t *)val);
         }
         case HIFHE_CTRL_BGV_GET_MSG_LEN: {
             if (val == NULL || valLen != sizeof(uint32_t)) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                 return HIFHE_PARAM_INVALID;
             }
             return Bgv_GetMsgLen(ctx, (uint32_t *)val);
@@ -112,6 +124,7 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
 
         case HIFHE_CTRL_BGV_GET_LEVEL: {
             if (val == NULL || valLen != sizeof(uint32_t)) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                 return HIFHE_PARAM_INVALID;
             }
             int32_t r = Bgv_BuildContext(ctx);
@@ -128,6 +141,7 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
          * Return 0 with success for a not-yet-generated key
          * so the caller can distinguish "empty" from "error". */
             if (val == NULL || valLen != sizeof(uint32_t)) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                 return HIFHE_PARAM_INVALID;
             }
             *(uint32_t *)val = 0u;
@@ -135,6 +149,7 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
 
         case HIFHE_CTRL_BGV_SET_SEED: {
             if (val == NULL || valLen != HIFHE_CTX_SEED_LEN) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                 return HIFHE_PARAM_INVALID;
             }
             int32_t r = Bgv_BuildContext(ctx);
@@ -146,6 +161,7 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
 
         case HIFHE_CTRL_BGV_SET_SLOT_MAP: {
             if (val == NULL || valLen != sizeof(uint32_t)) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                 return HIFHE_PARAM_INVALID;
             }
             int32_t r = Bgv_BuildContext(ctx);
@@ -154,6 +170,7 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
             }
             uint32_t on = *(const uint32_t *)val;
             if (on > 1u) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                 return HIFHE_PARAM_INVALID;
             }
             if (on != 0u) {
@@ -168,6 +185,7 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
         }
         case HIFHE_CTRL_BGV_GET_SLOT_MAP: {
             if (val == NULL || valLen != sizeof(uint32_t)) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                 return HIFHE_PARAM_INVALID;
             }
             int32_t r = Bgv_BuildContext(ctx);
@@ -185,6 +203,7 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
             /* `val` is a BSL_Param array carrying either HIFHE_ROTATE_STEPS
          * (int32_t[]) or HIFHE_GALOIS_ELTS (uint64_t[]). */
             if (val == NULL) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                 return HIFHE_PARAM_INVALID;
             }
             BSL_Param *arr = (BSL_Param *)val;
@@ -209,6 +228,7 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
             if (pElts != NULL && pElts->value != NULL) {
                 uint32_t count = pElts->valueLen / (uint32_t)sizeof(uint64_t);
                 if (count == 0u || count > N) {
+                    HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                     return HIFHE_PARAM_INVALID;
                 }
                 return Bgv_GenGaloisKeys(ctx, (const uint64_t *)pElts->value, count);
@@ -216,6 +236,7 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
             if (pSteps != NULL && pSteps->value != NULL) {
                 uint32_t count = pSteps->valueLen / (uint32_t)sizeof(int32_t);
                 if (count == 0u || count > N) {
+                    HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                     return HIFHE_PARAM_INVALID;
                 }
                 Uint64Vector eltVec;
@@ -231,6 +252,7 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
                 Uint64Vector_Destroy(&eltVec);
                 return r;
             }
+            HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
             return HIFHE_PARAM_INVALID;
         }
 
@@ -247,6 +269,7 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
             return Bgv_HERotateElt(ctx, (BSL_Param *)val);
 
         default:
+            HIFHE_ERR_PUSH_ERROR(HIFHE_NOT_SUPPORTED);
             return HIFHE_NOT_SUPPORTED;
     }
 }

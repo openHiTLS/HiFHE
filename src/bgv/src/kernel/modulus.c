@@ -13,6 +13,7 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "hifhe_err_internal.h"
 #include "kernel/modulus.h"
 
 uint32_t Kernel_Log2Ceil(uint64_t x)
@@ -32,6 +33,7 @@ uint32_t Kernel_Log2Ceil(uint64_t x)
 HIFHE_ERROR Kernel_BarrettConst_Init(BarrettConst *out, Modulus q)
 {
     if (out == NULL || q < 2u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     out->q = q;
@@ -119,6 +121,7 @@ uint64_t Kernel_BarrettReduce128(uint64_t xHi, uint64_t xLo, const BarrettConst 
 HIFHE_ERROR Kernel_ShoupConst_Init(ShoupConst *out, uint64_t operand, Modulus q)
 {
     if (out == NULL || q < 2u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     if (operand >= q) {

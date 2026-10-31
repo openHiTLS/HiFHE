@@ -14,7 +14,8 @@
  */
 
 #include <string.h>
-#include "bsl_sal.h"
+#include "hifhe_mem.h"
+#include "hifhe_err_internal.h"
 #include "bgv/bgv.h"
 #include "bgv/plaintext.h"
 #include "bgv/ciphertext.h"
@@ -32,6 +33,7 @@ HIFHE_ERROR BGV_BGVContext_Create(BGVContext *out, BGVParameter *param)
 HIFHE_ERROR BGV_BGVContext_CreateWithTables(BGVContext *out, BGVParameter *param, uint64_t *const *cipherTables)
 {
     if (out == NULL || param == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     memset(out, 0, sizeof(*out));
@@ -53,6 +55,7 @@ HIFHE_ERROR BGV_BGVContext_EnsurePlainNtt(BGVContext *ctx)
 HIFHE_ERROR BGV_BGVContext_EnsurePlainNttWith(BGVContext *ctx, uint64_t *table)
 {
     if (ctx == NULL || ctx->bgvParameter == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (ctx->ptNttReady) {
@@ -63,6 +66,7 @@ HIFHE_ERROR BGV_BGVContext_EnsurePlainNttWith(BGVContext *ctx, uint64_t *table)
     Modulus t = ctx->bgvParameter->plainMod;
     /* Slot packing is a negacyclic NTT mod t, so t must be Proth for this ring. */
     if (!BGV_Params_IsPlainModNttFriendly(t, N)) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
 
@@ -73,8 +77,9 @@ HIFHE_ERROR BGV_BGVContext_EnsurePlainNttWith(BGVContext *ctx, uint64_t *table)
         ctx->ownsPtTableBuf = 0u;
         r = Kernel_Ntt_AttachTables(&ctx->ptNtt, ctx->ptTableBuf, t, N);
     } else {
-        ctx->ptTableBuf = (uint64_t *)BSL_SAL_Malloc((uint32_t)(HIFHE_NTT_TABLE_WORDS(N) * sizeof(uint64_t)));
+        ctx->ptTableBuf = (uint64_t *)HifheMalloc((uint32_t)(HIFHE_NTT_TABLE_WORDS(N) * sizeof(uint64_t)));
         if (ctx->ptTableBuf == NULL) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
             return HIFHE_MEMORY_ERROR;
         }
         ctx->ownsPtTableBuf = 1u;
@@ -82,7 +87,7 @@ HIFHE_ERROR BGV_BGVContext_EnsurePlainNttWith(BGVContext *ctx, uint64_t *table)
     }
     if (r != HIFHE_SUCCESS) {
         if (ctx->ownsPtTableBuf && ctx->ptTableBuf != NULL) {
-            BSL_SAL_Free(ctx->ptTableBuf);
+            HifheFree(ctx->ptTableBuf);
         }
         ctx->ptTableBuf = NULL;
         ctx->ownsPtTableBuf = 0u;
@@ -110,6 +115,7 @@ static uint32_t BitRevU32(uint32_t x, uint32_t bits)
 HIFHE_ERROR BGV_BGVContext_EnsureSlotMap(BGVContext *ctx)
 {
     if (ctx == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (ctx->slotMapReady) {
@@ -147,11 +153,12 @@ HIFHE_ERROR BGV_BGVContext_EnsureSlotMap(BGVContext *ctx)
 HIFHE_ERROR BGV_BGVContext_Destroy(BGVContext *self)
 {
     if (self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     RLWE_RlweContext_Destroy(&self->rlweContext);
     if (self->ownsPtTableBuf && self->ptTableBuf != NULL) {
-        BSL_SAL_Free(self->ptTableBuf);
+        HifheFree(self->ptTableBuf);
     }
     self->ptTableBuf = NULL;
     self->ownsPtTableBuf = 0u;
@@ -167,6 +174,7 @@ HIFHE_ERROR BGV_BGVContext_Destroy(BGVContext *self)
 HIFHE_ERROR BGV_BGVContext_GetDefaultPlaintextConfig(PlaintextConfig *out, const BGVContext *ctx)
 {
     if (out == NULL || ctx == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     memset(out, 0, sizeof(*out));
@@ -184,6 +192,7 @@ HIFHE_ERROR BGV_BGVContext_GetDefaultPlaintextConfig(PlaintextConfig *out, const
 HIFHE_ERROR BGV_BGVContext_GetDefaultCiphertextConfig(CiphertextConfig *out, const BGVContext *ctx)
 {
     if (out == NULL || ctx == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     /* Defer to Create so the header defaults live in one place. */

@@ -14,71 +14,27 @@
  */
 
 #include <string.h>
-#include "bsl_sal.h"
+#include "hifhe_mem.h"
+#include "hifhe_err_internal.h"
 #include "crypt_eal_rand.h"
 #include "crypt_eal_md.h"
-#include "crypt_eal_cipher.h"
 #include "crypt_algid.h"
 #include "basic/rand.h"
 
 HIFHE_ERROR BgvRand_Drbg(uint8_t *out, uint32_t outLen)
 {
     if (out == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (outLen == 0u) {
         return HIFHE_SUCCESS;
     }
-    int32_t r = CRYPT_EAL_Randbytes(out, outLen);
-    return (r == 0) ? HIFHE_SUCCESS : HIFHE_INTERNAL;
-}
-
-/*
- * Bulk unseeded randomness. The SHA-256 Hash-DRBG costs about 8 ns a byte
- * here, which made it most of an encryption: a uniform `a` over a 4-limb
- * chain at N = 8192 is 256 KiB. A 32-byte key from the DRBG drives
- * AES-256-CTR over the rest, the usual seed-expansion construction, at a
- * few percent of that cost. Short requests, and builds without the cipher,
- * read the DRBG directly.
- */
-#define HIFHE_RAND_EXPAND_MIN 256u
-
-HIFHE_ERROR BgvRand_DrbgBulk(uint8_t *out, uint32_t outLen)
-{
-    if (out == NULL) {
-        return HIFHE_NULL_INPUT;
+    if (CRYPT_EAL_Randbytes(out, outLen) != 0) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_RANDOM_ERROR);
+        return HIFHE_RANDOM_ERROR;
     }
-    if (outLen < HIFHE_RAND_EXPAND_MIN) {
-        return BgvRand_Drbg(out, outLen);
-    }
-
-    uint8_t key[32];
-    uint8_t iv[16];
-    HIFHE_ERROR r = BgvRand_Drbg(key, (uint32_t)sizeof(key));
-    if (r != HIFHE_SUCCESS) {
-        return r;
-    }
-    memset(iv, 0, sizeof(iv));
-
-    CRYPT_EAL_CipherCtx *c = CRYPT_EAL_CipherNewCtx(CRYPT_CIPHER_AES256_CTR);
-    if (c == NULL) {
-        BSL_SAL_CleanseData(key, (uint32_t)sizeof(key));
-        return BgvRand_Drbg(out, outLen);
-    }
-    r = HIFHE_INTERNAL;
-    if (CRYPT_EAL_CipherInit(c, key, (uint32_t)sizeof(key), iv, (uint32_t)sizeof(iv), true) == 0) {
-        memset(out, 0, outLen);
-        uint32_t produced = outLen;
-        if (CRYPT_EAL_CipherUpdate(c, out, outLen, out, &produced) == 0 && produced == outLen) {
-            r = HIFHE_SUCCESS;
-        }
-    }
-    CRYPT_EAL_CipherFreeCtx(c);
-    BSL_SAL_CleanseData(key, (uint32_t)sizeof(key));
-    if (r != HIFHE_SUCCESS) {
-        BSL_SAL_CleanseData(out, outLen);
-    }
-    return r;
+    return HIFHE_SUCCESS;
 }
 
 /* One absorbed chunk. An empty or absent chunk is skipped. */
@@ -93,10 +49,11 @@ static HIFHE_ERROR Shake128(const ShakeChunk *in, uint32_t nIn, uint8_t *out, ui
 {
     CRYPT_EAL_MdCtx *mctx = CRYPT_EAL_MdNewCtx(CRYPT_MD_SHAKE128);
     if (mctx == NULL) {
-        return HIFHE_INTERNAL;
+        HIFHE_ERR_PUSH_ERROR(HIFHE_HASH_ERROR);
+        return HIFHE_HASH_ERROR;
     }
 
-    HIFHE_ERROR ret = HIFHE_INTERNAL;
+    HIFHE_ERROR ret = HIFHE_HASH_ERROR;
     if (CRYPT_EAL_MdInit(mctx) != 0) {
         goto done;
     }
@@ -114,6 +71,9 @@ static HIFHE_ERROR Shake128(const ShakeChunk *in, uint32_t nIn, uint8_t *out, ui
     ret = HIFHE_SUCCESS;
 done:
     CRYPT_EAL_MdFreeCtx(mctx);
+    if (ret != HIFHE_SUCCESS) {
+        HIFHE_ERR_PUSH_ERROR(ret);
+    }
     return ret;
 }
 
@@ -121,12 +81,14 @@ HIFHE_ERROR BgvRand_Seeded(const uint8_t *seed, uint32_t seedLen, const uint8_t 
                            uint32_t outLen)
 {
     if (out == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (outLen == 0u) {
         return HIFHE_SUCCESS;
     }
     if (seed == NULL || seedLen == 0u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
 
@@ -251,6 +213,7 @@ void BgvRandStream_Init(BgvRandStream *s, const uint8_t *seed, const char *label
 HIFHE_ERROR BgvRandStream_Bytes(BgvRandStream *s, uint8_t *out, uint32_t len)
 {
     if (s == NULL || out == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     while (len > 0u) {
@@ -273,6 +236,7 @@ HIFHE_ERROR BgvRandStream_Bytes(BgvRandStream *s, uint8_t *out, uint32_t len)
 HIFHE_ERROR BgvRandStream_U64(BgvRandStream *s, uint64_t *out)
 {
     if (out == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     uint8_t b[8];
@@ -293,5 +257,5 @@ void BgvRandStream_Cleanse(BgvRandStream *s)
     if (s == NULL) {
         return;
     }
-    BSL_SAL_CleanseData(s, (uint32_t)sizeof(*s));
+    HifheCleanse(s, (uint32_t)sizeof(*s));
 }

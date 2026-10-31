@@ -23,11 +23,11 @@
  *
  * Every component of the input survives in the output, so out - in is a small
  * multiple of t and pairs the two ciphertexts to any holder of both. This
- * refreshes the noise budget; it is not an unlinkability primitive.
+ * consumes noise budget; it is not an unlinkability primitive.
  */
 
 #include <string.h>
-#include "bsl_sal.h"
+#include "hifhe_err_internal.h"
 #include "basic/vector.h"
 #include "bgv/evaluator.h"
 #include "bgv/ciphertext.h"
@@ -39,9 +39,11 @@
 HIFHE_ERROR BGV_Evaluator_Rerandomize(Ciphertext *out, const Ciphertext *in, const Evaluator *self)
 {
     if (out == NULL || in == NULL || self == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     if (in->config.ciphertextSize < 2u) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_CT_DEGREE_MISMATCH);
         return HIFHE_CT_DEGREE_MISMATCH;
     }
 
