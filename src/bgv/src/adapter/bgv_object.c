@@ -70,10 +70,6 @@ static void *BgvCtxDup(void *data, void *libCtx)
 
 static int32_t BgvCtxNew(HifheParamSnapshot *p, void *libCtx, void **out)
 {
-    if (p->config.isCkks) {
-        HIFHE_ERR_PUSH_ERROR(HIFHE_ALG_MISMATCH);
-        return HIFHE_ALG_MISMATCH;
-    }
     CRYPT_BGV_Ctx *math = CRYPT_BGV_NewCtx(HIFHE_BGV);
     if (math == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);

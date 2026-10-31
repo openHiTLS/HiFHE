@@ -21,10 +21,6 @@ typedef struct {
     void *libCtx;
 } HIFHE_ProvCtx;
 
-#ifdef HIFHE_ENABLE_CKKS
-extern const CRYPT_EAL_Func g_hifheKeyMgmtCkks[];
-extern const CRYPT_EAL_Func g_hifheCipherCkks[];
-#endif
 #ifdef HIFHE_ENABLE_BGV
 extern const CRYPT_EAL_Func g_hifheKeyMgmtBgv[];
 extern const CRYPT_EAL_Func g_hifheCipherBgv[];

@@ -18,7 +18,7 @@ usage()
 {
     cat <<'USAGE'
 Usage: build_benchmark.sh [asan] [clean] [run]
-                          [--enable ckks|bgv] [--disable ckks|bgv]
+                          [--enable bgv] [--disable bgv]
 
   asan       build with AddressSanitizer
   clean      remove the benchmark binary, then exit
@@ -48,7 +48,6 @@ HITLS_ROOT_DIR=${HITLS_ROOT_DIR:-"${HIFHE_ROOT_DIR}/platform/openhitls"}
 ENABLE_ASAN=OFF
 DO_RUN="no"
 # Empty means reuse the library build configuration.
-HIFHE_CKKS=""
 HIFHE_BGV=""
 
 while [[ $# -gt 0 ]]; do
@@ -64,9 +63,14 @@ while [[ $# -gt 0 ]]; do
             [[ "$1" == "--enable" ]] && STATE=ON || STATE=OFF
             shift
             case "${1:-}" in
-                ckks) HIFHE_CKKS=${STATE} ;;
-                bgv)  HIFHE_BGV=${STATE} ;;
-                *) echo "Expected ckks or bgv after --enable/--disable" >&2; exit 1 ;;
+                bgv)
+                    if [[ "${STATE}" == OFF ]]; then
+                        echo "BGV is the only algorithm and cannot be disabled" >&2
+                        exit 1
+                    fi
+                    HIFHE_BGV=${STATE}
+                    ;;
+                *) echo "Expected bgv after --enable/--disable" >&2; exit 1 ;;
             esac
             ;;
         -h|--help) usage; exit 0 ;;
@@ -76,7 +80,6 @@ while [[ $# -gt 0 ]]; do
 done
 
 CMAKE_FEATURE_ARGS=()
-[[ -n "${HIFHE_CKKS}" ]] && CMAKE_FEATURE_ARGS+=("-DHIFHE_CKKS=${HIFHE_CKKS}")
 [[ -n "${HIFHE_BGV}"  ]] && CMAKE_FEATURE_ARGS+=("-DHIFHE_BGV=${HIFHE_BGV}")
 
 

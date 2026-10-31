@@ -18,9 +18,6 @@
 #include "hifhe_provider_impl.h"
 
 static CRYPT_EAL_AlgInfo g_hifheKeyMgmtAlgs[] = {
-#ifdef HIFHE_ENABLE_CKKS
-    {HIFHE_CKKS, g_hifheKeyMgmtCkks, HIFHE_PROVIDER_ATTR},
-#endif
 #ifdef HIFHE_ENABLE_BGV
     {HIFHE_BGV, g_hifheKeyMgmtBgv, HIFHE_PROVIDER_ATTR},
 #endif
@@ -28,9 +25,6 @@ static CRYPT_EAL_AlgInfo g_hifheKeyMgmtAlgs[] = {
 };
 
 static CRYPT_EAL_AlgInfo g_hifheCipher[] = {
-#ifdef HIFHE_ENABLE_CKKS
-    {HIFHE_CKKS, g_hifheCipherCkks, HIFHE_PROVIDER_ATTR},
-#endif
 #ifdef HIFHE_ENABLE_BGV
     {HIFHE_BGV, g_hifheCipherBgv, HIFHE_PROVIDER_ATTR},
 #endif

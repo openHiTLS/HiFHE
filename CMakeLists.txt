@@ -26,7 +26,6 @@ include(hifhe_build_targets)
 install(FILES include/hifhe.h include/hifhe_types.h include/hifhe_err.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-message(STATUS "[HiFHE] CKKS: ${HIFHE_CKKS}")
 message(STATUS "[HiFHE] BGV: ${HIFHE_BGV}")
 message(STATUS "[HiFHE] Provider: ${HITLS_PROVIDER}")
 message(STATUS "[HiFHE] shared: ${HIFHE_BUILD_SHARED}")

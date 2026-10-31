@@ -45,11 +45,6 @@ static const HifheAlgMethod *FindMethod(int32_t id)
         return &g_hifheBgvMethod;
     }
 #endif
-#ifdef HIFHE_ENABLE_CKKS
-    if (id == HIFHE_CKKS) {
-        return &g_hifheCkksMethod;
-    }
-#endif
     (void)id;
     return NULL;
 }

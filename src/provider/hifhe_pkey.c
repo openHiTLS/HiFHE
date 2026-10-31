@@ -10,8 +10,6 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <complex.h>
-#include <math.h>
 #include "hifhe_local.h"
 #include "hifhe_err_internal.h"
 #include "hifhe_provider_impl.h"
@@ -19,6 +17,7 @@
 #include "crypt_params_key.h"
 #include "crypt_types.h"
 
+#ifdef HIFHE_ENABLE_BGV
 static int32_t ParseParams(const BSL_Param *p, uint32_t max, const BSL_Param **out, const int32_t *keys,
                            const uint32_t *types, uint32_t count)
 {
@@ -43,10 +42,6 @@ static int32_t ParseParams(const BSL_Param *p, uint32_t max, const BSL_Param **o
             HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
             return HIFHE_NULL_INPUT;
         }
-        if (types[k] == BSL_PARAM_TYPE_UINT32 && p[i].valueLen != sizeof(uint32_t)) {
-            HIFHE_ERR_PUSH_ERROR(HIFHE_INVALID_LENGTH);
-            return HIFHE_INVALID_LENGTH;
-        }
         out[k] = &p[i];
     }
     HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
@@ -67,36 +62,6 @@ static void *CtxDup(const void *ctx)
 {
     return Hifhe_CtxDup(ctx);
 }
-
-#ifdef HIFHE_ENABLE_CKKS
-static int32_t SetParam(void *data, const BSL_Param *values)
-{
-    HIFHE_Ctx *ctx = data;
-    if (ctx == NULL || values == NULL) {
-        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
-        return HIFHE_NULL_INPUT;
-    }
-    const int32_t keys[] = {HIFHE_PARAM_CKKS_N, HIFHE_PARAM_CKKS_Q_BITS, HIFHE_PARAM_CKKS_P_BITS,
-                            HIFHE_PARAM_CKKS_SIGMA_MILLI, HIFHE_PARAM_CKKS_SLOTS};
-    const uint32_t types[] = {BSL_PARAM_TYPE_UINT32, BSL_PARAM_TYPE_UINT32, BSL_PARAM_TYPE_UINT32,
-                              BSL_PARAM_TYPE_UINT32, BSL_PARAM_TYPE_UINT32};
-    const BSL_Param *found[5];
-    int32_t ret = ParseParams(values, 6, found, keys, types, 5);
-    if (ret != HIFHE_SUCCESS) {
-        return ret;
-    }
-    HifheParamConfig config = {.isCkks = true};
-    for (uint32_t i = 0; i < 5; i++) {
-        if (found[i] == NULL) {
-            HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
-            return HIFHE_PARAM_INVALID;
-        }
-        memcpy(&config.ckks[i], found[i]->value, sizeof(uint32_t));
-    }
-    config.slots = config.ckks[4];
-    return Hifhe_SetParam(ctx, &config);
-}
-#endif
 
 static int32_t Gen(void *ctx)
 {
@@ -325,76 +290,18 @@ static int32_t Crypt(void *data, const uint8_t *input, uint32_t n, uint8_t *out,
         HIFHE_ERR_PUSH_ERROR(HIFHE_KEY_NOT_SET);
         return HIFHE_KEY_NOT_SET;
     }
-    bool ckks = ctx->method->algId == HIFHE_CKKS;
     HIFHE_HEText *text = NULL, *result = NULL;
-    int32_t ret = 0;
-    if (enc && ckks) {
-        if (n == 0 || (n % sizeof(double complex)) != 0 || n / sizeof(double complex) > ctx->params->config.slots) {
-            HIFHE_ERR_PUSH_ERROR(HIFHE_INVALID_LENGTH);
-            return HIFHE_INVALID_LENGTH;
-        }
-        double complex *values = HifheMalloc(n);
-        if (values == NULL) {
-            HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
-            return HIFHE_MEMORY_ERROR;
-        }
-        memcpy(values, input, n);
-        ret = ctx->method->encode(ctx, values, n / sizeof(double complex), NULL);
-        HifheCleanse(values, n);
-        HifheFree(values);
-    } else {
-        ret = HIFHE_Deserialize(ctx, input, n, &text);
-        if (ret == HIFHE_SUCCESS) {
-            ret = Hifhe_CheckCompute(ctx, enc ? HIFHE_OP_ENCRYPT : HIFHE_OP_DECRYPT, text, NULL);
-        }
+    int32_t ret = HIFHE_Deserialize(ctx, input, n, &text);
+    if (ret == HIFHE_SUCCESS) {
+        ret = Hifhe_CheckCompute(ctx, enc ? HIFHE_OP_ENCRYPT : HIFHE_OP_DECRYPT, text, NULL);
     }
-    if (ret == HIFHE_SUCCESS && ckks && !enc) {
-        uint32_t need = ctx->params->config.slots * sizeof(double complex);
-        if (out == NULL || *len < need) {
-            *len = need;
-            if (out != NULL) {
-                HIFHE_ERR_PUSH_ERROR(HIFHE_BUFFER_TOO_SMALL);
-            }
-            ret = HIFHE_BUFFER_TOO_SMALL;
-        }
-    } else if (ret == HIFHE_SUCCESS) {
+    if (ret == HIFHE_SUCCESS) {
         ret = OutputSize(ctx, enc ? HIFHE_OP_ENCRYPT : HIFHE_OP_DECRYPT, text, out, len);
-    }
-    if (ret == HIFHE_SUCCESS && enc && ckks) {
-        double complex *aligned = HifheMalloc(n);
-        void *plain = NULL;
-        if (aligned == NULL) {
-            ret = HIFHE_MEMORY_ERROR;
-            HIFHE_ERR_PUSH_ERROR(ret);
-        } else {
-            memcpy(aligned, input, n);
-            ret = ctx->method->encode(ctx, aligned, n / sizeof(double complex), &plain);
-            if (ret == HIFHE_SUCCESS) {
-                ret = Hifhe_HETextNew(ctx, plain, &text);
-            }
-            HifheCleanse(aligned, n);
-            HifheFree(aligned);
-        }
     }
     if (ret == HIFHE_SUCCESS) {
         ret = enc ? HIFHE_Encrypt(ctx, text, &result) : HIFHE_Decrypt(ctx, text, &result);
     }
-    if (ret == HIFHE_SUCCESS && ckks && !enc) {
-        uint32_t count = ctx->params->config.slots;
-        double complex *values = HifheCalloc(count, sizeof(*values));
-        if (values == NULL) {
-            ret = HIFHE_MEMORY_ERROR;
-            HIFHE_ERR_PUSH_ERROR(ret);
-        } else {
-            ret = ctx->method->decode(ctx, result->data, values, &count);
-            if (ret == HIFHE_SUCCESS) {
-                *len = count * sizeof(*values);
-                memcpy(out, values, *len);
-            }
-            HifheCleanse(values, count * sizeof(*values));
-            HifheFree(values);
-        }
-    } else if (ret == HIFHE_SUCCESS) {
+    if (ret == HIFHE_SUCCESS) {
         ret = HIFHE_Serialize(ctx, result, out, len);
     }
     HIFHE_HETextFree(text);
@@ -474,25 +381,12 @@ static int32_t Ctrl(void *data, int32_t cmd, void *args, uint32_t len)
     return HIFHE_NOT_SUPPORTED;
 }
 
-#ifdef HIFHE_ENABLE_BGV
 const CRYPT_EAL_Func g_hifheKeyMgmtBgv[] = {{CRYPT_EAL_IMPLPKEYMGMT_NEWCTX, (CRYPT_EAL_ImplPkeyMgmtNewCtx)CtxNew},
                                             {CRYPT_EAL_IMPLPKEYMGMT_GENKEY, (CRYPT_EAL_ImplPkeyMgmtGenKey)Gen},
                                             {CRYPT_EAL_IMPLPKEYMGMT_DUPCTX, (CRYPT_EAL_ImplPkeyMgmtDupCtx)CtxDup},
                                             {CRYPT_EAL_IMPLPKEYMGMT_CTRL, (CRYPT_EAL_ImplPkeyMgmtCtrl)Ctrl},
                                             {CRYPT_EAL_IMPLPKEYMGMT_FREECTX, (CRYPT_EAL_ImplPkeyMgmtFreeCtx)CtxFree},
                                             CRYPT_EAL_FUNC_END};
-#endif
-
-#ifdef HIFHE_ENABLE_CKKS
-const CRYPT_EAL_Func g_hifheKeyMgmtCkks[] = {
-    {CRYPT_EAL_IMPLPKEYMGMT_NEWCTX, (CRYPT_EAL_ImplPkeyMgmtNewCtx)CtxNew},
-    {CRYPT_EAL_IMPLPKEYMGMT_GENKEY, (CRYPT_EAL_ImplPkeyMgmtGenKey)Gen},
-    {CRYPT_EAL_IMPLPKEYMGMT_DUPCTX, (CRYPT_EAL_ImplPkeyMgmtDupCtx)CtxDup},
-    {CRYPT_EAL_IMPLPKEYMGMT_CTRL, (CRYPT_EAL_ImplPkeyMgmtCtrl)Ctrl},
-    {CRYPT_EAL_IMPLPKEYMGMT_FREECTX, (CRYPT_EAL_ImplPkeyMgmtFreeCtx)CtxFree},
-    {CRYPT_EAL_IMPLPKEYMGMT_SETPARAM, (CRYPT_EAL_ImplPkeyMgmtSetParam)SetParam},
-    CRYPT_EAL_FUNC_END};
-#endif
 
 const CRYPT_EAL_Func g_hifheCipherBgv[] = {{CRYPT_EAL_IMPLPKEYCIPHER_ENCRYPT, (CRYPT_EAL_ImplPkeyEncrypt)Encrypt},
                                            {CRYPT_EAL_IMPLPKEYCIPHER_DECRYPT, (CRYPT_EAL_ImplPkeyDecrypt)Decrypt},
@@ -501,6 +395,4 @@ const CRYPT_EAL_Func g_hifheCipherBgv[] = {{CRYPT_EAL_IMPLPKEYCIPHER_ENCRYPT, (C
                                            {CRYPT_EAL_IMPLPKEYCIPHER_MSG_ENCODE, (CRYPT_EAL_ImplPkeyHEMsgEncode)Encode},
                                            {CRYPT_EAL_IMPLPKEYCIPHER_MSG_DECODE, (CRYPT_EAL_ImplPkeyHEMsgDecode)Decode},
                                            CRYPT_EAL_FUNC_END};
-const CRYPT_EAL_Func g_hifheCipherCkks[] = {{CRYPT_EAL_IMPLPKEYCIPHER_ENCRYPT, (CRYPT_EAL_ImplPkeyEncrypt)Encrypt},
-                                            {CRYPT_EAL_IMPLPKEYCIPHER_DECRYPT, (CRYPT_EAL_ImplPkeyDecrypt)Decrypt},
-                                            CRYPT_EAL_FUNC_END};
+#endif

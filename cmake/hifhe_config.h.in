@@ -14,7 +14,6 @@
 #define HIFHE_CONFIG_H
 
 #cmakedefine HITLS_PROVIDER 1
-#cmakedefine HIFHE_ENABLE_CKKS
 #cmakedefine HIFHE_ENABLE_BGV
 
 #endif
