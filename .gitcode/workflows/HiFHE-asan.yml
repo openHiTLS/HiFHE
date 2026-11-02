@@ -40,7 +40,8 @@ jobs:
       - name: Checkout
         uses: checkout
         with:
-          repository: ${{ atomgit.event.pull_request.head.repo.full_name || atomgit.repository }}
+          repository: >-
+            https://gitcode.com/${{ atomgit.event.pull_request.head.repo.full_name || atomgit.repository }}.git
           ref: ${{ atomgit.event.pull_request.head.sha || atomgit.sha }}
 
       - name: Verify checkout
