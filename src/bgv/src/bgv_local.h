@@ -167,6 +167,11 @@ int32_t BgvSerDes_DumpPlaintext(const Plaintext *pt, uint8_t *buf, uint32_t *buf
 int32_t BgvSerDes_LoadPlaintext(Plaintext *pt, const uint8_t *buf, uint32_t bufLen, BGVContext *ctx);
 int32_t BgvSerDes_DumpCiphertext(const Ciphertext *ct, uint8_t *buf, uint32_t *bufLen, int32_t algId);
 int32_t BgvSerDes_LoadCiphertext(Ciphertext *ct, const uint8_t *buf, uint32_t bufLen, BGVContext *ctx);
+HIFHE_ERROR Bgv_DumpPub(CRYPT_BGV_Ctx *ctx, uint8_t *out, uint32_t *len);
+HIFHE_ERROR Bgv_DumpPrv(CRYPT_BGV_Ctx *ctx, uint8_t *out, uint32_t *len);
+HIFHE_ERROR Bgv_LoadPub(CRYPT_BGV_Ctx *ctx, const uint8_t *in, uint32_t len);
+HIFHE_ERROR Bgv_LoadPrv(CRYPT_BGV_Ctx *ctx, const uint8_t *in, uint32_t len);
+
 int32_t BgvSerDes_DumpPubKey(const PublicKey *pk, uint8_t *buf, uint32_t *bufLen, int32_t algId);
 int32_t BgvSerDes_LoadPubKey(PublicKey *pk, const uint8_t *buf, uint32_t bufLen, BGVContext *ctx);
 int32_t BgvSerDes_DumpPrvKey(const SecretKey *sk, uint8_t *buf, uint32_t *bufLen, int32_t algId);

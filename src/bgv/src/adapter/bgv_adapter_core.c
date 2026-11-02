@@ -447,9 +447,10 @@ static HIFHE_ERROR DumpCtParam(const Ciphertext *ct, BSL_Param *p, int32_t algId
     return r;
 }
 
-HIFHE_ERROR Bgv_GetPub(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
+/* out == NULL asks for the size, as everywhere else. */
+HIFHE_ERROR Bgv_DumpPub(CRYPT_BGV_Ctx *ctx, uint8_t *out, uint32_t *len)
 {
-    if (ctx == NULL || param == NULL) {
+    if (ctx == NULL || len == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
@@ -457,15 +458,37 @@ HIFHE_ERROR Bgv_GetPub(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
         HIFHE_ERR_PUSH_ERROR(HIFHE_KEY_NOT_SET);
         return HIFHE_KEY_NOT_SET;
     }
+    return BgvSerDes_DumpPubKey(&ctx->bgv.pk, out, len, ctx->algId);
+}
+
+HIFHE_ERROR Bgv_GetPub(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
+{
+    if (ctx == NULL || param == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
+        return HIFHE_NULL_INPUT;
+    }
     BSL_Param *p = BSL_PARAM_FindParam(param, HIFHE_PARAM_BGV_PUBKEY);
     if (p == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     uint32_t len = p->valueLen;
-    int32_t r = BgvSerDes_DumpPubKey(&ctx->bgv.pk, (uint8_t *)p->value, &len, ctx->algId);
+    int32_t r = Bgv_DumpPub(ctx, (uint8_t *)p->value, &len);
     p->useLen = len;
     return r;
+}
+
+HIFHE_ERROR Bgv_DumpPrv(CRYPT_BGV_Ctx *ctx, uint8_t *out, uint32_t *len)
+{
+    if (ctx == NULL || len == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
+        return HIFHE_NULL_INPUT;
+    }
+    if (!ctx->bgv.haveKeygen || ctx->bgv.keygen.sk == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_KEY_NOT_SET);
+        return HIFHE_KEY_NOT_SET;
+    }
+    return BgvSerDes_DumpPrvKey(ctx->bgv.keygen.sk, out, len, ctx->algId);
 }
 
 HIFHE_ERROR Bgv_GetPrv(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
@@ -474,19 +497,45 @@ HIFHE_ERROR Bgv_GetPrv(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
-    if (!ctx->bgv.haveKeygen || ctx->bgv.keygen.sk == NULL) {
-        HIFHE_ERR_PUSH_ERROR(HIFHE_KEY_NOT_SET);
-        return HIFHE_KEY_NOT_SET;
-    }
     BSL_Param *p = BSL_PARAM_FindParam(param, HIFHE_PARAM_BGV_PRVKEY);
     if (p == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
     uint32_t len = p->valueLen;
-    int32_t r = BgvSerDes_DumpPrvKey(ctx->bgv.keygen.sk, (uint8_t *)p->value, &len, ctx->algId);
+    int32_t r = Bgv_DumpPrv(ctx, (uint8_t *)p->value, &len);
     p->useLen = len;
     return r;
+}
+
+HIFHE_ERROR Bgv_LoadPub(CRYPT_BGV_Ctx *ctx, const uint8_t *in, uint32_t len)
+{
+    if (ctx == NULL || in == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
+        return HIFHE_NULL_INPUT;
+    }
+    int32_t r = Bgv_BuildContext(ctx);
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
+    /* Load into a fresh key first, so a rejected blob leaves the one the
+     * context already holds in place. */
+    PublicKey fresh;
+    (void)memset(&fresh, 0, sizeof(fresh));
+    r = BgvSerDes_LoadPubKey(&fresh, in, len, &ctx->bgv.context);
+    if (r != HIFHE_SUCCESS) {
+        BGV_Ciphertext_Destroy(&fresh);
+        return r;
+    }
+    if (ctx->bgv.havePk) {
+        BGV_Ciphertext_Destroy(&ctx->bgv.pk);
+    }
+    ctx->bgv.pk = fresh;
+    ctx->bgv.havePk = 1u;
+    if (ctx->role == HIFHE_ROLE_UNINIT || ctx->role == HIFHE_ROLE_PARA) {
+        ctx->role = HIFHE_ROLE_EVAL;
+    }
+    return HIFHE_SUCCESS;
 }
 
 HIFHE_ERROR Bgv_SetPub(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
@@ -495,28 +544,12 @@ HIFHE_ERROR Bgv_SetPub(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
-    int32_t r = Bgv_BuildContext(ctx);
-    if (r != HIFHE_SUCCESS) {
-        return r;
-    }
     const BSL_Param *p = BSL_PARAM_FindConstParam(param, HIFHE_PARAM_BGV_PUBKEY);
     if (p == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
-    if (ctx->bgv.havePk) {
-        BGV_Ciphertext_Destroy(&ctx->bgv.pk);
-        ctx->bgv.havePk = 0u;
-    }
-    r = BgvSerDes_LoadPubKey(&ctx->bgv.pk, (const uint8_t *)p->value, p->valueLen, &ctx->bgv.context);
-    if (r != HIFHE_SUCCESS) {
-        return r;
-    }
-    ctx->bgv.havePk = 1u;
-    if (ctx->role == HIFHE_ROLE_UNINIT || ctx->role == HIFHE_ROLE_PARA) {
-        ctx->role = HIFHE_ROLE_EVAL;
-    }
-    return HIFHE_SUCCESS;
+    return Bgv_LoadPub(ctx, (const uint8_t *)p->value, p->valueLen);
 }
 
 HIFHE_ERROR Bgv_SetPrv(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
@@ -525,14 +558,23 @@ HIFHE_ERROR Bgv_SetPrv(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
-    int32_t r = Bgv_BuildContext(ctx);
-    if (r != HIFHE_SUCCESS) {
-        return r;
-    }
     const BSL_Param *p = BSL_PARAM_FindConstParam(param, HIFHE_PARAM_BGV_PRVKEY);
     if (p == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
+    }
+    return Bgv_LoadPrv(ctx, (const uint8_t *)p->value, p->valueLen);
+}
+
+HIFHE_ERROR Bgv_LoadPrv(CRYPT_BGV_Ctx *ctx, const uint8_t *in, uint32_t len)
+{
+    if (ctx == NULL || in == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
+        return HIFHE_NULL_INPUT;
+    }
+    int32_t r = Bgv_BuildContext(ctx);
+    if (r != HIFHE_SUCCESS) {
+        return r;
     }
     if (!ctx->bgv.haveKeygen) {
         r = BGV_KeyGenerator_Create(&ctx->bgv.keygen, &ctx->bgv.context);
@@ -549,7 +591,7 @@ HIFHE_ERROR Bgv_SetPrv(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
         HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
-    r = BgvSerDes_LoadPrvKey(fresh, (const uint8_t *)p->value, p->valueLen, &ctx->bgv.context);
+    r = BgvSerDes_LoadPrvKey(fresh, in, len, &ctx->bgv.context);
     if (r != HIFHE_SUCCESS) {
         BGV_SecretKey_Free(&fresh);
         return r;

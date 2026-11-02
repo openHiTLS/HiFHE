@@ -14,7 +14,6 @@
 #include <stdint.h>
 #include "hifhe_local.h"
 #include "crypt_eal_md.h"
-#include "crypt_eal_rand.h"
 #include "crypt_algid.h"
 #include "crypt_errno.h"
 #include "hifhe_err_internal.h"
@@ -164,6 +163,7 @@ HIFHE_Ctx *Hifhe_CtxDup(const HIFHE_Ctx *src)
     }
     memcpy(dst->keysetId, src->keysetId, 16);
     dst->keyMask = src->keyMask;
+    dst->wireFormat = src->wireFormat;
     dst->useLutCache = src->useLutCache;
     return dst;
 fail:
@@ -193,12 +193,13 @@ int32_t HIFHE_KeyGen(HIFHE_Ctx *ctx)
     uint8_t id[16];
     int32_t ret = ctx->method->keyGen(fresh);
     if (ret == HIFHE_SUCCESS) {
-        ret = ctx->libCtx != NULL ? CRYPT_EAL_RandbytesEx(ctx->libCtx, id, sizeof(id)) :
-                                    CRYPT_EAL_Randbytes(id, sizeof(id));
+        /* The id names which keys a ciphertext belongs to, so it has to be the
+         * same wherever those keys are. The algorithm derives it from whatever
+         * made the keys reproducible, and falls back to random when nothing
+         * did. */
+        ret = ctx->method->keysetId(fresh, id, sizeof(id));
         if (ret != HIFHE_SUCCESS) {
             HifheCleanse(id, sizeof(id));
-            ret = HIFHE_RANDOM_ERROR;
-            HIFHE_ERR_PUSH_ERROR(ret);
         }
     }
     if (ret != HIFHE_SUCCESS) {
@@ -249,6 +250,15 @@ static int32_t CheckCtx(const HIFHE_Ctx *ctx)
     return HIFHE_SUCCESS;
 }
 
+/* A context that generated its keys knows where they came from; one that was
+ * handed a key does not, and neither does an interchange buffer. An origin of
+ * all zeros means exactly that, and two of them have nothing to compare. */
+static bool KnownOrigin(const uint8_t *id)
+{
+    static const uint8_t none[16] = {0};
+    return memcmp(id, none, sizeof(none)) != 0;
+}
+
 int32_t Hifhe_CheckText(const HIFHE_Ctx *ctx, const HIFHE_HEText *text, bool flags)
 {
     int32_t ret = CheckCtx(ctx);
@@ -272,7 +282,8 @@ int32_t Hifhe_CheckText(const HIFHE_Ctx *ctx, const HIFHE_HEText *text, bool fla
         HIFHE_ERR_PUSH_ERROR(HIFHE_BAD_STATE);
         return HIFHE_BAD_STATE;
     }
-    if (m.kind == HIFHE_TEXT_CIPHER && ctx->keyMask != 0 && memcmp(m.keysetId, ctx->keysetId, 16) != 0) {
+    if (m.kind == HIFHE_TEXT_CIPHER && KnownOrigin(m.keysetId) && KnownOrigin(ctx->keysetId) &&
+        memcmp(m.keysetId, ctx->keysetId, sizeof(m.keysetId)) != 0) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_KEY_MISMATCH);
         return HIFHE_KEY_MISMATCH;
     }
@@ -393,7 +404,8 @@ int32_t Hifhe_CheckCompute(const HIFHE_Ctx *ctx, uint32_t op, const HIFHE_HEText
             return ret;
         }
         mb = *b->data;
-        if (mb.kind == HIFHE_TEXT_CIPHER && memcmp(ma.keysetId, mb.keysetId, 16) != 0) {
+        if (mb.kind == HIFHE_TEXT_CIPHER && KnownOrigin(ma.keysetId) && KnownOrigin(mb.keysetId) &&
+            memcmp(ma.keysetId, mb.keysetId, sizeof(ma.keysetId)) != 0) {
             HIFHE_ERR_PUSH_ERROR(HIFHE_KEY_MISMATCH);
             return HIFHE_KEY_MISMATCH;
         }
@@ -534,9 +546,20 @@ int32_t HIFHE_Ctrl(HIFHE_Ctx *ctx, int32_t cmd, HIFHE_HEText *text, void *value,
     return ret != HIFHE_SUCCESS ? ret : Hifhe_HETextNew(ctx, data, out);
 }
 
+#define HIFHE_WIRE_TAG    "HFHE"
+#define HIFHE_WIRE_KEYSET 60u
+
+/* Which format a buffer is in. The tag is only ever at the front of HiFHE's
+ * own, so anything else is handed to the algorithm, which validates its own
+ * interchange header and rejects whatever is neither. */
+static bool IsHifheWire(const uint8_t *p, uint32_t len)
+{
+    return p != NULL && len >= 4u && memcmp(p, HIFHE_WIRE_TAG, 4) == 0;
+}
+
 static void WriteHeader(const HIFHE_Ctx *ctx, uint32_t kind, uint32_t len, const uint8_t *id, uint8_t *p)
 {
-    memcpy(p, "HFHE", 4);
+    memcpy(p, HIFHE_WIRE_TAG, 4);
     Hifhe_Put32(p + 4, 1u | kind << 16);
     Hifhe_Put32(p + 8, (uint32_t)ctx->method->algId);
     Hifhe_Put32(p + 12, len);
@@ -565,7 +588,7 @@ static int32_t ReadHeader(const HIFHE_Ctx *ctx, const uint8_t *p, uint32_t len, 
         HIFHE_ERR_PUSH_ERROR(HIFHE_INVALID_LENGTH);
         return HIFHE_INVALID_LENGTH;
     }
-    if (memcmp(p, "HFHE", 4) != 0) {
+    if (!IsHifheWire(p, len)) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
@@ -588,18 +611,92 @@ static int32_t ReadHeader(const HIFHE_Ctx *ctx, const uint8_t *p, uint32_t len, 
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_MISMATCH);
         return HIFHE_PARAM_MISMATCH;
     }
-    if (*kind != HIFHE_TEXT_PLAIN && ctx->keyMask != 0 && memcmp(p + 60, ctx->keysetId, 16) != 0) {
+    if (*kind != HIFHE_TEXT_PLAIN && KnownOrigin(ctx->keysetId) && KnownOrigin(p + HIFHE_WIRE_KEYSET) &&
+        memcmp(p + HIFHE_WIRE_KEYSET, ctx->keysetId, sizeof(ctx->keysetId)) != 0) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_KEY_MISMATCH);
         return HIFHE_KEY_MISMATCH;
     }
     if (*kind == HIFHE_TEXT_PLAIN) {
         uint8_t zero[16] = {0};
-        if (memcmp(p + 60, zero, 16) != 0) {
+        if (memcmp(p + HIFHE_WIRE_KEYSET, zero, sizeof(zero)) != 0) {
             HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
             return HIFHE_SERDES_FAIL;
         }
     }
     return 0;
+}
+
+static int32_t ExportKey(const HIFHE_Ctx *ctx, uint32_t which, uint8_t *out, uint32_t *outLen)
+{
+    if (outLen == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
+        return HIFHE_NULL_INPUT;
+    }
+    int32_t ret = CheckCtx(ctx);
+    if (ret != HIFHE_SUCCESS) {
+        return ret;
+    }
+    if ((ctx->keyMask & which) == 0) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_KEY_NOT_SET);
+        return HIFHE_KEY_NOT_SET;
+    }
+    if (Overlap(out, *outLen, outLen, sizeof(*outLen))) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_BUFFER_OVERLAP);
+        return HIFHE_BUFFER_OVERLAP;
+    }
+    return ctx->method->keyDump(ctx, which, out, outLen);
+}
+
+static int32_t ImportKey(HIFHE_Ctx *ctx, uint32_t which, const uint8_t *in, uint32_t len)
+{
+    int32_t ret = CheckCtx(ctx);
+    if (ret != HIFHE_SUCCESS) {
+        return ret;
+    }
+    if (in == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
+        return HIFHE_NULL_INPUT;
+    }
+    if (len > HIFHE_MAX_WIRE) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_LIMIT_EXCEEDED);
+        return HIFHE_LIMIT_EXCEEDED;
+    }
+    ret = ctx->method->keyLoad(ctx, which, in, len);
+    if (ret != HIFHE_SUCCESS) {
+        return ret;
+    }
+    if (which == HIFHE_KEY_PRIVATE) {
+        /* A new secret invalidates everything derived from the old one, and
+         * the algorithm drops those along with the public key. The mask has
+         * to stop advertising a key that is no longer there, or encrypting
+         * would pass its gate and fail somewhere deeper. */
+        ctx->keyMask &= ~HIFHE_KEY_PUBLIC;
+    }
+    ctx->keyMask |= which;
+    /* The key arrived without a provenance, so the context has no origin left
+     * to hold a ciphertext to. */
+    (void)memset(ctx->keysetId, 0, sizeof(ctx->keysetId));
+    return HIFHE_SUCCESS;
+}
+
+int32_t HIFHE_ExportPubKey(const HIFHE_Ctx *ctx, uint8_t *out, uint32_t *outLen)
+{
+    return ExportKey(ctx, HIFHE_KEY_PUBLIC, out, outLen);
+}
+
+int32_t HIFHE_ExportPrvKey(const HIFHE_Ctx *ctx, uint8_t *out, uint32_t *outLen)
+{
+    return ExportKey(ctx, HIFHE_KEY_PRIVATE, out, outLen);
+}
+
+int32_t HIFHE_ImportPubKey(HIFHE_Ctx *ctx, const uint8_t *data, uint32_t dataLen)
+{
+    return ImportKey(ctx, HIFHE_KEY_PUBLIC, data, dataLen);
+}
+
+int32_t HIFHE_ImportPrvKey(HIFHE_Ctx *ctx, const uint8_t *data, uint32_t dataLen)
+{
+    return ImportKey(ctx, HIFHE_KEY_PRIVATE, data, dataLen);
 }
 
 int32_t HIFHE_Serialize(const HIFHE_Ctx *ctx, const HIFHE_HEText *text, uint8_t *out, uint32_t *outLen)
@@ -615,6 +712,9 @@ int32_t HIFHE_Serialize(const HIFHE_Ctx *ctx, const HIFHE_HEText *text, uint8_t 
     if (Overlap(out, *outLen, outLen, sizeof(*outLen))) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_BUFFER_OVERLAP);
         return HIFHE_BUFFER_OVERLAP;
+    }
+    if (ctx->wireFormat == HIFHE_WIRE_INTERCHANGE) {
+        return ctx->method->serializeNative(ctx, text->data, out, outLen);
     }
     uint32_t n = 0;
     ret = ctx->method->serialize(ctx, text->data, NULL, &n);
@@ -655,18 +755,35 @@ int32_t HIFHE_Deserialize(const HIFHE_Ctx *ctx, const uint8_t *in, uint32_t len,
     if (ret != HIFHE_SUCCESS) {
         return ret;
     }
-    uint32_t kind;
-    ret = ReadHeader(ctx, in, len, &kind);
-    if (ret != HIFHE_SUCCESS) {
-        return ret;
-    }
+    uint32_t kind = 0;
     void *data = NULL;
-    ret = ctx->method->deserialize(ctx, kind, in + HIFHE_WIRE_HEADER, len - HIFHE_WIRE_HEADER, &data);
+    const bool own = IsHifheWire(in, len);
+    if (own) {
+        ret = ReadHeader(ctx, in, len, &kind);
+        if (ret == HIFHE_SUCCESS) {
+            ret = ctx->method->deserialize(ctx, kind, in + HIFHE_WIRE_HEADER, len - HIFHE_WIRE_HEADER, &data);
+        }
+    } else {
+        ret = CheckCtx(ctx);
+        if (ret == HIFHE_SUCCESS && in == NULL) {
+            ret = HIFHE_NULL_INPUT;
+            HIFHE_ERR_PUSH_ERROR(ret);
+        }
+        if (ret == HIFHE_SUCCESS) {
+            ret = ctx->method->deserializeNative(ctx, in, len, &kind, &data);
+        }
+    }
     if (ret != HIFHE_SUCCESS) {
         return ret;
     }
     HifheTextMeta *meta = data;
-    memcpy(meta->keysetId, in + 60, 16);
+    if (kind == HIFHE_TEXT_CIPHER) {
+        /* HiFHE's own format names the keys the ciphertext belongs to. The
+         * interchange format does not, so the reader's own keys are taken to
+         * be the right ones; decrypting under the wrong ones yields noise,
+         * exactly as it does for a caller of the Provider. */
+        memcpy(meta->keysetId, own ? in + HIFHE_WIRE_KEYSET : ctx->keysetId, sizeof(meta->keysetId));
+    }
     meta->flags = 0;
     return Hifhe_HETextNew(ctx, data, out);
 }

@@ -583,3 +583,68 @@ EXIT:
     CRYPT_BGV_FreeCtx(preset);
 }
 /* END_CASE */
+
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_MODSWITCHED_WIRE_TC001(void)
+{
+    CRYPT_BGV_Ctx *native = NULL;
+    HIFHE_Ctx *pub = NULL;
+    HIFHE_HEText *loaded = NULL;
+    uint8_t *ct = NULL, *shorter = NULL, *msg = NULL, *pt = NULL;
+    uint32_t ctLen = 0, shorterLen = 0, ptLen = 0, slots = 0;
+    int32_t preset = HIFHE_BGV_4096_44x2_17BIT;
+
+    ASSERT_EQ(TestRandInit(), HIFHE_SUCCESS);
+
+    /* The native surface can spend a level; the public one cannot even say
+     * that it has been spent, since every preset carries mulDepth 0. */
+    native = CRYPT_BGV_NewCtx(HIFHE_BGV);
+    ASSERT_TRUE(native != NULL);
+    ASSERT_EQ(CRYPT_BGV_Ctrl(native, CRYPT_CTRL_SET_PARA_BY_ID, &preset, sizeof(preset)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_BGV_Gen(native), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_BGV_Ctrl(native, HIFHE_CTRL_BGV_GET_POLY_DEGREE, &slots, sizeof(slots)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_BGV_Ctrl(native, HIFHE_CTRL_BGV_GET_CIPHERTEXT_LEN, &ctLen, sizeof(ctLen)), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_BGV_Ctrl(native, HIFHE_CTRL_BGV_GET_PLAINTEXT_LEN, &ptLen, sizeof(ptLen)), HIFHE_SUCCESS);
+    msg = calloc(slots, sizeof(uint64_t));
+    pt = malloc(ptLen);
+    ct = malloc(ctLen);
+    shorter = malloc(ctLen);
+    ASSERT_TRUE(msg != NULL && pt != NULL && ct != NULL && shorter != NULL);
+    for (uint32_t i = 0; i < slots; i++) {
+        ((uint64_t *)msg)[i] = (i % 5u) + 1u;
+    }
+    BSL_Param encIn[] = {{HIFHE_PARAM_BGV_MSG, BSL_PARAM_TYPE_OCTETS, msg, slots * (uint32_t)sizeof(uint64_t), 0},
+                         BSL_PARAM_END};
+    ASSERT_EQ(CRYPT_BGV_HEMsgEncode(native, encIn, pt, &ptLen), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_BGV_Encrypt(native, pt, ptLen, ct, &ctLen), HIFHE_SUCCESS);
+
+    BSL_Param msIn[] = {{HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct, ctLen, 0},
+                        {HIFHE_PARAM_BGV_CIPHERTEXT2, BSL_PARAM_TYPE_OCTETS, shorter, ctLen, 0},
+                        BSL_PARAM_END};
+    ASSERT_EQ(CRYPT_BGV_Ctrl(native, HIFHE_CTRL_BGV_HE_MODSWITCH, msIn, 0), HIFHE_SUCCESS);
+    shorterLen = msIn[1].useLen;
+    /* One limb fewer on the wire is what makes this interesting. */
+    ASSERT_TRUE(shorterLen > 0 && shorterLen < ctLen);
+
+    pub = HIFHE_New(HIFHE_BGV);
+    ASSERT_TRUE(pub != NULL);
+    ASSERT_EQ(HIFHE_SetParaById(pub, preset), HIFHE_SUCCESS);
+    /* The full-chain ciphertext reads; the one that spent a level does not,
+     * which is the same answer HIFHE_Deserialize gives for HiFHE's own
+     * format, rather than loading an object it could never write back. */
+    ASSERT_EQ(HIFHE_Deserialize(pub, ct, ctLen, &loaded), HIFHE_SUCCESS);
+    HIFHE_HETextFree(loaded);
+    loaded = NULL;
+    ASSERT_TRUE(HIFHE_Deserialize(pub, shorter, shorterLen, &loaded) == HIFHE_SERDES_FAIL);
+    ASSERT_TRUE(loaded == NULL);
+EXIT:
+    HIFHE_HETextFree(loaded);
+    HIFHE_Free(pub);
+    CRYPT_BGV_FreeCtx(native);
+    free(msg);
+    free(pt);
+    free(ct);
+    free(shorter);
+}
+
+/* END_CASE */
