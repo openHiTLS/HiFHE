@@ -51,6 +51,13 @@ static uint8_t *Serialized(const HIFHE_Ctx *ctx, const HIFHE_HEText *text, uint3
     return bytes;
 }
 
+/* One fixed seed, so two contexts derive one keypair and one key origin. */
+static uint8_t g_wireSeed[32] = {
+    0x77, 0x69, 0x72, 0x65, 0x5f, 0x66, 0x6d, 0x74, /* "wire_fmt" */
+    0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c,
+    0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
+};
+
 static void Put32(uint8_t *out, uint32_t value)
 {
     for (uint32_t i = 0; i < 4; i++) {
@@ -514,4 +521,313 @@ EXIT:
     free(values);
     CRYPT_EAL_Cleanup(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND);
 }
+/* END_CASE */
+
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_WIRE_INTERCHANGE_API_TC001(void)
+{
+    HIFHE_Ctx *w = NULL, *r = NULL;
+    HIFHE_HEText *pt = NULL, *ct = NULL, *back = NULL, *plain = NULL;
+    uint8_t *wire = NULL;
+    uint64_t *values = NULL;
+    uint32_t len = 0, expect = 0;
+    uint32_t interchange = HIFHE_WIRE_INTERCHANGE;
+    uint64_t msg[] = {7, 11, 13, 17};
+
+    ASSERT_EQ(CRYPT_EAL_Init(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND), HIFHE_SUCCESS);
+    w = Configured();
+    r = Configured();
+    ASSERT_TRUE(w != NULL && r != NULL);
+    ASSERT_EQ(HIFHE_Ctrl(w, HIFHE_CTRL_BGV_SET_SEED, NULL, g_wireSeed, sizeof(g_wireSeed)), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Ctrl(r, HIFHE_CTRL_BGV_SET_SEED, NULL, g_wireSeed, sizeof(g_wireSeed)), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_KeyGen(w), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_KeyGen(r), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Ctrl(w, HIFHE_CTRL_BGV_SET_WIRE_FORMAT, NULL, &interchange, sizeof(interchange)), HIFHE_SUCCESS);
+
+    /* The length query has to follow the selected format, or a caller sizing a
+     * buffer from it writes short. */
+    ASSERT_EQ(HIFHE_Ctrl(w, HIFHE_CTRL_BGV_GET_CIPHERTEXT_LEN, NULL, &expect, sizeof(expect)), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Encode(w, msg, 4, &pt), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Encrypt(w, pt, &ct), HIFHE_SUCCESS);
+    wire = Serialized(w, ct, &len);
+    ASSERT_TRUE(wire != NULL);
+    ASSERT_EQ(len, expect);
+    /* The interchange header, not HiFHE's own. */
+    ASSERT_TRUE(memcmp(wire, "HLG\0", 4) == 0);
+
+    /* A second context, keys of its own from the same seed, reads it. */
+    ASSERT_EQ(HIFHE_Deserialize(r, wire, len, &back), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Decrypt(r, back, &plain), HIFHE_SUCCESS);
+    uint32_t count = 0;
+    ASSERT_TRUE(HIFHE_Decode(r, plain, NULL, &count) == HIFHE_BUFFER_TOO_SMALL);
+    values = calloc(count, sizeof(*values));
+    ASSERT_TRUE(values != NULL);
+    ASSERT_EQ(HIFHE_Decode(r, plain, values, &count), HIFHE_SUCCESS);
+    ASSERT_TRUE(values[0] == 7 && values[1] == 11 && values[2] == 13 && values[3] == 17);
+EXIT:
+    HIFHE_HETextFree(pt);
+    HIFHE_HETextFree(ct);
+    HIFHE_HETextFree(back);
+    HIFHE_HETextFree(plain);
+    HIFHE_Free(w);
+    HIFHE_Free(r);
+    free(wire);
+    free(values);
+    CRYPT_EAL_Cleanup(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND);
+}
+
+/* END_CASE */
+
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_KEY_ORIGIN_API_TC001(void)
+{
+    HIFHE_Ctx *a = NULL, *same = NULL, *other = NULL;
+    HIFHE_HEText *pt = NULL, *ct = NULL, *back = NULL, *plain = NULL, *reject = NULL;
+    uint8_t *wire = NULL;
+    uint64_t *values = NULL;
+    uint32_t len = 0;
+    uint8_t otherSeed[32];
+    uint64_t msg[] = {3, 5, 7, 9};
+
+    ASSERT_EQ(CRYPT_EAL_Init(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND), HIFHE_SUCCESS);
+    memcpy(otherSeed, g_wireSeed, sizeof(otherSeed));
+    otherSeed[0] ^= 0xffu;
+
+    a = Configured();
+    same = Configured();
+    other = Configured();
+    ASSERT_TRUE(a != NULL && same != NULL && other != NULL);
+    ASSERT_EQ(HIFHE_Ctrl(a, HIFHE_CTRL_BGV_SET_SEED, NULL, g_wireSeed, sizeof(g_wireSeed)), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Ctrl(same, HIFHE_CTRL_BGV_SET_SEED, NULL, g_wireSeed, sizeof(g_wireSeed)), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Ctrl(other, HIFHE_CTRL_BGV_SET_SEED, NULL, otherSeed, sizeof(otherSeed)), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_KeyGen(a), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_KeyGen(same), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_KeyGen(other), HIFHE_SUCCESS);
+
+    ASSERT_EQ(HIFHE_Encode(a, msg, 4, &pt), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Encrypt(a, pt, &ct), HIFHE_SUCCESS);
+    wire = Serialized(a, ct, &len);
+    ASSERT_TRUE(wire != NULL);
+    ASSERT_TRUE(memcmp(wire, "HFHE", 4) == 0);
+
+    /* One seed, one key, one origin: a separate context reads it. */
+    ASSERT_EQ(HIFHE_Deserialize(same, wire, len, &back), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Decrypt(same, back, &plain), HIFHE_SUCCESS);
+    uint32_t count = 0;
+    ASSERT_TRUE(HIFHE_Decode(same, plain, NULL, &count) == HIFHE_BUFFER_TOO_SMALL);
+    values = calloc(count, sizeof(*values));
+    ASSERT_TRUE(values != NULL);
+    ASSERT_EQ(HIFHE_Decode(same, plain, values, &count), HIFHE_SUCCESS);
+    ASSERT_TRUE(values[0] == 3 && values[1] == 5 && values[2] == 7 && values[3] == 9);
+
+    /* A different seed is a different key, and the origin still says so. */
+    ASSERT_TRUE(HIFHE_Deserialize(other, wire, len, &reject) == HIFHE_KEY_MISMATCH);
+    ASSERT_TRUE(reject == NULL);
+EXIT:
+    HIFHE_HETextFree(pt);
+    HIFHE_HETextFree(ct);
+    HIFHE_HETextFree(back);
+    HIFHE_HETextFree(plain);
+    HIFHE_HETextFree(reject);
+    HIFHE_Free(a);
+    HIFHE_Free(same);
+    HIFHE_Free(other);
+    free(wire);
+    free(values);
+    CRYPT_EAL_Cleanup(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND);
+}
+
+/* END_CASE */
+
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_WIRE_FORMAT_ARGS_API_TC001(void)
+{
+    HIFHE_Ctx *ctx = NULL, *early = NULL;
+    HIFHE_HEText *pt = NULL, *bad = NULL;
+    uint8_t *wire = NULL;
+    uint32_t len = 0;
+    uint32_t format = 2;
+    uint64_t msg[] = {1, 2, 3, 4};
+
+    ASSERT_EQ(CRYPT_EAL_Init(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND), HIFHE_SUCCESS);
+    /* The setting belongs to the context, so it takes before the parameters
+     * as readily as after. */
+    early = HIFHE_New(HIFHE_BGV);
+    ASSERT_TRUE(early != NULL);
+    uint32_t interchange = HIFHE_WIRE_INTERCHANGE;
+    ASSERT_EQ(HIFHE_Ctrl(early, HIFHE_CTRL_BGV_SET_WIRE_FORMAT, NULL, &interchange, sizeof(interchange)),
+              HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_SetParaById(early, HIFHE_BGV_4096_44x2_17BIT), HIFHE_SUCCESS);
+
+    ctx = Configured();
+    ASSERT_TRUE(ctx != NULL);
+    ASSERT_TRUE(HIFHE_Ctrl(ctx, HIFHE_CTRL_BGV_SET_WIRE_FORMAT, NULL, &format, sizeof(format)) ==
+                HIFHE_VALUE_OUT_OF_RANGE);
+    format = HIFHE_WIRE_INTERCHANGE;
+    ASSERT_TRUE(HIFHE_Ctrl(ctx, HIFHE_CTRL_BGV_SET_WIRE_FORMAT, NULL, &format, 1) == HIFHE_INVALID_LENGTH);
+    ASSERT_EQ(HIFHE_Ctrl(ctx, HIFHE_CTRL_BGV_SET_WIRE_FORMAT, NULL, &format, sizeof(format)), HIFHE_SUCCESS);
+
+    /* Neither header: still refused, not read as one format or the other. */
+    ASSERT_EQ(HIFHE_Encode(ctx, msg, 4, &pt), HIFHE_SUCCESS);
+    wire = Serialized(ctx, pt, &len);
+    ASSERT_TRUE(wire != NULL && len > 12);
+    wire[0] ^= 0xffu;
+    ASSERT_TRUE(HIFHE_Deserialize(ctx, wire, len, &bad) == HIFHE_SERDES_FAIL);
+    ASSERT_TRUE(bad == NULL);
+    /* A truncated interchange header is refused before anything is read. */
+    wire[0] ^= 0xffu;
+    ASSERT_TRUE(HIFHE_Deserialize(ctx, wire, 11, &bad) == HIFHE_SERDES_FAIL);
+    ASSERT_TRUE(bad == NULL);
+EXIT:
+    HIFHE_HETextFree(pt);
+    HIFHE_HETextFree(bad);
+    HIFHE_Free(ctx);
+    HIFHE_Free(early);
+    free(wire);
+    CRYPT_EAL_Cleanup(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND);
+}
+
+/* END_CASE */
+
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_KEY_IO_API_TC001(void)
+{
+    HIFHE_Ctx *owner = NULL, *reader = NULL, *writer = NULL, *rival = NULL;
+    HIFHE_HEText *rpt = NULL, *rct = NULL, *rback = NULL, *rplain = NULL;
+    uint8_t *rivalPrv = NULL, *rivalWire = NULL;
+    uint32_t rivalLen = 0, rivalPrvLen = 0;
+    uint8_t rivalSeed[32];
+    HIFHE_HEText *pt = NULL, *ct = NULL, *back = NULL, *plain = NULL;
+    HIFHE_HEText *wpt = NULL, *wct = NULL, *oback = NULL, *oplain = NULL;
+    uint8_t *pub = NULL, *prv = NULL, *wire = NULL, *fromWriter = NULL;
+    uint64_t *values = NULL;
+    uint32_t pubLen = 0, prvLen = 0, len = 0, writerLen = 0, query = 0;
+    uint64_t msg[] = {21, 22, 23, 24};
+
+    ASSERT_EQ(CRYPT_EAL_Init(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND), HIFHE_SUCCESS);
+    owner = Configured();
+    reader = Configured();
+    writer = Configured();
+    ASSERT_TRUE(owner != NULL && reader != NULL && writer != NULL);
+
+    /* Nothing to export before there are keys. */
+    ASSERT_TRUE(HIFHE_ExportPubKey(owner, NULL, &query) == HIFHE_KEY_NOT_SET);
+    ASSERT_TRUE(HIFHE_ExportPrvKey(owner, NULL, &query) == HIFHE_KEY_NOT_SET);
+    ASSERT_EQ(HIFHE_Ctrl(owner, HIFHE_CTRL_BGV_SET_SEED, NULL, g_wireSeed, sizeof(g_wireSeed)), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_KeyGen(owner), HIFHE_SUCCESS);
+
+    /* Both keys go out in the interchange format, sized by the query. */
+    pubLen = 0;
+    ASSERT_TRUE(HIFHE_ExportPubKey(owner, NULL, &pubLen) == HIFHE_BUFFER_TOO_SMALL);
+    pub = malloc(pubLen);
+    ASSERT_TRUE(pub != NULL);
+    ASSERT_EQ(HIFHE_ExportPubKey(owner, pub, &pubLen), HIFHE_SUCCESS);
+    prvLen = 0;
+    ASSERT_TRUE(HIFHE_ExportPrvKey(owner, NULL, &prvLen) == HIFHE_BUFFER_TOO_SMALL);
+    prv = malloc(prvLen);
+    ASSERT_TRUE(prv != NULL);
+    ASSERT_EQ(HIFHE_ExportPrvKey(owner, prv, &prvLen), HIFHE_SUCCESS);
+    ASSERT_TRUE(memcmp(pub, "HLG\0", 4) == 0 && memcmp(prv, "HLG\0", 4) == 0);
+
+    /* A ciphertext is not a key, and a broken header is not either. */
+    ASSERT_EQ(HIFHE_Encode(owner, msg, 4, &pt), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Encrypt(owner, pt, &ct), HIFHE_SUCCESS);
+    wire = Serialized(owner, ct, &len);
+    ASSERT_TRUE(wire != NULL);
+    ASSERT_TRUE(HIFHE_ImportPrvKey(reader, prv, 11) == HIFHE_SERDES_FAIL);
+    prv[0] ^= 0xffu;
+    ASSERT_TRUE(HIFHE_ImportPrvKey(reader, prv, prvLen) == HIFHE_SERDES_FAIL);
+    prv[0] ^= 0xffu;
+    /* Each call takes one kind of key and nothing else. */
+    ASSERT_TRUE(HIFHE_ImportPubKey(reader, prv, prvLen) == HIFHE_SERDES_FAIL);
+    ASSERT_TRUE(HIFHE_ImportPrvKey(reader, pub, pubLen) == HIFHE_SERDES_FAIL);
+    ASSERT_TRUE(HIFHE_ImportPrvKey(reader, wire, len) == HIFHE_SERDES_FAIL);
+
+    /* The private key alone opens the owner's ciphertext. The reader has no
+     * origin of its own once a key is handed to it, so the owner's origin on
+     * the wire is nothing to hold it to. */
+    ASSERT_EQ(HIFHE_ImportPrvKey(reader, prv, prvLen), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Deserialize(reader, wire, len, &back), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Decrypt(reader, back, &plain), HIFHE_SUCCESS);
+    uint32_t count = 0;
+    ASSERT_TRUE(HIFHE_Decode(reader, plain, NULL, &count) == HIFHE_BUFFER_TOO_SMALL);
+    values = calloc(count, sizeof(*values));
+    ASSERT_TRUE(values != NULL);
+    ASSERT_EQ(HIFHE_Decode(reader, plain, values, &count), HIFHE_SUCCESS);
+    ASSERT_TRUE(values[0] == 21 && values[1] == 22 && values[2] == 23 && values[3] == 24);
+
+    /* The public key alone encrypts, and the owner reads that back. */
+    ASSERT_EQ(HIFHE_ImportPubKey(writer, pub, pubLen), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Encode(writer, msg, 4, &wpt), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Encrypt(writer, wpt, &wct), HIFHE_SUCCESS);
+    fromWriter = Serialized(writer, wct, &writerLen);
+    ASSERT_TRUE(fromWriter != NULL);
+    ASSERT_EQ(HIFHE_Deserialize(owner, fromWriter, writerLen, &oback), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Decrypt(owner, oback, &oplain), HIFHE_SUCCESS);
+    memset(values, 0, count * sizeof(*values));
+    ASSERT_EQ(HIFHE_Decode(owner, oplain, values, &count), HIFHE_SUCCESS);
+    ASSERT_TRUE(values[0] == 21 && values[1] == 22 && values[2] == 23 && values[3] == 24);
+
+    /* A public key does not let it decrypt. */
+    HIFHE_HETextFree(oplain);
+    oplain = NULL;
+    ASSERT_TRUE(HIFHE_Decrypt(writer, wct, &oplain) == HIFHE_KEY_NOT_SET);
+
+    /* An import replaces the key, so the origin the context had from its own
+     * keygen no longer describes it: a ciphertext under the imported key has
+     * to be readable. */
+    rival = Configured();
+    ASSERT_TRUE(rival != NULL);
+    memcpy(rivalSeed, g_wireSeed, sizeof(rivalSeed));
+    rivalSeed[1] ^= 0xffu;
+    ASSERT_EQ(HIFHE_Ctrl(rival, HIFHE_CTRL_BGV_SET_SEED, NULL, rivalSeed, sizeof(rivalSeed)), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_KeyGen(rival), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Encode(rival, msg, 4, &rpt), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Encrypt(rival, rpt, &rct), HIFHE_SUCCESS);
+    rivalWire = Serialized(rival, rct, &rivalLen);
+    ASSERT_TRUE(rivalWire != NULL);
+    rivalPrvLen = 0;
+    ASSERT_TRUE(HIFHE_ExportPrvKey(rival, NULL, &rivalPrvLen) == HIFHE_BUFFER_TOO_SMALL);
+    rivalPrv = malloc(rivalPrvLen);
+    ASSERT_TRUE(rivalPrv != NULL);
+    ASSERT_EQ(HIFHE_ExportPrvKey(rival, rivalPrv, &rivalPrvLen), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_ImportPrvKey(owner, rivalPrv, rivalPrvLen), HIFHE_SUCCESS);
+    /* That import replaced the secret, so the public key the context generated
+     * with the old one is gone and must not still be on offer. */
+    ASSERT_TRUE(HIFHE_ExportPubKey(owner, NULL, &query) == HIFHE_KEY_NOT_SET);
+    HIFHE_HETextFree(ct);
+    ct = NULL;
+    ASSERT_TRUE(HIFHE_Encrypt(owner, pt, &ct) == HIFHE_KEY_NOT_SET);
+    ASSERT_EQ(HIFHE_Deserialize(owner, rivalWire, rivalLen, &rback), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_Decrypt(owner, rback, &rplain), HIFHE_SUCCESS);
+    memset(values, 0, count * sizeof(*values));
+    ASSERT_EQ(HIFHE_Decode(owner, rplain, values, &count), HIFHE_SUCCESS);
+    ASSERT_TRUE(values[0] == 21 && values[1] == 22 && values[2] == 23 && values[3] == 24);
+EXIT:
+    HIFHE_HETextFree(rpt);
+    HIFHE_HETextFree(rct);
+    HIFHE_HETextFree(rback);
+    HIFHE_HETextFree(rplain);
+    HIFHE_Free(rival);
+    free(rivalPrv);
+    free(rivalWire);
+    HIFHE_HETextFree(pt);
+    HIFHE_HETextFree(ct);
+    HIFHE_HETextFree(back);
+    HIFHE_HETextFree(plain);
+    HIFHE_HETextFree(wpt);
+    HIFHE_HETextFree(wct);
+    HIFHE_HETextFree(oback);
+    HIFHE_HETextFree(oplain);
+    HIFHE_Free(owner);
+    HIFHE_Free(reader);
+    HIFHE_Free(writer);
+    free(pub);
+    free(prv);
+    free(wire);
+    free(fromWriter);
+    free(values);
+    CRYPT_EAL_Cleanup(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND);
+}
+
 /* END_CASE */

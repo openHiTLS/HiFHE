@@ -17,6 +17,10 @@ HIFHE_1.0 {
         HIFHE_Decode;
         HIFHE_Serialize;
         HIFHE_Deserialize;
+        HIFHE_ExportPubKey;
+        HIFHE_ExportPrvKey;
+        HIFHE_ImportPubKey;
+        HIFHE_ImportPrvKey;
         CRYPT_EAL_ProviderInit;
     local: *;
 };

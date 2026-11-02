@@ -51,6 +51,13 @@ typedef enum {
 #define HIFHE_PARAM_BGV_PLAINTEXT (HIFHE_PARAM_BGV_BASE + 11)
 #endif
 
+/**
+ * Wire formats for HIFHE_CTRL_BGV_SET_WIRE_FORMAT. HIFHE_Deserialize reads
+ * both whichever is selected; the setting only decides what is written.
+ */
+#define HIFHE_WIRE_HIFHE       0u /* HiFHE's own: carries the parameter fingerprint and the key origin. */
+#define HIFHE_WIRE_INTERCHANGE 1u /* The 12-byte-header format the Provider reads. */
+
 #define HIFHE_PRESET_BGV_BASE 100000
 
 /** BGV preset identifiers for HIFHE_SetParaById; these are not algorithm identifiers. */
@@ -112,8 +119,20 @@ typedef enum {
      * Set the BGV seed after parameter configuration and before key generation.
      * text: NULL; value: 32 seed bytes, copied by the call; valueLen: 32.
      * Returns HIFHE_BAD_STATE if keys have already been generated.
+     * A seed also makes the key origin reproducible: keys generated from one
+     * seed carry one origin, so a ciphertext serialized by one context
+     * deserializes into another that holds the same seed.
      */
     HIFHE_CTRL_BGV_SET_SEED = 100007,
+    /**
+     * Select the format HIFHE_Serialize writes.
+     * text: NULL; value: uint32_t * containing HIFHE_WIRE_HIFHE (the default)
+     * or HIFHE_WIRE_INTERCHANGE; valueLen: sizeof(uint32_t).
+     * Accepted before or after HIFHE_SetParaById, since the setting belongs to
+     * the context rather than to its parameters. Applies from the next call;
+     * existing objects are unaffected.
+     */
+    HIFHE_CTRL_BGV_SET_WIRE_FORMAT = 100008,
 } HIFHE_CMD;
 
 #ifdef __cplusplus

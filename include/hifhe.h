@@ -170,8 +170,64 @@ int32_t HIFHE_Decrypt(HIFHE_Ctx *ctx, const HIFHE_HEText *ciphertext, HIFHE_HETe
 int32_t HIFHE_Decode(const HIFHE_Ctx *ctx, const HIFHE_HEText *plaintext, uint64_t *values, uint32_t *count);
 
 /**
- * @brief Serialize a plaintext or ciphertext into the HiFHE wire format; the object is unchanged.
- * @param[in] ctx Configured context compatible with the object.
+ * @brief Export the context's public key; the context is unchanged.
+ * @param[in] ctx Configured context holding a public key.
+ * @param[out] out Caller-owned byte buffer; NULL queries the required size.
+ * @param[in,out] outLen Capacity in bytes on entry; actual/required size on
+ *                      success/HIFHE_BUFFER_TOO_SMALL. Initialize to 0 for a NULL-buffer query.
+ * @retval HIFHE_SUCCESS Success.
+ * @retval HIFHE_KEY_NOT_SET The context holds no public key.
+ * @retval Other Error code; see hifhe_err.h.
+ * @note Keys always travel in the interchange format, whatever
+ *       HIFHE_CTRL_BGV_SET_WIRE_FORMAT selects for plaintexts and ciphertexts, so a key
+ *       written here loads into any implementation that reads that format.
+ */
+int32_t HIFHE_ExportPubKey(const HIFHE_Ctx *ctx, uint8_t *out, uint32_t *outLen);
+
+/**
+ * @brief Export the context's private key; the context is unchanged.
+ * @param[in] ctx Configured context holding a private key.
+ * @param[out] out Caller-owned byte buffer; NULL queries the required size.
+ * @param[in,out] outLen Capacity in bytes on entry; actual/required size on
+ *                      success/HIFHE_BUFFER_TOO_SMALL. Initialize to 0 for a NULL-buffer query.
+ * @retval HIFHE_SUCCESS Success.
+ * @retval HIFHE_KEY_NOT_SET The context holds no private key.
+ * @retval Other Error code; see hifhe_err.h.
+ * @note The output is secret material. Wipe the buffer once it has been sent.
+ */
+int32_t HIFHE_ExportPrvKey(const HIFHE_Ctx *ctx, uint8_t *out, uint32_t *outLen);
+
+/**
+ * @brief Install a public key, replacing the one the context holds.
+ * @param[in,out] ctx Configured context; unchanged on failure.
+ * @param[in] data Exported public key bytes; the input buffer is not retained.
+ * @param[in] dataLen Exact input size in bytes, including the header.
+ * @retval HIFHE_SUCCESS Success.
+ * @retval HIFHE_SERDES_FAIL The buffer is not a public key.
+ * @retval Other Error code; see hifhe_err.h.
+ * @note A public key on its own allows encryption but not decryption. An installed key
+ *       carries no record of where it was generated, so the context stops enforcing a key
+ *       origin and reads a ciphertext whatever origin it names, as a Provider caller does.
+ */
+int32_t HIFHE_ImportPubKey(HIFHE_Ctx *ctx, const uint8_t *data, uint32_t dataLen);
+
+/**
+ * @brief Install a private key, replacing the one the context holds.
+ * @param[in,out] ctx Configured context; unchanged on failure.
+ * @param[in] data Exported private key bytes; the input buffer is not retained.
+ * @param[in] dataLen Exact input size in bytes, including the header.
+ * @retval HIFHE_SUCCESS Success.
+ * @retval HIFHE_SERDES_FAIL The buffer is not a private key.
+ * @retval Other Error code; see hifhe_err.h.
+ * @note A private key on its own allows decryption but not encryption. It also clears the
+ *       context's key origin, as HIFHE_ImportPubKey does.
+ */
+int32_t HIFHE_ImportPrvKey(HIFHE_Ctx *ctx, const uint8_t *data, uint32_t dataLen);
+
+/**
+ * @brief Serialize a plaintext or ciphertext into a wire format; the object is unchanged.
+ * @param[in] ctx Configured context compatible with the object. Its
+ *                HIFHE_CTRL_BGV_SET_WIRE_FORMAT setting selects the format.
  * @param[in] object Plaintext or ciphertext without a pending SET_NEGATE flag.
  * @param[out] out Caller-owned byte buffer; NULL queries the required size.
  * @param[in,out] outLen Capacity in bytes on entry; actual/required size on
@@ -183,14 +239,20 @@ int32_t HIFHE_Decode(const HIFHE_Ctx *ctx, const HIFHE_HEText *plaintext, uint64
 int32_t HIFHE_Serialize(const HIFHE_Ctx *ctx, const HIFHE_HEText *object, uint8_t *out, uint32_t *outLen);
 
 /**
- * @brief Read one complete HiFHE-serialized plaintext or ciphertext.
+ * @brief Read one complete serialized plaintext or ciphertext, in either wire format.
  * @param[in] ctx Context configured with the serialized algorithm, preset, and parameters.
- *                Keys are optional; if present, they must match the ciphertext's key origin.
- * @param[in] data Serialized bytes; the input buffer is not retained.
- * @param[in] dataLen Exact input size in bytes, including the HiFHE header.
+ *                For HIFHE_WIRE_HIFHE input, keys are optional; if present, they must match
+ *                the ciphertext's key origin. HIFHE_WIRE_INTERCHANGE input carries no key
+ *                origin, so a ciphertext read from it takes the context's own.
+ * @param[in] data Serialized bytes; the format is taken from the data, not from the context's
+ *                 HIFHE_CTRL_BGV_SET_WIRE_FORMAT setting. The input buffer is not retained.
+ * @param[in] dataLen Exact input size in bytes, including the header.
  * @param[out] object New plaintext or ciphertext; *object must be NULL on entry.
  * @retval HIFHE_SUCCESS Success.
  * @retval Other Error code; see hifhe_err.h.
+ * @note An interchange-format object records neither the slot index map nor the multiplicative
+ *       depth already spent, so it is read as slot-encoded with its depth taken from the
+ *       modulus chain it carries.
  */
 int32_t HIFHE_Deserialize(const HIFHE_Ctx *ctx, const uint8_t *data, uint32_t dataLen, HIFHE_HEText **object);
 

@@ -19,12 +19,13 @@
 #include "hifhe.h"
 #include "hifhe_config.h"
 #include "hifhe_mem.h"
+#define HIFHE_KEY_PUBLIC  1u
+#define HIFHE_KEY_PRIVATE 2u
+
 #define HIFHE_WIRE_HEADER 76u
 #define HIFHE_MAX_WIRE    (64u * 1024u * 1024u)
 #define HIFHE_TEXT_PLAIN  4u
 #define HIFHE_TEXT_CIPHER 3u
-#define HIFHE_KEY_PUBLIC  1u
-#define HIFHE_KEY_PRIVATE 2u
 #define HIFHE_OP_ENCRYPT  1u
 #define HIFHE_OP_DECRYPT  2u
 #define HIFHE_OP_ADD      3u
@@ -66,6 +67,7 @@ struct HIFHE_Ctx {
     void *libCtx;
     uint8_t keysetId[16];
     uint32_t keyMask;
+    uint32_t wireFormat;
     bool useLutCache;
 };
 
@@ -98,6 +100,17 @@ struct HifheAlgMethod {
     int32_t (*mul)(const HIFHE_Ctx *ctx, const void *para1, const void *para2, void **out);
     int32_t (*serialize)(const HIFHE_Ctx *ctx, const void *data, uint8_t *out, uint32_t *len);
     int32_t (*deserialize)(const HIFHE_Ctx *ctx, uint32_t kind, const uint8_t *in, uint32_t len, void **out);
+    /* The same pair in the interchange format, header included. The reader
+     * takes the kind from the buffer, since that format declares it. */
+    int32_t (*serializeNative)(const HIFHE_Ctx *ctx, const void *data, uint8_t *out, uint32_t *len);
+    int32_t (*deserializeNative)(const HIFHE_Ctx *ctx, const uint8_t *in, uint32_t len, uint32_t *kind, void **out);
+    /* Fill idLen bytes naming the key origin of the keys data holds. Derived
+     * where those keys can be regenerated, random where they cannot. */
+    int32_t (*keysetId)(const void *data, uint8_t *id, uint32_t idLen);
+    /* One key in or out, named by a HIFHE_KEY_* bit, always in the
+     * interchange format. A buffer holding the other key is rejected. */
+    int32_t (*keyDump)(const HIFHE_Ctx *ctx, uint32_t which, uint8_t *out, uint32_t *len);
+    int32_t (*keyLoad)(HIFHE_Ctx *ctx, uint32_t which, const uint8_t *in, uint32_t len);
     void (*textFree)(void *data);
 };
 #ifdef HIFHE_ENABLE_BGV
