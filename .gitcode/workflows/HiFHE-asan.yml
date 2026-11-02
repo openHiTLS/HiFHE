@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  pull_request_target:
+  pull_request:
     types:
       - open
       - update
@@ -12,6 +12,9 @@ on:
     branches:
       - main
   workflow_dispatch:
+
+permissions:
+  repository: read
 
 defaults:
   run:
@@ -36,6 +39,17 @@ jobs:
     steps:
       - name: Checkout
         uses: checkout
+        with:
+          repository: ${{ atomgit.event.pull_request.head.repo.full_name || atomgit.repository }}
+          ref: ${{ atomgit.event.pull_request.head.sha || atomgit.sha }}
+
+      - name: Verify checkout
+        env:
+          EXPECTED_SHA: ${{ atomgit.event.pull_request.head.sha || atomgit.sha }}
+        run: |
+          set -euo pipefail
+          git log -1 --format='%H %s'
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
       - name: Prepare workspace
         run: |
