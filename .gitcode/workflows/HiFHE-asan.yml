@@ -19,7 +19,7 @@ defaults:
 
 jobs:
   asan-gate:
-    name: ASan gate (Provider ${{ matrix.provider }})
+    name: ASan gate
     runs-on: [ubuntu-latest, x64, medium]
     timeout-minutes: 90
     strategy:
@@ -110,7 +110,7 @@ jobs:
       - name: Run SDV with ASan
         run: |
           set -euo pipefail
-          ctest --test-dir build --verbose --output-on-failure --no-tests=error -L sdv \
+          bash testcode/script/execute_sdv.sh \
             2>&1 | tee artifacts/sdv-asan.log
 
       - name: Verify sanitizer logs
