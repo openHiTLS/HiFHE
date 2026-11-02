@@ -446,6 +446,7 @@ static HIFHE_ERROR DumpCtParam(const Ciphertext *ct, BSL_Param *p, int32_t algId
     p->useLen = len;
     return r;
 }
+#endif
 
 /* out == NULL asks for the size, as everywhere else. */
 HIFHE_ERROR Bgv_DumpPub(CRYPT_BGV_Ctx *ctx, uint8_t *out, uint32_t *len)
@@ -461,6 +462,7 @@ HIFHE_ERROR Bgv_DumpPub(CRYPT_BGV_Ctx *ctx, uint8_t *out, uint32_t *len)
     return BgvSerDes_DumpPubKey(&ctx->bgv.pk, out, len, ctx->algId);
 }
 
+#ifdef HITLS_PROVIDER
 HIFHE_ERROR Bgv_GetPub(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
 {
     if (ctx == NULL || param == NULL) {
@@ -477,6 +479,7 @@ HIFHE_ERROR Bgv_GetPub(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
     p->useLen = len;
     return r;
 }
+#endif
 
 HIFHE_ERROR Bgv_DumpPrv(CRYPT_BGV_Ctx *ctx, uint8_t *out, uint32_t *len)
 {
@@ -491,6 +494,7 @@ HIFHE_ERROR Bgv_DumpPrv(CRYPT_BGV_Ctx *ctx, uint8_t *out, uint32_t *len)
     return BgvSerDes_DumpPrvKey(ctx->bgv.keygen.sk, out, len, ctx->algId);
 }
 
+#ifdef HITLS_PROVIDER
 HIFHE_ERROR Bgv_GetPrv(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
 {
     if (ctx == NULL || param == NULL) {
@@ -507,6 +511,7 @@ HIFHE_ERROR Bgv_GetPrv(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
     p->useLen = len;
     return r;
 }
+#endif
 
 HIFHE_ERROR Bgv_LoadPub(CRYPT_BGV_Ctx *ctx, const uint8_t *in, uint32_t len)
 {
@@ -538,6 +543,7 @@ HIFHE_ERROR Bgv_LoadPub(CRYPT_BGV_Ctx *ctx, const uint8_t *in, uint32_t len)
     return HIFHE_SUCCESS;
 }
 
+#ifdef HITLS_PROVIDER
 HIFHE_ERROR Bgv_SetPub(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
 {
     if (ctx == NULL || param == NULL) {
@@ -565,6 +571,7 @@ HIFHE_ERROR Bgv_SetPrv(CRYPT_BGV_Ctx *ctx, BSL_Param *param)
     }
     return Bgv_LoadPrv(ctx, (const uint8_t *)p->value, p->valueLen);
 }
+#endif
 
 HIFHE_ERROR Bgv_LoadPrv(CRYPT_BGV_Ctx *ctx, const uint8_t *in, uint32_t len)
 {
@@ -607,6 +614,7 @@ HIFHE_ERROR Bgv_LoadPrv(CRYPT_BGV_Ctx *ctx, const uint8_t *in, uint32_t len)
 
 /* ---------------- encrypt / decrypt (wire-in, wire-out) ---------------- */
 
+#ifdef HITLS_PROVIDER
 HIFHE_ERROR Bgv_Encrypt(CRYPT_BGV_Ctx *ctx, const uint8_t *data, uint32_t dataLen, uint8_t *out, uint32_t *outLen)
 {
     if (ctx == NULL || data == NULL || outLen == NULL) {
