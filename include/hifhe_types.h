@@ -55,7 +55,7 @@ typedef enum {
  * Wire formats for HIFHE_CTRL_BGV_SET_WIRE_FORMAT. HIFHE_Deserialize reads
  * both whichever is selected; the setting only decides what is written.
  */
-#define HIFHE_WIRE_HIFHE       0u /* HiFHE's own: carries the parameter fingerprint and the key origin. */
+#define HIFHE_WIRE_HIFHE       0u /* HiFHE's own: carries the preset, the depth and the key origin. */
 #define HIFHE_WIRE_INTERCHANGE 1u /* The 12-byte-header format the Provider reads. */
 
 #define HIFHE_PRESET_BGV_BASE 100000

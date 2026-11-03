@@ -883,9 +883,9 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_REDUCTION_FIXED_CORRECTION_TC001(void)
             uint64_t pair[] = {0u, 1u, 2u, q / 2u, q - 2u, q - 1u};
             for (uint32_t i = 0; i < sizeof(pair) / sizeof(pair[0]); ++i) {
                 for (uint32_t j = 0; j < sizeof(pair) / sizeof(pair[0]); ++j) {
-                    ModulusWide prod = (ModulusWide)pair[i] * (ModulusWide)pair[j];
-                    uint64_t want = (uint64_t)(prod % (ModulusWide)q);
-                    ASSERT_EQ(Kernel_BarrettReduce128Inl((uint64_t)(prod >> 64), (uint64_t)prod, &bc), want);
+                    Uint128 prod = Kernel_U128Mul(pair[i], pair[j]);
+                    uint64_t want = Kernel_U128ModU64(prod, q);
+                    ASSERT_EQ(Kernel_BarrettReduce128Inl(prod.hi, prod.lo, &bc), want);
                     ASSERT_EQ(Kernel_BarrettMulModInl(pair[i], pair[j], &bc), want);
                     ShoupConst sc;
                     ASSERT_EQ(Kernel_ShoupConst_Init(&sc, pair[j], q), HIFHE_SUCCESS);
@@ -902,8 +902,7 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_REDUCTION_FIXED_CORRECTION_TC001(void)
                 state ^= state >> 7;
                 state ^= state << 17;
                 uint64_t m = state % q;
-                ModulusWide prod = (ModulusWide)a * (ModulusWide)m;
-                uint64_t want = (uint64_t)(prod % (ModulusWide)q);
+                uint64_t want = Kernel_U128ModU64(Kernel_U128Mul(a, m), q);
                 ASSERT_EQ(Kernel_BarrettMulModInl(a, m, &bc), want);
                 ShoupConst sc;
                 ASSERT_EQ(Kernel_ShoupConst_Init(&sc, m, q), HIFHE_SUCCESS);

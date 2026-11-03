@@ -22,7 +22,7 @@
 #define HIFHE_KEY_PUBLIC  1u
 #define HIFHE_KEY_PRIVATE 2u
 
-#define HIFHE_WIRE_HEADER 76u
+#define HIFHE_WIRE_HEADER 44u
 #define HIFHE_MAX_WIRE    (64u * 1024u * 1024u)
 #define HIFHE_TEXT_PLAIN  4u
 #define HIFHE_TEXT_CIPHER 3u
@@ -56,7 +56,6 @@ struct HifheParamSnapshot {
     atomic_uint references;
     const HifheAlgMethod *method;
     HifheParamConfig config;
-    uint8_t fingerprint[32];
     void *math;
 };
 
@@ -79,7 +78,9 @@ typedef struct {
 } HifheTextMeta;
 
 struct HIFHE_HEText {
-    uint8_t fingerprint[32];
+    /* The preset the text was made under. Every parameter the algorithm
+     * derives comes from it, so it is the whole of what has to agree. */
+    int32_t paramId;
     const HifheAlgMethod *method;
     /* Every algorithm payload starts with HifheTextMeta. */
     HifheTextMeta *data;
@@ -118,10 +119,8 @@ extern const HifheAlgMethod g_hifheBgvMethod;
 #endif
 void Hifhe_Put32(uint8_t *out, uint32_t value);
 uint32_t Hifhe_Get32(const uint8_t *in);
-void Hifhe_Put64(uint8_t *out, uint64_t value);
 void Hifhe_ParamRetain(HifheParamSnapshot *params);
 void Hifhe_ParamRelease(HifheParamSnapshot *params);
-int32_t Hifhe_ParamSetFingerprint(HifheParamSnapshot *params, const uint8_t *canonical, uint32_t len);
 int32_t Hifhe_HETextNew(const HIFHE_Ctx *ctx, void *data, HIFHE_HEText **out);
 int32_t Hifhe_CheckCompute(const HIFHE_Ctx *ctx, uint32_t op, const HIFHE_HEText *a, const HIFHE_HEText *b);
 int32_t Hifhe_CheckText(const HIFHE_Ctx *ctx, const HIFHE_HEText *text, bool flags);

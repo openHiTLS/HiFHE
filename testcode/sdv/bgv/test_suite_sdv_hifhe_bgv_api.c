@@ -21,6 +21,10 @@
 #include "test.h"
 /* END_HEADER */
 
+/* The fixed part of HiFHE's own wire format, ahead of the algorithm's body.
+ * The cases below reach into that body by offset. */
+#define WIRE_HEADER 44u
+
 static HIFHE_Ctx *Configured(void)
 {
     HIFHE_Ctx *ctx = HIFHE_New(HIFHE_BGV);
@@ -237,7 +241,15 @@ void SDV_CRYPTO_HIFHE_BGV_WORKFLOW_API_TC001(void)
     ASSERT_EQ(HIFHE_Encrypt(a, p, &c), HIFHE_SUCCESS);
     wire = Serialized(a, c, &len);
     ASSERT_TRUE(wire != NULL);
-    ASSERT_TRUE(len > 76 && memcmp(wire, "HFHE", 4) == 0);
+    ASSERT_TRUE(len > WIRE_HEADER && memcmp(wire, "HFHE", 4) == 0);
+    /* The version says what the rest of the header looks like, so a buffer
+     * from an earlier layout is refused rather than read at the wrong
+     * offsets. */
+    uint8_t version = wire[4];
+    wire[4] = 1u;
+    ASSERT_TRUE(HIFHE_Deserialize(b, wire, len, &q) == HIFHE_VERSION_NOT_SUPPORTED);
+    ASSERT_TRUE(q == NULL);
+    wire[4] = version;
     ASSERT_EQ(HIFHE_Deserialize(b, wire, len, &q), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_SET_NEGATE, q, NULL, 0), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_Encode(b, bucket, 4, &bp), HIFHE_SUCCESS);
@@ -496,8 +508,8 @@ void SDV_CRYPTO_HIFHE_BGV_COEFFICIENT_API_TC001(void)
     wire = malloc(len);
     ASSERT_TRUE(wire != NULL);
     ASSERT_EQ(HIFHE_Serialize(ctx, pt, wire, &len), HIFHE_SUCCESS);
-    Put32(wire + 76 + 8 + 16, 0);
-    uint32_t dataOffset = 76 + 8 + 20 + 16;
+    Put32(wire + WIRE_HEADER + 8 + 16, 0);
+    uint32_t dataOffset = WIRE_HEADER + 8 + 20 + 16;
     memset(wire + dataOffset, 0, len - dataOffset);
     wire[dataOffset] = 1;
     wire[dataOffset + 4096 * 8] = 1;

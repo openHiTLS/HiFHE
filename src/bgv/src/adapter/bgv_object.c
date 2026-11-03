@@ -88,26 +88,8 @@ static int32_t BgvCtxNew(HifheParamSnapshot *p, void *libCtx, void **out)
     if (ret != HIFHE_SUCCESS) {
         return ret;
     }
-    uint32_t n = math->bgv.params.rlweParameter.polyDegree;
-    p->config.slots = n;
+    p->config.slots = math->bgv.params.rlweParameter.polyDegree;
     p->config.mulDepth = 0;
-    uint32_t l = math->bgv.params.rlweParameter.cipherMod.size;
-    uint32_t len = 32 + l * 8;
-    uint8_t canonical[32 + HIFHE_BGV_MAX_CHAIN_LEN * 8] = {0};
-    Hifhe_Put32(canonical, HIFHE_BGV);
-    Hifhe_Put32(canonical + 4, n);
-    Hifhe_Put32(canonical + 8, p->config.slots);
-    Hifhe_Put32(canonical + 12, p->config.mulDepth);
-    Hifhe_Put64(canonical + 16, math->bgv.params.plainMod);
-    Hifhe_Put32(canonical + 24, l);
-    Hifhe_Put32(canonical + 28, math->para.relinDnum);
-    for (uint32_t i = 0; i < l; i++) {
-        Hifhe_Put64(canonical + 32 + i * 8, math->bgv.params.rlweParameter.cipherMod.data[i]);
-    }
-    ret = Hifhe_ParamSetFingerprint(p, canonical, len);
-    if (ret != HIFHE_SUCCESS) {
-        return ret;
-    }
     *out = BgvCtxDup(p->math, libCtx);
     return *out == NULL ? HIFHE_MEMORY_ERROR : HIFHE_SUCCESS;
 }
@@ -611,7 +593,7 @@ static int32_t BgvGetOutputSize(const HIFHE_Ctx *ctx, uint32_t op, const void *d
     uint32_t raw = (op == 0 || op == HIFHE_OP_DECRYPT) ? BgvSerDes_PlaintextSizeFor(l, l * n) :
                                                          BgvSerDes_CiphertextSizeFor(l, k * l * n);
     /* The interchange format is the raw dump; HiFHE's own replaces its
-     * 12-byte header with a 76-byte one plus 8 bytes of its own state. */
+     * 12-byte header with a 44-byte one plus 8 bytes of its own state. */
     *len = ctx->wireFormat == HIFHE_WIRE_INTERCHANGE ? raw : HIFHE_WIRE_HEADER + 8 + raw - 12;
     return 0;
 }

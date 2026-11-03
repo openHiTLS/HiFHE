@@ -42,7 +42,6 @@ target_compile_definitions(SHARED_COMPILE_DEFS INTERFACE
     HITLS_CRYPTO_PKEY_CRYPT
     HITLS_CRYPTO_SHA256
     HITLS_NO_CONFIG_CHECK
-    HITLS_SIXTY_FOUR_BITS
     PRINT_TO_TERMINAL
 )
 if(HITLS_PROVIDER)
@@ -112,7 +111,7 @@ foreach(TEST_SUITE ${TEST_FILES})
     target_link_libraries(${SUITE_NAME} PRIVATE
         TESTCASE_PRE SHARED_COMPILE_DEFS
         ${HITLS_CRYPTO_LIB} ${HITLS_BSL_LIB}
-        Threads::Threads m
+        Threads::Threads m ${CMAKE_DL_LIBS}
     )
     if(NOT APPLE)
         target_link_options(${SUITE_NAME} PRIVATE "$<$<NOT:$<CONFIG:Debug>>:LINKER:-z,noexecstack>")

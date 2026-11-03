@@ -48,7 +48,6 @@ target_compile_definitions(hifhe_bgv_objects PRIVATE
     HITLS_CRYPTO_PKEY
     HITLS_CRYPTO_PKEY_CRYPT
     HITLS_NO_CONFIG_CHECK
-    HITLS_SIXTY_FOUR_BITS
 )
 
 foreach(src ${HIFHE_BGV_SOURCES})

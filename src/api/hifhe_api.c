@@ -13,7 +13,6 @@
 #include <limits.h>
 #include <stdint.h>
 #include "hifhe_local.h"
-#include "crypt_eal_md.h"
 #include "crypt_algid.h"
 #include "crypt_errno.h"
 #include "hifhe_err_internal.h"
@@ -28,13 +27,6 @@ void Hifhe_Put32(uint8_t *p, uint32_t v)
 uint32_t Hifhe_Get32(const uint8_t *p)
 {
     return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
-}
-
-void Hifhe_Put64(uint8_t *p, uint64_t v)
-{
-    for (uint32_t i = 0; i < 8; i++) {
-        p[i] = (uint8_t)(v >> (8 * i));
-    }
 }
 
 static const HifheAlgMethod *FindMethod(int32_t id)
@@ -92,18 +84,6 @@ void HIFHE_Free(HIFHE_Ctx *ctx)
     Hifhe_ParamRelease(ctx->params);
     HifheCleanse(ctx, sizeof(*ctx));
     HifheFree(ctx);
-}
-
-int32_t Hifhe_ParamSetFingerprint(HifheParamSnapshot *params, const uint8_t *canonical, uint32_t len)
-{
-    uint32_t hashLen = sizeof(params->fingerprint);
-    int32_t ret = CRYPT_EAL_Md(CRYPT_MD_SHA256, canonical, len, params->fingerprint, &hashLen);
-    if (ret != HIFHE_SUCCESS || hashLen != sizeof(params->fingerprint)) {
-        ret = ret == CRYPT_MEM_ALLOC_FAIL ? HIFHE_MEMORY_ERROR : HIFHE_HASH_ERROR;
-        HIFHE_ERR_PUSH_ERROR(ret);
-        return ret;
-    }
-    return HIFHE_SUCCESS;
 }
 
 int32_t Hifhe_SetParam(HIFHE_Ctx *ctx, const HifheParamConfig *p)
@@ -221,7 +201,7 @@ int32_t Hifhe_HETextNew(const HIFHE_Ctx *ctx, void *data, HIFHE_HEText **out)
         HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
-    memcpy(text->fingerprint, ctx->params->fingerprint, sizeof(text->fingerprint));
+    text->paramId = ctx->params->config.paramId;
     text->method = ctx->method;
     text->data = data;
     *out = text;
@@ -273,7 +253,7 @@ int32_t Hifhe_CheckText(const HIFHE_Ctx *ctx, const HIFHE_HEText *text, bool fla
         HIFHE_ERR_PUSH_ERROR(HIFHE_ALG_MISMATCH);
         return HIFHE_ALG_MISMATCH;
     }
-    if (memcmp(text->fingerprint, ctx->params->fingerprint, 32) != 0) {
+    if (text->paramId != ctx->params->config.paramId) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_MISMATCH);
         return HIFHE_PARAM_MISMATCH;
     }
@@ -546,8 +526,9 @@ int32_t HIFHE_Ctrl(HIFHE_Ctx *ctx, int32_t cmd, HIFHE_HEText *text, void *value,
     return ret != HIFHE_SUCCESS ? ret : Hifhe_HETextNew(ctx, data, out);
 }
 
-#define HIFHE_WIRE_TAG    "HFHE"
-#define HIFHE_WIRE_KEYSET 60u
+#define HIFHE_WIRE_TAG     "HFHE"
+#define HIFHE_WIRE_VERSION 2u
+#define HIFHE_WIRE_KEYSET  28u
 
 /* Which format a buffer is in. The tag is only ever at the front of HiFHE's
  * own, so anything else is handed to the algorithm, which validates its own
@@ -560,14 +541,13 @@ static bool IsHifheWire(const uint8_t *p, uint32_t len)
 static void WriteHeader(const HIFHE_Ctx *ctx, uint32_t kind, uint32_t len, const uint8_t *id, uint8_t *p)
 {
     memcpy(p, HIFHE_WIRE_TAG, 4);
-    Hifhe_Put32(p + 4, 1u | kind << 16);
+    Hifhe_Put32(p + 4, HIFHE_WIRE_VERSION | kind << 16);
     Hifhe_Put32(p + 8, (uint32_t)ctx->method->algId);
     Hifhe_Put32(p + 12, len);
     Hifhe_Put32(p + 16, (uint32_t)ctx->params->config.paramId);
     Hifhe_Put32(p + 20, ctx->params->config.slots);
     Hifhe_Put32(p + 24, ctx->params->config.mulDepth);
-    memcpy(p + 28, ctx->params->fingerprint, 32);
-    memcpy(p + 60, id, 16);
+    memcpy(p + HIFHE_WIRE_KEYSET, id, 16);
 }
 
 static int32_t ReadHeader(const HIFHE_Ctx *ctx, const uint8_t *p, uint32_t len, uint32_t *kind)
@@ -592,7 +572,7 @@ static int32_t ReadHeader(const HIFHE_Ctx *ctx, const uint8_t *p, uint32_t len, 
         HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
-    if ((Hifhe_Get32(p + 4) & 0xffff) != 1) {
+    if ((Hifhe_Get32(p + 4) & 0xffff) != HIFHE_WIRE_VERSION) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_VERSION_NOT_SUPPORTED);
         return HIFHE_VERSION_NOT_SUPPORTED;
     }
@@ -606,8 +586,7 @@ static int32_t ReadHeader(const HIFHE_Ctx *ctx, const uint8_t *p, uint32_t len, 
         return HIFHE_ALG_MISMATCH;
     }
     if (Hifhe_Get32(p + 16) != (uint32_t)ctx->params->config.paramId ||
-        Hifhe_Get32(p + 20) != ctx->params->config.slots || Hifhe_Get32(p + 24) != ctx->params->config.mulDepth ||
-        memcmp(p + 28, ctx->params->fingerprint, 32) != 0) {
+        Hifhe_Get32(p + 20) != ctx->params->config.slots || Hifhe_Get32(p + 24) != ctx->params->config.mulDepth) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_MISMATCH);
         return HIFHE_PARAM_MISMATCH;
     }

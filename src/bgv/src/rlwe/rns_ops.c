@@ -164,12 +164,11 @@ HIFHE_ERROR RLWE_RnsPoly_MulDot(RnsPoly *out, const RnsPoly *a, const RnsPoly *b
     const BarrettConst *bc = LimbBarrett(a);
     if (bc != NULL) {
         for (uint32_t i = 0; i < a->dataSize; ++i) {
-            ModulusWide p = (ModulusWide)a->data[i] * (ModulusWide)b->data[i];
-            out->data[i] = Kernel_BarrettReduce128Inl((uint64_t)(p >> 64), (uint64_t)p, bc);
+            out->data[i] = Kernel_BarrettMulModInl(a->data[i], b->data[i], bc);
         }
     } else {
         for (uint32_t i = 0; i < a->dataSize; ++i) {
-            out->data[i] = (uint64_t)(((ModulusWide)a->data[i] * (ModulusWide)b->data[i]) % (ModulusWide)q);
+            out->data[i] = Kernel_MulMod(a->data[i], b->data[i], q);
         }
     }
     out->config = a->config;
@@ -199,8 +198,7 @@ HIFHE_ERROR RLWE_RnsPoly_MulDotAcc(RnsPoly *out, const RnsPoly *a, const RnsPoly
         return HIFHE_SUCCESS;
     }
     for (uint32_t i = 0; i < a->dataSize; ++i) {
-        ModulusWide w = (ModulusWide)a->data[i] * (ModulusWide)b->data[i];
-        uint64_t s = out->data[i] + (uint64_t)(w % (ModulusWide)q);
+        uint64_t s = out->data[i] + Kernel_MulMod(a->data[i], b->data[i], q);
         if (s >= q) {
             s -= q;
         }
@@ -231,7 +229,7 @@ HIFHE_ERROR RLWE_RnsPoly_MulScalar(RnsPoly *out, const RnsPoly *a, uint64_t x)
             }
         } else {
             for (uint32_t i = 0; i < a->dataSize; ++i) {
-                out->data[i] = (uint64_t)(((ModulusWide)a->data[i] * (ModulusWide)xMod) % (ModulusWide)q);
+                out->data[i] = Kernel_MulMod(a->data[i], xMod, q);
             }
         }
     }

@@ -26,6 +26,6 @@ target_include_directories(hifhe_api_objects PRIVATE
     ${HITLS_ROOT_PATH}/config/macro_config
     ${HITLS_ROOT_PATH}/crypto/include
     ${HITLS_ROOT_PATH}/bsl/sal/include)
-target_compile_definitions(hifhe_api_objects PRIVATE HITLS_CRYPTO_EAL HITLS_CRYPTO_MD
+target_compile_definitions(hifhe_api_objects PRIVATE HITLS_CRYPTO_EAL
     HITLS_BSL_SAL HITLS_BSL_SAL_MEM
-    HITLS_SIXTY_FOUR_BITS HITLS_NO_CONFIG_CHECK)
+    HITLS_NO_CONFIG_CHECK)

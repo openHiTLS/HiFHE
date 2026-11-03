@@ -164,7 +164,7 @@ HIFHE_ERROR BGV_Encoder_CrtCenteredModT(uint64_t *out, const uint64_t *data, con
     }
 
     uint64_t qhatModT[HIFHE_BGV_MAX_CHAIN_LEN];
-    ModulusWide recip[HIFHE_BGV_MAX_CHAIN_LEN]; /* floor(2^96 / q_i) */
+    Uint128 recip[HIFHE_BGV_MAX_CHAIN_LEN]; /* floor(2^96 / q_i) */
     ShoupConst qhatInvSc[HIFHE_BGV_MAX_CHAIN_LEN];
     ShoupConst qhatModTSc[HIFHE_BGV_MAX_CHAIN_LEN];
     BarrettConst tBarrett;
@@ -205,7 +205,7 @@ HIFHE_ERROR BGV_Encoder_CrtCenteredModT(uint64_t *out, const uint64_t *data, con
         /* Held at full width: parameter validation admits moduli from 20
          * bits, whose reciprocal does not fit a word. y < q_i keeps the
          * product below 2^96 either way. */
-        recip[i] = (((ModulusWide)1u) << 96) / (ModulusWide)qi;
+        recip[i] = Kernel_U128DivU64(Kernel_U128Shl(Kernel_U128From64(1u), 96u), qi);
     }
 
     /*
@@ -225,23 +225,24 @@ HIFHE_ERROR BGV_Encoder_CrtCenteredModT(uint64_t *out, const uint64_t *data, con
         return HIFHE_INTERNAL;
     }
     for (uint32_t j = 0; j < N; ++j) {
-        ModulusWide frac = 0;
+        Uint128 frac = Kernel_U128From64(0u);
         uint64_t acc = 0u;
         for (uint32_t i = 0; i < L; ++i) {
             /* L is the chain length, which is a parameter and not a secret.
              * Every other operand below is secret and is reduced by mask. */
             uint64_t y = (L == 1u) ? data[j] : Kernel_ShoupMulModInl(data[i * N + j], &qhatInvSc[i]);
-            frac += (ModulusWide)y * recip[i];
+            frac = Kernel_U128Add(frac, Kernel_U128MulU64(recip[i], y));
             acc += Kernel_ShoupMulModInl(Kernel_BarrettReduce64Inl(y, &tBarrett), &qhatModTSc[i]);
             acc = Kernel_CondSubInl(acc, t); /* Both addends are below t. */
         }
-        uint64_t v = (uint64_t)(frac >> 96);
+        uint64_t v = Kernel_U128Shr(frac, 96u).lo;
         uint64_t z = acc + t - Kernel_ShoupMulModInl(Kernel_BarrettReduce64Inl(v, &tBarrett), &qModTSc);
         z = Kernel_CondSubInl(z, t);
         /* Fractional part above one half means the residues stand for z - Q.
          * The fraction is the sign of the private phase, so it is masked in
          * rather than branched on. */
-        uint64_t neg = 0u - (uint64_t)((frac & (((ModulusWide)1u << 96) - 1u)) > ((ModulusWide)1u << 95));
+        Uint128 low96 = Kernel_U128Make(frac.hi & 0xffffffffu, frac.lo);
+        uint64_t neg = 0u - Kernel_U128Gt(low96, Kernel_U128Shl(Kernel_U128From64(1u), 95u));
         z += (t - qModT) & neg;
         out[j] = Kernel_CondSubInl(z, t);
     }
