@@ -29,8 +29,10 @@ jobs:
       fail-fast: false
       matrix:
         provider: [enable, disable]
+        int128: [enable, disable]
     env:
       HIFHE_PROVIDER_MODE: ${{ matrix.provider }}
+      HIFHE_INT128_MODE: ${{ matrix.int128 }}
       HITLS_SOURCE_DIR: .ci/openhitls
       HITLS_BUILD_DIR: .ci/openhitls/build
       ASAN_OPTIONS: detect_leaks=1:halt_on_error=1:abort_on_error=1:detect_stack_use_after_return=1:strict_string_checks=1:check_initialization_order=1:symbolize=1
@@ -96,9 +98,15 @@ jobs:
       - name: Build HiFHE with ASan
         run: |
           set -euo pipefail
+          build_args=-UHIFHE_NO_INT128
+          if [[ "$HIFHE_INT128_MODE" == disable ]]; then
+            build_args=-DHIFHE_NO_INT128
+          fi
+          printf 'Provider=%s int128=%s\n' "$HIFHE_PROVIDER_MODE" "$HIFHE_INT128_MODE"
           bash testcode/script/build_hifhe.sh debug asan \
             "--${HIFHE_PROVIDER_MODE}" provider \
             --hitls_dir "$PWD/$HITLS_SOURCE_DIR" \
+            --build_args "$build_args" \
             2>&1 | tee artifacts/hifhe-asan-build.log
           test -f build/libhifhe.so
           readelf -d build/libhifhe.so | grep -F 'libasan.so'

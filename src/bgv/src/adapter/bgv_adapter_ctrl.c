@@ -20,6 +20,7 @@
 #include "bgv_local.h"
 #include "bgv/evaluator.h"
 
+#ifdef HITLS_PROVIDER
 int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t valLen)
 {
     if (ctx == NULL) {
@@ -273,3 +274,4 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
             return HIFHE_NOT_SUPPORTED;
     }
 }
+#endif
