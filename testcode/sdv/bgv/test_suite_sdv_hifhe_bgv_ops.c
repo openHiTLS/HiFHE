@@ -1552,7 +1552,7 @@ void SDV_CRYPTO_HIFHE_BGV_SECRET_WEIGHT_TC001(void)
     coeff = (uint64_t *)BSL_SAL_Malloc(n * sizeof(uint64_t));
     ASSERT_TRUE(coeff != NULL);
     const uint8_t *data = b + 20 + 8u * rns;
-    uint64_t rInv = Kernel_ModInv((uint64_t)((((ModulusWide)1u) << 64) % (ModulusWide)q), q);
+    uint64_t rInv = Kernel_ModInv(Kernel_U128ModU64(Kernel_U128Make(1u, 0u), q), q);
     ASSERT_TRUE(rInv != 0u);
     for (uint32_t i = 0; i < n; ++i) {
         uint64_t w = 0u;

@@ -42,18 +42,18 @@
  * accumulator on top of one already-reduced residue. */
 static uint64_t LazyTermLimit(Modulus q)
 {
-    ModulusWide qm1 = (ModulusWide)(q - 1u);
-    ModulusWide room = ~(ModulusWide)0 - qm1;
-    ModulusWide n = room / (qm1 * qm1);
-    return (n > (ModulusWide)UINT64_MAX) ? UINT64_MAX : (uint64_t)n;
+    uint64_t qm1 = q - 1u;
+    Uint128 room = Kernel_U128Sub(Kernel_U128Make(UINT64_MAX, UINT64_MAX), Kernel_U128From64(qm1));
+    Uint128 n = Kernel_U128Div(room, Kernel_U128Mul(qm1, qm1));
+    return (n.hi != 0u) ? UINT64_MAX : n.lo;
 }
 
 /* Reduce every accumulator of limb l to [0, q_l). The result stays in the
  * accumulator, so later terms keep adding on top of it. */
-static void FoldLimb(ModulusWide *acc, uint32_t N, const BarrettConst *bc)
+static void FoldLimb(Uint128 *acc, uint32_t N, const BarrettConst *bc)
 {
     for (uint32_t k = 0; k < N; ++k) {
-        acc[k] = Kernel_BarrettReduce128Inl((uint64_t)(acc[k] >> 64), (uint64_t)acc[k], bc);
+        acc[k] = Kernel_U128From64(Kernel_BarrettReduce128Inl(acc[k].hi, acc[k].lo, bc));
     }
 }
 
@@ -265,7 +265,7 @@ HIFHE_ERROR BGV_KeySwitch_Run(Ciphertext *out, const CrtPoly *polyNtt, const Cip
 
     /* acc[0] and acc[1] for out.c0 / out.c1, limb-major like the ciphertext. */
     size_t accWords = (size_t)2u * L * N;
-    ModulusWide *acc = (ModulusWide *)HifheCalloc((uint32_t)accWords, (uint32_t)sizeof(ModulusWide));
+    Uint128 *acc = (Uint128 *)HifheCalloc((uint32_t)accWords, (uint32_t)sizeof(Uint128));
     if (acc == NULL) {
         Uint64Vector_Destroy(&lifted);
         RLWE_CrtPoly_Destroy(&digitPoly);
@@ -328,13 +328,13 @@ HIFHE_ERROR BGV_KeySwitch_Run(Ciphertext *out, const CrtPoly *polyNtt, const Cip
             }
             for (uint32_t c = 0; c < 2u; ++c) {
                 const uint64_t *kc = piece->data + (size_t)c * L * N;
-                ModulusWide *ac = acc + (size_t)c * L * N;
+                Uint128 *ac = acc + (size_t)c * L * N;
                 for (uint32_t l = 0; l < L; ++l) {
                     const uint64_t *d = digitPoly.data + (size_t)l * N;
                     const uint64_t *kv = kc + (size_t)l * N;
-                    ModulusWide *av = ac + (size_t)l * N;
+                    Uint128 *av = ac + (size_t)l * N;
                     for (uint32_t k = 0; k < N; ++k) {
-                        av[k] += (ModulusWide)d[k] * kv[k];
+                        av[k] = Kernel_U128MulAdd(av[k], d[k], kv[k]);
                     }
                 }
             }
@@ -344,10 +344,10 @@ HIFHE_ERROR BGV_KeySwitch_Run(Ciphertext *out, const CrtPoly *polyNtt, const Cip
 
     if (r == HIFHE_SUCCESS) {
         for (uint32_t l = 0; l < 2u * L; ++l) {
-            const ModulusWide *av = acc + (size_t)l * N;
+            const Uint128 *av = acc + (size_t)l * N;
             uint64_t *ov = out->data + (size_t)l * N;
             for (uint32_t k = 0; k < N; ++k) {
-                ov[k] = Kernel_BarrettReduce128Inl((uint64_t)(av[k] >> 64), (uint64_t)av[k], bcs[l % L]);
+                ov[k] = Kernel_BarrettReduce128Inl(av[k].hi, av[k].lo, bcs[l % L]);
             }
         }
     }

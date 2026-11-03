@@ -39,7 +39,7 @@
 
 static uint64_t MulMod(uint64_t a, uint64_t b, Modulus q)
 {
-    return (uint64_t)(((ModulusWide)a * (ModulusWide)b) % (ModulusWide)q);
+    return Kernel_MulMod(a, b, q);
 }
 
 static uint64_t PowMod(uint64_t base, uint64_t exp, Modulus q)
@@ -65,14 +65,14 @@ static uint64_t InvMod(uint64_t a, Modulus q)
 /* Shoup quotient floor(w * 2^64 / q) for a fixed multiplier w < q. */
 static uint64_t ShoupQuot(uint64_t w, Modulus q)
 {
-    return (uint64_t)((((ModulusWide)w) << 64) / (ModulusWide)q);
+    return Kernel_U128DivU64(Kernel_U128Make(w, 0u), q).lo;
 }
 
 /* Returns w * x mod q in [0, 2q). Requires w < q < 2^62. x may be any
  * uint64. */
 static inline uint64_t ShoupMulLazy(uint64_t x, uint64_t w, uint64_t wq, uint64_t q)
 {
-    uint64_t hi = (uint64_t)(((ModulusWide)x * (ModulusWide)wq) >> 64);
+    uint64_t hi = Kernel_MulHi64(x, wq);
     return x * w - hi * q;
 }
 

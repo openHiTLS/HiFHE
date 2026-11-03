@@ -108,8 +108,7 @@ HIFHE_ERROR BGV_Evaluator_MulCtCt(Ciphertext *out, const Ciphertext *a, const Ci
     }
     /* correctionFactor accumulates multiplicatively in BGV. */
     prod.config.correctionFactor =
-        (uint64_t)(((ModulusWide)a->config.correctionFactor * (ModulusWide)b->config.correctionFactor) %
-                   (ModulusWide)a->context->bgvParameter->plainMod);
+        Kernel_MulMod(a->config.correctionFactor, b->config.correctionFactor, a->context->bgvParameter->plainMod);
 
     /* Swap in only once complete, so `out` may alias an operand. */
     BGV_Ciphertext_Destroy(out);

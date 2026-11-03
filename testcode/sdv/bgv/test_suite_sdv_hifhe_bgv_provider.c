@@ -23,6 +23,10 @@
 #include "test.h"
 /* END_HEADER */
 
+/* The fixed part of HiFHE's own wire format, ahead of the algorithm's body.
+ * The cases below reach into that body by offset. */
+#define WIRE_HEADER 44u
+
 static uint8_t *Serialized(const HIFHE_Ctx *ctx, const HIFHE_HEText *text, uint32_t *len)
 {
     *len = 0;
@@ -262,9 +266,9 @@ void SDV_CRYPTO_HIFHE_BGV_PROVIDER_MUL_SIZE_TC001(int components)
     ptWire = Serialized(a, pt, &ptLen);
     ctWire = Serialized(a, ct, &ctLen);
     ASSERT_TRUE(ptWire != NULL && ctWire != NULL);
-    ASSERT_TRUE(ctLen > 140);
-    ASSERT_EQ(Get32(ctWire + 84), 2);
-    uint32_t slots = Get32(ctWire + 128), limbs = Get32(ctWire + 132);
+    ASSERT_TRUE(ctLen > WIRE_HEADER + 64u);
+    ASSERT_EQ(Get32(ctWire + WIRE_HEADER + 8), 2);
+    uint32_t slots = Get32(ctWire + WIRE_HEADER + 52), limbs = Get32(ctWire + WIRE_HEADER + 56);
     ASSERT_EQ(slots, 4096);
     ASSERT_EQ(limbs, 2);
     uint32_t wideLen = ctLen + ((uint32_t)components - 2) * slots * limbs * sizeof(uint64_t);
@@ -273,7 +277,7 @@ void SDV_CRYPTO_HIFHE_BGV_PROVIDER_MUL_SIZE_TC001(int components)
     /* Zero extra components preserve the encrypted message. */
     memcpy(wide, ctWire, ctLen);
     Put32(wide + 12, wideLen);
-    Put32(wide + 84, (uint32_t)components);
+    Put32(wide + WIRE_HEADER + 8, (uint32_t)components);
 
     BSL_Param input[] = {{CRYPT_PARAM_PKEY_HE_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, wide, wideLen, 0},
                          {HIFHE_PARAM_BGV_PLAINTEXT, BSL_PARAM_TYPE_OCTETS, ptWire, ptLen, 0},
@@ -290,7 +294,7 @@ void SDV_CRYPTO_HIFHE_BGV_PROVIDER_MUL_SIZE_TC001(int components)
     ASSERT_EQ(CRYPT_EAL_PkeyHEMul(b, input, result, &resultLen), HIFHE_SUCCESS);
     ASSERT_EQ(resultLen, required);
     ASSERT_EQ(resultLen, wideLen);
-    ASSERT_EQ(Get32(result + 84), (uint32_t)components);
+    ASSERT_EQ(Get32(result + WIRE_HEADER + 8), (uint32_t)components);
 
     ASSERT_EQ(HIFHE_Deserialize(a, result, resultLen, &product), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_Decrypt(a, product, &decoded), HIFHE_SUCCESS);

@@ -28,7 +28,7 @@
 
 static uint64_t MulModU64(uint64_t a, uint64_t b, uint64_t m)
 {
-    return (uint64_t)(((ModulusWide)a * (ModulusWide)b) % (ModulusWide)m);
+    return Kernel_MulMod(a, b, m);
 }
 
 static uint64_t PowModU64(uint64_t base, uint64_t exp, uint64_t m)

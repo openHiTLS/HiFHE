@@ -21,19 +21,13 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "hifhe_err.h"
+#include "kernel/uint128.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef uint64_t Modulus;
-
-/* Wide multiplication carrier. */
-#if defined(__SIZEOF_INT128__)
-typedef unsigned __int128 ModulusWide;
-#else
-#error "requires a compiler with __int128 support (GCC/Clang)."
-#endif
 
 /* Barrett constant: ratio = floor(2^128 / q), kept as two words.
  * Populated at BGVContext build time. */
@@ -59,7 +53,7 @@ uint64_t Kernel_BarrettReduce128(uint64_t xHi, uint64_t xLo, const BarrettConst 
 HIFHE_ERROR Kernel_ShoupConst_Init(ShoupConst *out, uint64_t operand, Modulus q);
 uint64_t Kernel_ShoupMulMod(uint64_t x, const ShoupConst *sc);
 
-/* Straightforward mul-mod, no precomputation. Uses ModulusWide internally. */
+/* Straightforward mul-mod, no precomputation. Divides, so it is for setup. */
 uint64_t Kernel_MulMod(uint64_t a, uint64_t b, Modulus q);
 
 /* a^e mod q via square-and-multiply. */
@@ -87,9 +81,9 @@ static inline uint64_t Kernel_CondSubInl(uint64_t r, uint64_t q)
  * the true quotient and r < 2q: one correction, always taken or not. */
 static inline uint64_t Kernel_BarrettReduce64Inl(uint64_t x, const BarrettConst *bc)
 {
-    ModulusWide acc = (ModulusWide)x * (ModulusWide)bc->ratioHi;
-    acc += ((ModulusWide)x * (ModulusWide)bc->ratioLo) >> 64;
-    uint64_t qhat = (uint64_t)(acc >> 64);
+    Uint128 acc = Kernel_U128Mul(x, bc->ratioHi);
+    acc = Kernel_U128AddU64(acc, Kernel_MulHi64(x, bc->ratioLo));
+    uint64_t qhat = acc.hi;
     uint64_t r = x - qhat * bc->q;
     return Kernel_CondSubInl(r, bc->q);
 }
@@ -100,10 +94,10 @@ static inline uint64_t Kernel_BarrettReduce64Inl(uint64_t x, const BarrettConst 
  * correction. */
 static inline uint64_t Kernel_BarrettReduce128Inl(uint64_t xHi, uint64_t xLo, const BarrettConst *bc)
 {
-    ModulusWide acc = ((ModulusWide)xLo * (ModulusWide)bc->ratioLo) >> 64;
-    acc += (ModulusWide)xLo * (ModulusWide)bc->ratioHi;
-    acc += (ModulusWide)xHi * (ModulusWide)bc->ratioLo;
-    uint64_t qhat = (uint64_t)(acc >> 64) + xHi * bc->ratioHi;
+    Uint128 acc = Kernel_U128From64(Kernel_MulHi64(xLo, bc->ratioLo));
+    acc = Kernel_U128Add(acc, Kernel_U128Mul(xLo, bc->ratioHi));
+    acc = Kernel_U128Add(acc, Kernel_U128Mul(xHi, bc->ratioLo));
+    uint64_t qhat = acc.hi + xHi * bc->ratioHi;
     uint64_t r = xLo - qhat * bc->q;
     return Kernel_CondSubInl(r, bc->q);
 }
@@ -111,13 +105,13 @@ static inline uint64_t Kernel_BarrettReduce128Inl(uint64_t xHi, uint64_t xLo, co
 /* a * b mod q through the Barrett constant; a, b < q. */
 static inline uint64_t Kernel_BarrettMulModInl(uint64_t a, uint64_t b, const BarrettConst *bc)
 {
-    ModulusWide p = (ModulusWide)a * (ModulusWide)b;
-    return Kernel_BarrettReduce128Inl((uint64_t)(p >> 64), (uint64_t)p, bc);
+    Uint128 p = Kernel_U128Mul(a, b);
+    return Kernel_BarrettReduce128Inl(p.hi, p.lo, bc);
 }
 
 static inline uint64_t Kernel_ShoupMulModInl(uint64_t x, const ShoupConst *sc)
 {
-    uint64_t qHat = (uint64_t)(((ModulusWide)x * (ModulusWide)sc->quotient) >> 64);
+    uint64_t qHat = Kernel_MulHi64(x, sc->quotient);
     uint64_t r = x * sc->operand - qHat * sc->q;
     return Kernel_CondSubInl(r, sc->q);
 }

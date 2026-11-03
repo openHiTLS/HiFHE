@@ -124,7 +124,7 @@ static HIFHE_ERROR DomainFactors_Init(DomainFactors *f, const RnsBase *base, Pol
             return HIFHE_SERDES_FAIL;
         }
         f->q[i] = qi;
-        f->r[i] = (uint64_t)((((ModulusWide)1u) << 64) % (ModulusWide)qi);
+        f->r[i] = Kernel_U128ModU64(Kernel_U128Make(1u, 0u), qi);
         f->rInv[i] = Kernel_ModInv(f->r[i], qi);
         if (f->scaled && f->rInv[i] == 0u) {
             HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
