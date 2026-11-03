@@ -16,10 +16,6 @@ file(GLOB HIFHE_BGV_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/bgv/*.c"
 )
 
-if(NOT HITLS_PROVIDER)
-    list(FILTER HIFHE_BGV_SOURCES EXCLUDE REGEX "/bgv_adapter_ctrl\\.c$")
-endif()
-
 hifhe_add_object_library(hifhe_bgv_objects ${HIFHE_BGV_SOURCES})
 target_include_directories(hifhe_bgv_objects PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
