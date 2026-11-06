@@ -16,7 +16,7 @@ or bootstrapping and cannot execute computations of arbitrary depth.
 
 - **Data transport:** plaintext and ciphertext serialization/deserialization for
   storage and transport. BGV ciphertexts interoperate between native and Provider APIs.
-- **Build options:** BGV and Provider integration can be enabled independently.
+- **Build options:** BGV is always built; Provider integration is optional.
 
 HiFHE provides a native C API and an openHiTLS Provider. The C API in
 [hifhe.h](include/hifhe.h) uses opaque `HIFHE_Ctx` and `HIFHE_HEText` types for
@@ -160,7 +160,10 @@ bash testcode/script/build_demo.sh
 
 Random and Hash operations use the built-in openHiTLS implementation.
 
-Native parameters use `HIFHE_SetParaById`; custom parameter objects and key
-import/export are omitted. `HIFHE_Mul` supports ciphertext/plaintext products.
+Native parameters use `HIFHE_SetParaById`; custom parameter objects are
+omitted. Public and private keys move with `HIFHE_ExportPubKey`,
+`HIFHE_ExportPrvKey`, `HIFHE_ImportPubKey` and `HIFHE_ImportPrvKey`; the
+Provider registers no key transfer of its own. `HIFHE_Mul` supports
+ciphertext/plaintext products.
 Native APIs do not use `BSL_Param`. `-DHITLS_PROVIDER=OFF` removes the Provider, BSL adapters,
 and their tests.

@@ -142,6 +142,6 @@ bash testcode/script/build_demo.sh
 
 随机数与 Hash 固定使用内置 openHiTLS 实现。
 
-原生参数仅使用 `HIFHE_SetParaById`；不提供参数对象、公私钥导入导出和密文×密文能力。
+原生参数仅使用 `HIFHE_SetParaById`；不提供参数对象和密文×密文能力。公私钥通过 `HIFHE_ExportPubKey`、`HIFHE_ExportPrvKey`、`HIFHE_ImportPubKey`、`HIFHE_ImportPrvKey` 导入导出，Provider 自身不注册密钥传递接口。
 `HIFHE_Mul` 支持密文×明文，原生接口不依赖 `BSL_Param`。
 `-DHITLS_PROVIDER=OFF` 关闭 Provider 及 BSL 参数适配，并裁剪相关用例。

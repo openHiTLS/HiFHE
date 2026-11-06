@@ -157,7 +157,7 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
             if (r != HIFHE_SUCCESS) {
                 return r;
             }
-            return BgvContext_SetSeed(&ctx->bgv.context.rlweContext.seedCtx, (const uint8_t *)val, valLen);
+            return BGV_BGVContext_SetKeySeed(&ctx->bgv.context, (const uint8_t *)val, valLen);
         }
 
         case HIFHE_CTRL_BGV_SET_SLOT_MAP: {

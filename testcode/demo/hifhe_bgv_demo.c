@@ -10,6 +10,21 @@
  * See the Mulan PSL v2 for more details.
  */
 
+/* Leaked-string detection, client A and server B in one process. A sends one
+ * ciphertext holding the four 16-bit fields of SHA3-256(secret)[0..7], four
+ * slots per entry; B returns Rerandomize(r * (bucket - query)) with a random
+ * nonzero r per slot; entry i matched when slots 4i..4i+3 are all 0.
+ *
+ * What a reply shows: slot 4i+j is 0 exactly when field j of entry i
+ * matched, so the client learns, per entry, which of its four fields it
+ * guessed, not only whether the whole entry matched. That is a property of
+ * this layout: with one ciphertext and no rotation, a slot can only depend on
+ * its own field. It does not protect the bucket against a client that crafts
+ * its ciphertexts either: the client holds the secret key, and Rerandomize
+ * adds bounded noise but provides no circuit privacy. This is an arithmetic
+ * demonstration, not a secure private set-membership protocol.
+ */
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

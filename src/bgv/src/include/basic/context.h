@@ -32,6 +32,10 @@ typedef struct {
 } BgvContext;
 
 void BgvContext_Init(BgvContext *ctx);
+/* Stores the seed as given. A seed a caller supplied belongs to the
+ * parameters it was supplied under, so it reaches here through
+ * BGV_BGVContext_SetKeySeed, which binds it first; this entry point is for
+ * the bound result and for duplicating a store that already holds one. */
 HIFHE_ERROR BgvContext_SetSeed(BgvContext *ctx, const uint8_t *seed, uint32_t seedLen);
 void BgvContext_ClearSeed(BgvContext *ctx);
 

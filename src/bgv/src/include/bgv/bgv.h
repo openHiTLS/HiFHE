@@ -91,6 +91,12 @@ HIFHE_ERROR BGV_BGVContext_EnsurePlainNttWith(BGVContext *ctx, uint64_t *table);
  * wherever EnsurePlainNtt does. */
 HIFHE_ERROR BGV_BGVContext_EnsureSlotMap(BGVContext *ctx);
 
+/* Install the seed key generation draws from. The 32 caller bytes are bound
+ * to the parameters the context carries before they are stored, so one seed
+ * under two presets installs two unrelated key seeds. The caller's bytes are
+ * not kept. HIFHE_PARAM_NOT_SET before the parameters are in. */
+HIFHE_ERROR BGV_BGVContext_SetKeySeed(BGVContext *ctx, const uint8_t *seed, uint32_t seedLen);
+
 /* Parameter helpers. */
 HIFHE_ERROR BGV_BGVParameter_Create(BGVParameter *out, Modulus plainMod, uint64_t correctionFactor,
                                     uint32_t defaultCiphertextSize, uint32_t polyDegree,

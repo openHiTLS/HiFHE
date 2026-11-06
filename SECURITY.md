@@ -64,7 +64,8 @@ and decryption, and HiFHE's use of dependency APIs.
   stop at the first mismatching byte.
 - **Observable timing:** exploitable timing leakage visible to a remote attacker
   is in scope on common GCC/Clang builds at `-O2` or `-Os`, and on the default
-  CMake Release build (`-O3` with the current GCC configuration). Direct timing
+  CMake Release build (which appends `-O2` after the configuration's own
+  `-O3`, so `-O2` is what takes effect). Direct timing
   observation that the platform cannot reasonably mitigate is also in scope;
   this does not extend to the physical emission measurements in section 2.2.
 
