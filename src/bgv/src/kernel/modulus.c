@@ -251,28 +251,6 @@ uint64_t Kernel_ModInv(uint64_t a, Modulus q)
     return s0;
 }
 
-/*
- * Both reductions estimate floor(x / q) as the top word of x * ratio, where
- * ratio = floor(2^128 / q). That product is wider than 128 bits, so it is
- * accumulated from the partial products that reach the top word. Forming
- * x * ratio directly overflows and gives a wrong quotient for x above roughly
- * 2^(128 - qBits).
- *
- * ratio is a floor, so qhat never exceeds the true quotient and the remainder
- * is never negative. The correction loop runs at most twice.
- */
-
-/* Barrett reduce a 64-bit input mod q. */
-uint64_t Kernel_BarrettReduce64(uint64_t x, const BarrettConst *bc)
-{
-    return Kernel_BarrettReduce64Inl(x, bc);
-}
-
-uint64_t Kernel_BarrettReduce128(uint64_t xHi, uint64_t xLo, const BarrettConst *bc)
-{
-    return Kernel_BarrettReduce128Inl(xHi, xLo, bc);
-}
-
 HIFHE_ERROR Kernel_ShoupConst_Init(ShoupConst *out, uint64_t operand, Modulus q)
 {
     if (out == NULL || q < 2u) {
@@ -287,10 +265,4 @@ HIFHE_ERROR Kernel_ShoupConst_Init(ShoupConst *out, uint64_t operand, Modulus q)
     /* quotient = floor((operand << 64) / q) */
     out->quotient = Kernel_U128DivU64(Kernel_U128Make(operand, 0u), q).lo;
     return HIFHE_SUCCESS;
-}
-
-/* Shoup fast mul-mod. Preconditions: operand < q, x < q, q < 2^63. */
-uint64_t Kernel_ShoupMulMod(uint64_t x, const ShoupConst *sc)
-{
-    return Kernel_ShoupMulModInl(x, sc);
 }

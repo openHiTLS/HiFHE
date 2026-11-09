@@ -21,6 +21,7 @@
 #include "rlwe/crt_ops.h"
 #include "rlwe/rns_ops.h"
 #include "kernel/modulus.h"
+#include "kernel/sampler.h"
 
 /* ---------------- CrtPolyConfig ---------------- */
 
@@ -72,6 +73,32 @@ HIFHE_ERROR RLWE_CrtPoly_Create(CrtPoly *out, const CrtPolyConfig *cfg, RlweCont
     }
     out->ownsData = 1u;
     out->ownsConfig = 1u;
+    return HIFHE_SUCCESS;
+}
+
+HIFHE_ERROR RLWE_CrtPoly_SampleUniformNtt(CrtPoly *out, RlweContext *ctx, const BgvEntropy *src)
+{
+    CrtPolyConfig cfg;
+    memset(&cfg, 0, sizeof(cfg));
+    int32_t r = Uint64Vector_Create(&cfg.rnsbase, ctx->cipherRnsBase.data, ctx->cipherRnsBase.size);
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
+    cfg.dtype = HIFHE_NTT;
+    r = RLWE_CrtPoly_Create(out, &cfg, ctx);
+    Uint64Vector_Destroy(&cfg.rnsbase);
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
+    uint32_t N = ctx->parameter->polyDegree;
+    for (uint32_t i = 0; i < out->config.rnsbase.size; ++i) {
+        Modulus q = out->config.rnsbase.data[i];
+        r = Kernel_Sampler_UniformModQ(out->data + i * N, N, q, i, src);
+        if (r != HIFHE_SUCCESS) {
+            RLWE_CrtPoly_Destroy(out);
+            return r;
+        }
+    }
     return HIFHE_SUCCESS;
 }
 

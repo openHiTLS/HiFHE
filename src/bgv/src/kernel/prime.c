@@ -26,37 +26,18 @@
 #include "kernel/prime.h"
 #include "kernel/modulus.h"
 
-static uint64_t MulModU64(uint64_t a, uint64_t b, uint64_t m)
-{
-    return Kernel_MulMod(a, b, m);
-}
-
-static uint64_t PowModU64(uint64_t base, uint64_t exp, uint64_t m)
-{
-    uint64_t r = 1u % m;
-    base %= m;
-    while (exp > 0u) {
-        if (exp & 1u) {
-            r = MulModU64(r, base, m);
-        }
-        base = MulModU64(base, base, m);
-        exp >>= 1;
-    }
-    return r;
-}
-
 /* One Miller-Rabin round. `n` odd, `n > 3`. */
 static bool MillerRabinWitness(uint64_t n, uint64_t d, uint32_t r, uint64_t a)
 {
     if (a % n == 0u) {
         return true; /* trivial; treat as pass */
     }
-    uint64_t x = PowModU64(a, d, n);
+    uint64_t x = Kernel_PowMod(a, d, n);
     if (x == 1u || x == n - 1u) {
         return true;
     }
     for (uint32_t i = 1; i < r; ++i) {
-        x = MulModU64(x, x, n);
+        x = Kernel_MulMod(x, x, n);
         if (x == n - 1u) {
             return true;
         }
@@ -206,11 +187,11 @@ HIFHE_ERROR Kernel_Prime_PrimitiveRoot2N(uint64_t *out, Modulus q, uint32_t poly
 
     /* w = g^exp has order exactly 2N iff w^N == q - 1. */
     for (uint64_t g = 2u; g < 200u; ++g) {
-        uint64_t w = PowModU64(g, exp, q);
+        uint64_t w = Kernel_PowMod(g, exp, q);
         if (w <= 1u) {
             continue;
         }
-        uint64_t wN = PowModU64(w, polyDegree, q);
+        uint64_t wN = Kernel_PowMod(w, polyDegree, q);
         if (wN == q - 1u) {
             *out = w;
             return HIFHE_SUCCESS;

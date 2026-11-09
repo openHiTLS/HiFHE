@@ -47,11 +47,8 @@ typedef struct {
 } ShoupConst;
 
 HIFHE_ERROR Kernel_BarrettConst_Init(BarrettConst *out, Modulus q);
-uint64_t Kernel_BarrettReduce64(uint64_t x, const BarrettConst *bc);
-uint64_t Kernel_BarrettReduce128(uint64_t xHi, uint64_t xLo, const BarrettConst *bc);
 
 HIFHE_ERROR Kernel_ShoupConst_Init(ShoupConst *out, uint64_t operand, Modulus q);
-uint64_t Kernel_ShoupMulMod(uint64_t x, const ShoupConst *sc);
 
 /* Straightforward mul-mod, no precomputation. Divides, so it is for setup. */
 uint64_t Kernel_MulMod(uint64_t a, uint64_t b, Modulus q);
@@ -66,9 +63,8 @@ uint64_t Kernel_ModInv(uint64_t a, Modulus q);
 /* ceil(log2(x)), the bit count of x - 1. 0 for x <= 1. */
 uint32_t Kernel_Log2Ceil(uint64_t x);
 
-/* Inline bodies of the reductions above, for hot loops. The exported
- * functions wrap these; without LTO a cross-file call per coefficient costs
- * more than the arithmetic. */
+/* Inline reductions for hot loops; a cross-file call per coefficient costs
+ * more than the arithmetic without LTO. */
 /* r - q when r >= q, r otherwise, selected by mask and not by branch. Every
  * reduction below ends in these, and their inputs are secret-derived. */
 static inline uint64_t Kernel_CondSubInl(uint64_t r, uint64_t q)

@@ -42,24 +42,10 @@ static uint64_t MulMod(uint64_t a, uint64_t b, Modulus q)
     return Kernel_MulMod(a, b, q);
 }
 
-static uint64_t PowMod(uint64_t base, uint64_t exp, Modulus q)
-{
-    uint64_t r = 1u % q;
-    base %= q;
-    while (exp > 0u) {
-        if (exp & 1u) {
-            r = MulMod(r, base, q);
-        }
-        base = MulMod(base, base, q);
-        exp >>= 1;
-    }
-    return r;
-}
-
 /* Modular inverse via Fermat's little theorem (q prime). */
 static uint64_t InvMod(uint64_t a, Modulus q)
 {
-    return PowMod(a, q - 2u, q);
+    return Kernel_PowMod(a, q - 2u, q);
 }
 
 /* Shoup quotient floor(w * 2^64 / q) for a fixed multiplier w < q. */
