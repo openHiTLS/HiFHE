@@ -19,12 +19,14 @@
 #define HIFHE_RLWE_CRT_OPS_H
 
 #include "hifhe_err.h"
+#include "basic/rand.h"
 #include "rlwe/rlwe.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+HIFHE_ERROR RLWE_CrtPoly_SampleUniformNtt(CrtPoly *out, RlweContext *ctx, const BgvEntropy *src);
 HIFHE_ERROR RLWE_CrtPoly_Add(CrtPoly *out, const CrtPoly *a, const CrtPoly *b);
 HIFHE_ERROR RLWE_CrtPoly_Sub(CrtPoly *out, const CrtPoly *a, const CrtPoly *b);
 HIFHE_ERROR RLWE_CrtPoly_Neg(CrtPoly *out, const CrtPoly *a);

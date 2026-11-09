@@ -74,35 +74,6 @@ uint32_t BGV_BV_DigitsForBase(const RnsBase *base)
 
 /* ---- Small helpers ---- */
 
-static HIFHE_ERROR SampleUniformCrtNtt(CrtPoly *out, BGVContext *ctx, const BgvEntropy *src)
-{
-    /* Uniform in the NTT domain; NTT is a bijection, so this is uniform. */
-    CrtPolyConfig cfg;
-    memset(&cfg, 0, sizeof(cfg));
-    int32_t r =
-        Uint64Vector_Create(&cfg.rnsbase, ctx->rlweContext.cipherRnsBase.data, ctx->rlweContext.cipherRnsBase.size);
-    if (r != HIFHE_SUCCESS) {
-        return r;
-    }
-    cfg.dtype = HIFHE_NTT;
-    r = RLWE_CrtPoly_Create(out, &cfg, &ctx->rlweContext);
-    Uint64Vector_Destroy(&cfg.rnsbase);
-    if (r != HIFHE_SUCCESS) {
-        return r;
-    }
-
-    uint32_t N = ctx->rlweContext.parameter->polyDegree;
-    for (uint32_t i = 0; i < out->config.rnsbase.size; ++i) {
-        Modulus q = out->config.rnsbase.data[i];
-        r = Kernel_Sampler_UniformModQ(out->data + i * N, N, q, i, src);
-        if (r != HIFHE_SUCCESS) {
-            RLWE_CrtPoly_Destroy(out);
-            return r;
-        }
-    }
-    return HIFHE_SUCCESS;
-}
-
 /* Secret-key coefficient distribution. SECRET_FIXED_WEIGHT matches the
  * predecessor: polyDegree/4 at +1, the same at -1, rest zero, shuffled.
  * CBD is kept for error polynomials. */
@@ -247,7 +218,7 @@ static HIFHE_ERROR MakeKeyPiece(Ciphertext *out, const CrtPoly *sk_ntt, const Cr
 
     /* a: uniform in NTT. */
     CrtPoly a;
-    r = SampleUniformCrtNtt(&a, ctx, &srcA);
+    r = RLWE_CrtPoly_SampleUniformNtt(&a, &ctx->rlweContext, &srcA);
     if (r != HIFHE_SUCCESS) {
         BGV_Ciphertext_Destroy(out);
         return r;

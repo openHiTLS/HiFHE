@@ -53,24 +53,6 @@ static HIFHE_ERROR MakeChainCrtPoly(CrtPoly *out, BGVContext *ctx, PolyForm dtyp
     return r;
 }
 
-static HIFHE_ERROR SampleUniformCrtNtt(CrtPoly *out, BGVContext *ctx, const BgvEntropy *src)
-{
-    int32_t r = MakeChainCrtPoly(out, ctx, HIFHE_NTT);
-    if (r != HIFHE_SUCCESS) {
-        return r;
-    }
-    uint32_t N = ctx->rlweContext.parameter->polyDegree;
-    for (uint32_t i = 0; i < out->config.rnsbase.size; ++i) {
-        Modulus q = out->config.rnsbase.data[i];
-        r = Kernel_Sampler_UniformModQ(out->data + i * N, N, q, i, src);
-        if (r != HIFHE_SUCCESS) {
-            RLWE_CrtPoly_Destroy(out);
-            return r;
-        }
-    }
-    return HIFHE_SUCCESS;
-}
-
 static HIFHE_ERROR SampleSmallCrtNtt(CrtPoly *out, BGVContext *ctx, const BgvEntropy *src, bool ternary)
 {
     int32_t r = MakeChainCrtPoly(out, ctx, HIFHE_POLY);
@@ -218,7 +200,7 @@ HIFHE_ERROR BGV_Encryptor_EncryptZeroSymmetric(Ciphertext *out, const SecretKey 
     if (r != HIFHE_SUCCESS) {
         return r;
     }
-    r = SampleUniformCrtNtt(&a, self->context, &src);
+    r = RLWE_CrtPoly_SampleUniformNtt(&a, &self->context->rlweContext, &src);
     if (r != HIFHE_SUCCESS) {
         RLWE_CrtPoly_Destroy(&sk_view);
         return r;
