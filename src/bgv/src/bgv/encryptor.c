@@ -319,11 +319,7 @@ static HIFHE_ERROR AddPtToC0(Ciphertext *ct, const Plaintext *pt)
         uint64_t *c0slice = ct->data + i * N;
         const uint64_t *ptslice = pt->data + i * N;
         for (uint32_t j = 0; j < N; ++j) {
-            uint64_t s = c0slice[j] + ptslice[j];
-            if (s >= q) {
-                s -= q;
-            }
-            c0slice[j] = s;
+            c0slice[j] = Kernel_CondSubInl(c0slice[j] + ptslice[j], q);
         }
     }
     ct->config.correctionFactor = pt->config.scaleFactor;
