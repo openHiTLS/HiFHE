@@ -120,7 +120,9 @@ HIFHE_ERROR Bgv_DupState(BgvState *dst, const BgvState *src)
     }
     dst->context.useSlotMap = src->context.useSlotMap;
     /* Context creation zeroes the seed store. Without this the duplicate
-     * falls back to the DRBG, and the same seed stops giving the same keys. */
+     * falls back to the DRBG, and the same seed stops giving the same keys.
+     * What is copied is the stored seed, already bound to the parameters, so
+     * it is installed raw rather than bound a second time. */
     if (src->context.rlweContext.seedCtx.hasSeed) {
         r = BgvContext_SetSeed(&dst->context.rlweContext.seedCtx, src->context.rlweContext.seedCtx.seed,
                                HIFHE_CTX_SEED_LEN);

@@ -687,7 +687,7 @@ static int32_t BgvCtrl(HIFHE_Ctx *ctx, int32_t cmd, const HIFHE_HEText *text, vo
                 return HIFHE_BAD_STATE;
             }
             CRYPT_BGV_Ctx *runtime = ctx->data;
-            return BgvContext_SetSeed(&runtime->bgv.context.rlweContext.seedCtx, value, valueLen);
+            return BGV_BGVContext_SetKeySeed(&runtime->bgv.context, value, valueLen);
         }
         case HIFHE_CTRL_BGV_GET_POLY_DEGREE:
             memcpy(value, &ctx->params->config.slots, sizeof(uint32_t));

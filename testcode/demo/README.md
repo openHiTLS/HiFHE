@@ -31,6 +31,14 @@ B: Encode(bucket) -> bucket-query -> multiply by nonzero masks -> add noise -> A
 A: Decrypt -> Decode -> find the entry whose four fields are zero
 ```
 
+Slot 4i+j of the reply is zero exactly when field j of entry i matched, so A
+learns, per entry, which of its four fields it guessed, not only whether the
+whole entry matched; with one ciphertext and no rotation, a slot can only
+depend on its own field. This does not protect bucket contents against
+clients that craft ciphertexts either: A holds the secret key, and
+RERANDOMIZE adds bounded noise and provides no circuit privacy. These are
+arithmetic demonstrations, not a secure private set-membership protocol.
+
 The Provider version uses SetParaById, HEMsgEncode, Encrypt, HEAdd, HEMul,
 Ctrl, Decrypt, and HEMsgDecode. NEGATE and the bucket plaintext share one HEAdd.
 Buffer capacities come from length queries; the host DRBG uses system entropy.
@@ -44,8 +52,9 @@ Both exit successfully only when hunter2 matches index 7 and the absent
 query produces no match. Provider initialization and buffer allocation occur before
 the query loop.
 
-The public API omits custom parameters, key import/export, and ciphertext/ciphertext
-multiplication. Both demos use the 4096 preset with ciphertext multiplication depth zero.
+The public API omits custom parameters and ciphertext/ciphertext
+multiplication. Both demos use the 4096 preset with ciphertext multiplication
+depth zero, and neither transfers a key.
 
 Both demos initialize openHiTLS before creating FHE contexts. Algorithm kernels
 use their existing random interfaces; no service pointers are injected.

@@ -13,7 +13,8 @@
 /* Leaked-string detection between a client and a server.
  *
  * The client asks whether its secret is in the server's leak bucket. The
- * server sees a ciphertext and a bucket id. The client learns one index.
+ * server sees a ciphertext and a bucket id. The client reads back the index
+ * of the matching entry.
  *
  * One query, t = plainMod, 4 slots per entry:
  *   client  h   = SHA3-256(secret)[0..7]
@@ -27,6 +28,15 @@
  *
  * t is prime and both operands are below t, so a slot is 0 exactly when the
  * two fields were equal.
+ *
+ * What a reply shows: slot 4i+j is 0 exactly when field j of entry i
+ * matched, so the client learns, per entry, which of its four fields it
+ * guessed, not only whether the whole entry matched. That is a property of
+ * this layout: with one ciphertext and no rotation, a slot can only depend on
+ * its own field. It does not protect the bucket against a client that crafts
+ * its ciphertexts either: the client holds the secret key, and Rerandomize
+ * adds bounded noise but provides no circuit privacy. This is an arithmetic
+ * demonstration, not a secure private set-membership protocol.
  *
  * The server runs HEAdd, HEMul and
  * Rerandomize, none of which take a key, so it never generates one.

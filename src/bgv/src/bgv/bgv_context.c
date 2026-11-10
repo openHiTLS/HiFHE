@@ -20,6 +20,7 @@
 #include "bgv/plaintext.h"
 #include "bgv/ciphertext.h"
 #include "bgv/params_check.h"
+#include "basic/rand.h"
 #include "kernel/ntt.h"
 #include "kernel/modulus.h"
 #include "rlwe/rlwe.h"
@@ -148,6 +149,83 @@ HIFHE_ERROR BGV_BGVContext_EnsureSlotMap(BGVContext *ctx)
     }
     ctx->slotMapReady = 1u;
     return HIFHE_SUCCESS;
+}
+
+/* Everything that decides what a key means, in a fixed order: the degree, the
+ * plaintext modulus, the correction factor, then the chain length and the
+ * chain. Two presets that agree on all of it derive the same keys, which is
+ * what reproducibility means; two that differ anywhere derive unrelated ones. */
+static HIFHE_ERROR ParamWords(const BGVContext *ctx, uint8_t *out, uint32_t *outLen)
+{
+    const RlweParameter *rp = &ctx->bgvParameter->rlweParameter;
+    const ModulusVector *chain = &rp->cipherMod;
+    if (chain->size == 0u || chain->size > HIFHE_BGV_MAX_CHAIN_LEN) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
+        return HIFHE_PARAM_INVALID;
+    }
+    uint64_t words[HIFHE_BGV_MAX_CHAIN_LEN + 4u];
+    uint32_t n = 0u;
+    words[n++] = (uint64_t)rp->polyDegree;
+    words[n++] = (uint64_t)ctx->bgvParameter->plainMod;
+    words[n++] = ctx->bgvParameter->correctionFactor;
+    words[n++] = (uint64_t)chain->size;
+    for (uint32_t i = 0; i < chain->size; ++i) {
+        words[n++] = chain->data[i];
+    }
+    for (uint32_t i = 0; i < n; ++i) {
+        for (uint32_t b = 0; b < sizeof(uint64_t); ++b) {
+            out[i * sizeof(uint64_t) + b] = (uint8_t)(words[i] >> (8u * b));
+        }
+    }
+    *outLen = n * (uint32_t)sizeof(uint64_t);
+    return HIFHE_SUCCESS;
+}
+
+HIFHE_ERROR BGV_BGVContext_SetKeySeed(BGVContext *ctx, const uint8_t *seed, uint32_t seedLen)
+{
+    if (ctx == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
+        return HIFHE_NULL_INPUT;
+    }
+    if (seed == NULL) {
+        return BgvContext_SetSeed(&ctx->rlweContext.seedCtx, NULL, 0u);
+    }
+    if (seedLen != HIFHE_CTX_SEED_LEN) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
+        return HIFHE_PARAM_INVALID;
+    }
+    if (ctx->bgvParameter == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_NOT_SET);
+        return HIFHE_PARAM_NOT_SET;
+    }
+
+    uint8_t params[(HIFHE_BGV_MAX_CHAIN_LEN + 4u) * sizeof(uint64_t)];
+    uint32_t paramsLen = 0u;
+    int32_t r = ParamWords(ctx, params, &paramsLen);
+    if (r != HIFHE_SUCCESS) {
+        return r;
+    }
+    BgvLabel lbl;
+    const char *label = BgvLabel_Build(&lbl, "params", NULL, 0u, NULL);
+    if (label == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_INTERNAL);
+        return HIFHE_INTERNAL;
+    }
+
+    /* The label is fixed width and the words that follow are too, so the two
+     * cannot be confused for one another. */
+    uint8_t ds[HIFHE_DS_MAX + sizeof(params)];
+    uint32_t labelLen = (uint32_t)strlen(label);
+    memcpy(ds, label, labelLen);
+    memcpy(ds + labelLen, params, paramsLen);
+
+    uint8_t bound[HIFHE_CTX_SEED_LEN];
+    r = BgvRand_Seeded(seed, seedLen, ds, labelLen + paramsLen, bound, sizeof(bound));
+    if (r == HIFHE_SUCCESS) {
+        r = BgvContext_SetSeed(&ctx->rlweContext.seedCtx, bound, sizeof(bound));
+    }
+    HifheCleanse(bound, sizeof(bound));
+    return r;
 }
 
 HIFHE_ERROR BGV_BGVContext_Destroy(BGVContext *self)

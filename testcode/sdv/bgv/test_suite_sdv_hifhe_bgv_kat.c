@@ -34,6 +34,9 @@
 /*
  * BGV KATs compare fixed-input output digests through CRYPT_BGV_*.
  * Baselines come from 66378e2 or the later optimisation work, as marked in .data.
+ * A digest covers the whole serialised output, header included, so it carries the
+ * algorithm id: when HIFHE_BGV moved to 0x90000001 every affected digest was
+ * re-derived after checking that it still matched with the previous id put back.
  * Native arithmetic vectors check decoded slots against modular arithmetic.
  */
 

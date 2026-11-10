@@ -28,6 +28,7 @@
 #include "hifhe_types.h"
 #include "hifhe_err.h"
 #include "bgv_local.h"
+#include "hifhe_local.h"
 /* HIFHE_BGV_MAX_CIPHERTEXT_SIZE, and the modular helpers the key-recovery
  * attempt needs to do its own arithmetic on the wire. */
 #include "bgv/bgv.h"
@@ -982,6 +983,211 @@ EXIT:
     free(needle);
     BSL_SAL_Free(slab);
     BSL_SAL_Free(pt);
+    CRYPT_BGV_FreeCtx(ctx);
+}
+/* END_CASE */
+
+/* What one native context derives from a seed: the exported keys, the seed
+ * SET_SEED actually installed, and the key origin KeyGen assigned. The seed
+ * and the origin are read from the context, so this checks the native control
+ * path end to end rather than BGV_BGVContext_SetKeySeed on its own. `pub` and
+ * `prv` are caller-owned and replaced on success. */
+typedef struct {
+    uint8_t *pub;
+    uint8_t *prv;
+    uint32_t pubLen;
+    uint32_t prvLen;
+    uint8_t bound[HIFHE_CTX_SEED_LEN];
+    uint8_t origin[16];
+} SecSeeded;
+
+static int SecSeededKeys(int32_t preset, const uint8_t *seed, SecSeeded *s)
+{
+    uint8_t **pub = &s->pub, **prv = &s->prv;
+    uint32_t *pubLen = &s->pubLen, *prvLen = &s->prvLen;
+    HIFHE_Ctx *ctx = HIFHE_New(HIFHE_BGV);
+    int rc = -1;
+    if (ctx == NULL) {
+        return -1;
+    }
+    *pub = NULL;
+    *prv = NULL;
+    if (HIFHE_SetParaById(ctx, preset) != HIFHE_SUCCESS ||
+        HIFHE_Ctrl(ctx, HIFHE_CTRL_BGV_SET_SEED, NULL, (void *)(uintptr_t)seed, HIFHE_BGV_SEED_LEN) != HIFHE_SUCCESS ||
+        HIFHE_KeyGen(ctx) != HIFHE_SUCCESS) {
+        goto EXIT;
+    }
+    const CRYPT_BGV_Ctx *runtime = ctx->data;
+    const uint8_t *stored = BgvContext_GetSeed(&runtime->bgv.context.rlweContext.seedCtx);
+    if (stored == NULL) {
+        goto EXIT;
+    }
+    memcpy(s->bound, stored, sizeof(s->bound));
+    memcpy(s->origin, ctx->keysetId, sizeof(s->origin));
+    *pubLen = 0u;
+    *prvLen = 0u;
+    if (HIFHE_ExportPubKey(ctx, NULL, pubLen) != HIFHE_BUFFER_TOO_SMALL ||
+        HIFHE_ExportPrvKey(ctx, NULL, prvLen) != HIFHE_BUFFER_TOO_SMALL) {
+        goto EXIT;
+    }
+    *pub = malloc(*pubLen);
+    *prv = malloc(*prvLen);
+    if (*pub == NULL || *prv == NULL) {
+        goto EXIT;
+    }
+    if (HIFHE_ExportPubKey(ctx, *pub, pubLen) != HIFHE_SUCCESS ||
+        HIFHE_ExportPrvKey(ctx, *prv, prvLen) != HIFHE_SUCCESS) {
+        goto EXIT;
+    }
+    rc = 0;
+EXIT:
+    if (rc != 0) {
+        free(*pub);
+        free(*prv);
+        *pub = NULL;
+        *prv = NULL;
+    }
+    HIFHE_Free(ctx);
+    return rc;
+}
+
+/* @
+* @test  SDV_CRYPTO_HIFHE_BGV_SEC_SEED_PARAM_BOUND_TC001
+* @title  One seed under two presets derives unrelated keys, and the same preset repeats them.
+* @auto  TRUE
+@ */
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_SEC_SEED_PARAM_BOUND_TC001(int presetA, int presetB, int same)
+{
+    SecSeeded a = {0}, b = {0};
+
+    TestMemInit();
+    TestRandInit();
+    ASSERT_EQ(SecSeededKeys((int32_t)presetA, SEC_SEED_A, &a), 0);
+    ASSERT_EQ(SecSeededKeys((int32_t)presetB, SEC_SEED_A, &b), 0);
+    uint8_t *pubA = a.pub, *prvA = a.prv, *pubB = b.pub;
+    uint8_t *prvB = b.prv;
+    uint32_t pubALen = a.pubLen, prvALen = a.prvLen, pubBLen = b.pubLen, prvBLen = b.prvLen;
+
+    /* Every pair, whatever its rings: the seed SET_SEED installed and the
+     * origin KeyGen assigned agree exactly when the presets do. An unbound
+     * seed, or one bound to only some of the parameters, installs the same
+     * value under two presets; an origin taken from anything but the bound
+     * seed lets one preset's ciphertexts pass for the other's. */
+    ASSERT_TRUE((same != 0) == (memcmp(a.bound, b.bound, sizeof(a.bound)) == 0));
+    ASSERT_TRUE((same != 0) == (memcmp(a.origin, b.origin, sizeof(a.origin)) == 0));
+
+    /* Exports of different lengths come from different rings and have no
+     * bytes to compare; the seed and origin checks above are what separate
+     * them. A pair that shares a ring is also compared byte by byte. */
+    if (pubALen != pubBLen || prvALen != prvBLen) {
+        ASSERT_EQ(same, 0);
+        goto EXIT;
+    }
+
+    /* The secret is what the two public keys would otherwise share. */
+    if (same != 0) {
+        ASSERT_EQ(memcmp(prvA, prvB, prvALen), 0);
+        ASSERT_EQ(memcmp(pubA, pubB, pubALen), 0);
+    } else {
+        ASSERT_TRUE(memcmp(prvA, prvB, prvALen) != 0);
+        /* The whole public key, then the uniform component on its own: b
+         * differs with t alone, so b alone proves nothing. The two
+         * components split the ciphertext body in half, b first. */
+        ASSERT_TRUE(memcmp(pubA, pubB, pubALen) != 0);
+        const uint8_t *aPolyA = SecCtData(pubA);
+        const uint8_t *aPolyB = SecCtData(pubB);
+        uint32_t bodyLen = pubALen - (uint32_t)(aPolyA - pubA);
+        ASSERT_EQ(SecRdU32(pubA + WIRE_CT_SZ_OFF), 2u);
+        ASSERT_TRUE(memcmp(aPolyA + bodyLen / 2u, aPolyB + bodyLen / 2u, bodyLen / 2u) != 0);
+    }
+EXIT:
+    free(a.pub);
+    free(a.prv);
+    free(b.pub);
+    free(b.prv);
+}
+/* END_CASE */
+
+#define SEC_PARAM_DEGREE     0
+#define SEC_PARAM_PLAIN_MOD  1
+#define SEC_PARAM_CORRECTION 2
+#define SEC_PARAM_CHAIN_LEN  3
+#define SEC_PARAM_CHAIN_PRIME 4
+
+/* The seed SetKeySeed derives from SEC_SEED_A under the context's current
+ * parameters, copied into `out`. */
+static int SecBoundSeed(BGVContext *bc, uint8_t out[HIFHE_CTX_SEED_LEN])
+{
+    if (BGV_BGVContext_SetKeySeed(bc, SEC_SEED_A, HIFHE_BGV_SEED_LEN) != HIFHE_SUCCESS) {
+        return -1;
+    }
+    const uint8_t *seed = BgvContext_GetSeed(&bc->rlweContext.seedCtx);
+    if (seed == NULL) {
+        return -1;
+    }
+    memcpy(out, seed, HIFHE_CTX_SEED_LEN);
+    return 0;
+}
+
+/* @
+* @test  SDV_CRYPTO_HIFHE_BGV_SEC_SEED_PARAM_WORD_TC001
+* @title  Changing any one parameter that defines a key changes the seed it is bound to.
+* @brief  The presets only pair rings that differ in the plaintext modulus, and a
+*         custom parameter set cannot change the degree without changing the
+*         chain primes, so the binding is checked on one context: each input of
+*         the bound seed is changed on its own, the same caller seed installed
+*         again, and the bound value compared with the original. Each change is
+*         undone before the context is used or freed.
+* @auto  TRUE
+@ */
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_SEC_SEED_PARAM_WORD_TC001(int word)
+{
+    CRYPT_BGV_Ctx *ctx = NULL;
+    CRYPT_BGV_Ctx *inner = NULL;
+    uint8_t ref[HIFHE_CTX_SEED_LEN], got[HIFHE_CTX_SEED_LEN], again[HIFHE_CTX_SEED_LEN];
+
+    TestMemInit();
+    TestRandInit();
+    /* Two limbs, so the chain can shrink and still be a chain. */
+    ctx = SecNewCtx(HIFHE_BGV_4096_44x2_17BIT, SEC_SEED_A, 1);
+    ASSERT_TRUE(ctx != NULL);
+    ASSERT_EQ(CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GET_INNER_CTX, &inner, (uint32_t)sizeof(inner)), HIFHE_SUCCESS);
+    ASSERT_TRUE(inner != NULL && inner->bgv.haveContext);
+    BGVContext *bc = &inner->bgv.context;
+    BGVParameter *p = bc->bgvParameter;
+    ASSERT_TRUE(p != NULL && p->rlweParameter.cipherMod.size == 2u);
+    ASSERT_EQ(SecBoundSeed(bc, ref), 0);
+
+    RlweParameter *rp = &p->rlweParameter;
+    const uint32_t degree = rp->polyDegree;
+    const Modulus plainMod = p->plainMod;
+    const uint64_t correction = p->correctionFactor;
+    const uint32_t chainLen = (uint32_t)rp->cipherMod.size;
+    const uint64_t prime = rp->cipherMod.data[1];
+    switch (word) {
+        case SEC_PARAM_DEGREE: rp->polyDegree = degree * 2u; break;
+        case SEC_PARAM_PLAIN_MOD: p->plainMod = plainMod + 2u; break;
+        case SEC_PARAM_CORRECTION: p->correctionFactor = correction + 1u; break;
+        case SEC_PARAM_CHAIN_LEN: rp->cipherMod.size = chainLen - 1u; break;
+        case SEC_PARAM_CHAIN_PRIME: rp->cipherMod.data[1] = prime + 2u; break;
+        default: break;
+    }
+    int rc = SecBoundSeed(bc, got);
+    rp->polyDegree = degree;
+    p->plainMod = plainMod;
+    p->correctionFactor = correction;
+    rp->cipherMod.size = chainLen;
+    rp->cipherMod.data[1] = prime;
+    ASSERT_TRUE(word >= SEC_PARAM_DEGREE && word <= SEC_PARAM_CHAIN_PRIME);
+    ASSERT_EQ(rc, 0);
+    ASSERT_TRUE(memcmp(ref, got, sizeof(ref)) != 0);
+
+    /* Back on the original parameters, the binding repeats. */
+    ASSERT_EQ(SecBoundSeed(bc, again), 0);
+    ASSERT_EQ(memcmp(ref, again, sizeof(ref)), 0);
+EXIT:
     CRYPT_BGV_FreeCtx(ctx);
 }
 /* END_CASE */

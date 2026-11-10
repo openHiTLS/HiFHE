@@ -30,7 +30,7 @@ typedef void (*HIFHE_FreeFunc)(void *ptr);
 
 /** Algorithm identifiers for HIFHE_New and CRYPT_EAL_ProviderPkeyNewCtx. */
 typedef enum {
-    HIFHE_BGV = (int32_t)0x89000002u,
+    HIFHE_BGV = (int32_t)0x90000001u,
 } HIFHE_ALG_ID;
 
 #ifdef HITLS_PROVIDER
@@ -121,7 +121,11 @@ typedef enum {
      * Returns HIFHE_BAD_STATE if keys have already been generated.
      * A seed also makes the key origin reproducible: keys generated from one
      * seed carry one origin, so a ciphertext serialized by one context
-     * deserializes into another that holds the same seed.
+     * deserializes into another that holds the same seed and the same preset.
+     * The seed is bound to the parameters before anything is derived from it,
+     * so the same seed under two presets yields two unrelated key pairs and
+     * two origins. A seed is private-key material either way: whoever holds
+     * it can regenerate the private key of every preset it was used with.
      */
     HIFHE_CTRL_BGV_SET_SEED = 100007,
     /**
