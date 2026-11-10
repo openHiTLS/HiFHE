@@ -22,7 +22,7 @@ defaults:
 
 jobs:
   asan-gate:
-    name: I128-${{ matrix.int128 == 'enable' && 'on' || 'off' }} provider-${{ matrix.provider == 'enable' && 'on' || 'off' }}
+    name: ASan
     runs-on: [ubuntu-latest, x64, medium]
     timeout-minutes: 90
     strategy:
