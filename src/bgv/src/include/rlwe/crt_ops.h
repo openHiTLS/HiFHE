@@ -39,7 +39,8 @@ HIFHE_ERROR RLWE_CrtPoly_MulScalar(CrtPoly *out, const CrtPoly *a, uint64_t x);
 HIFHE_ERROR RLWE_CrtPoly_MulScalarPerLimb(CrtPoly *out, const CrtPoly *a, const uint64_t *xPerLimb);
 /* Copy coefficients into `dst`'s existing storage. Works on a view. */
 HIFHE_ERROR RLWE_CrtPoly_Assign(CrtPoly *dst, const CrtPoly *src);
-/* One signed length-N vector into every limb, mapped into [0, q_i).
+/* One signed length-N vector, |v[j]| < every q_i, into every limb, mapped
+ * into [0, q_i).
  * Leaves the poly in coefficient form. */
 HIFHE_ERROR RLWE_CrtPoly_SetSigned(CrtPoly *self, const int64_t *v);
 

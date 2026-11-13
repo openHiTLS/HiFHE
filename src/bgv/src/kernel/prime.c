@@ -101,10 +101,13 @@ static uint32_t LogTwoU64(uint64_t x)
 }
 
 /*
- * Proth search. Candidates q = 2N*k + 1, with k walking down from
- * 2^(bits - log2(N) - 1) - 1 so q is exactly `bits` wide. The start point
- * and the downward direction fix which prime a request lands on, so both
- * match the predecessor generator. Capped at HIFHE_PROTH_MAX_STEPS.
+ * Proth search. Candidates q = 2N*k + 1 = k * 2^(log2(N) + 1) + 1, with k
+ * walking down from 2^(bits - log2(N) - 1) - 1 so q is exactly `bits` wide.
+ * The walk stops at k = 2^(bits - log2(N) - 2), the smallest k whose
+ * candidate (2^(bits - 1) + 1) still has `bits` bits, so a narrower prime is
+ * never returned. The start point and the downward direction fix which prime
+ * a request lands on, so both match the predecessor generator. Capped at
+ * HIFHE_PROTH_MAX_STEPS.
  */
 #define HIFHE_PROTH_MAX_STEPS 1000u
 
@@ -133,8 +136,9 @@ HIFHE_ERROR Kernel_Prime_FindProth(Modulus *out, uint32_t bits, uint32_t polyDeg
 
     uint64_t twoN = (uint64_t)polyDegree * 2u;
     uint64_t k = (1ull << (bits - logN - 1u)) - 1u;
+    const uint64_t kMin = 1ull << (bits - logN - 2u);
 
-    for (uint32_t step = 0; step < HIFHE_PROTH_MAX_STEPS && k > 0u; ++step, --k) {
+    for (uint32_t step = 0; step < HIFHE_PROTH_MAX_STEPS && k >= kMin; ++step, --k) {
         uint64_t cand = twoN * k + 1u;
 
         bool skip = false;

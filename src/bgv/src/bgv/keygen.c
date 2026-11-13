@@ -28,6 +28,7 @@
  * byte-identical keys, an unseeded one falls back to the DRBG.
  */
 
+#include "hifhe_config.h"
 #include <string.h>
 #include "hifhe_err_internal.h"
 #include "bgv/keygen.h"
@@ -45,6 +46,7 @@
 #include "rlwe/rns_ops.h"
 
 /* Number of base-2^16 digits needed to decompose a value < q. */
+#ifdef HIFHE_CUSTOM_PARAM
 uint32_t BGV_BV_DnumForModulus(Modulus q)
 {
     uint32_t bits = 0u;
@@ -71,6 +73,8 @@ uint32_t BGV_BV_DigitsForBase(const RnsBase *base)
     }
     return widest;
 }
+
+#endif
 
 /* ---- Small helpers ---- */
 
@@ -303,6 +307,7 @@ HIFHE_ERROR BGV_KeyGenerator_GenPublicKey(PublicKey *out, const KeyGenerator *se
     return r;
 }
 
+#ifdef HIFHE_CUSTOM_PARAM
 HIFHE_ERROR BGV_KeyGenerator_GenRelinKey(RelinKeys *out, uint32_t digits, const KeyGenerator *self)
 {
     if (out == NULL || self == NULL || self->sk == NULL) {
@@ -539,3 +544,5 @@ giveup:
     BGV_GaloisKeys_Destroy(out);
     return r;
 }
+
+#endif

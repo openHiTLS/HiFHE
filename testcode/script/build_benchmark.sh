@@ -26,8 +26,7 @@ Usage: build_benchmark.sh [asan] [clean] [run]
   --enable   force an algorithm's modules on  (-DHIFHE_<ALG>=ON)
   --disable  force an algorithm's modules off (-DHIFHE_<ALG>=OFF)
 
-Without --enable/--disable, reuse the library build configuration.
-The Bgv module requires HITLS_PROVIDER; Kernel runs without it.
+Builds full features in a separate benchmark build directory.
 
 The binary lands in testcode/output/hifhe_benchmark. For finer control run it
 directly, or use execute_benchmark.sh:
@@ -47,7 +46,7 @@ HITLS_ROOT_DIR=${HITLS_ROOT_DIR:-"${HIFHE_ROOT_DIR}/platform/openhitls"}
 
 ENABLE_ASAN=OFF
 DO_RUN="no"
-# Empty means reuse the library build configuration.
+# BGV is enabled by default.
 HIFHE_BGV=""
 
 while [[ $# -gt 0 ]]; do
@@ -84,11 +83,12 @@ CMAKE_FEATURE_ARGS=()
 
 
 CMAKE_FEATURE_ARGS+=("-DHITLS_ROOT_PATH=${HITLS_ROOT_DIR}")
-cmake -S "${HIFHE_ROOT_DIR}" -B "${HIFHE_PROVIDER_DIR}" \
-    -DBUILD_BENCHMARK=ON \
+BENCHMARK_BUILD_DIR=${HIFHE_BENCHMARK_DIR:-"${HIFHE_ROOT_DIR}/build/benchmark"}
+cmake -S "${HIFHE_ROOT_DIR}/testcode/benchmark" -B "${BENCHMARK_BUILD_DIR}" \
+    -DCMAKE_BUILD_TYPE=Release \
     -DHIFHE_ENABLE_ASAN="${ENABLE_ASAN}" \
     "${CMAKE_FEATURE_ARGS[@]}"
-cmake --build "${HIFHE_PROVIDER_DIR}" --target hifhe_benchmark --parallel "$(nproc)"
+cmake --build "${BENCHMARK_BUILD_DIR}" --target hifhe_benchmark --parallel "$(nproc)"
 
 if [[ "${DO_RUN}" == "yes" ]]; then
     bash "${HIFHE_ROOT_DIR}/testcode/script/execute_benchmark.sh"

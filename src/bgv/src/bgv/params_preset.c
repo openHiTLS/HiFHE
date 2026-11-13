@@ -30,12 +30,32 @@ static const uint32_t kCipherBits_2048_48[] = {48u};
  * search's starting point. 48 bits, 1 mod 4096, inside the 54-bit budget
  * that N=2048 has at the 128-bit level. */
 static const uint64_t kCipherMod_default[] = {140786965118977ull};
+/* The moduli every other preset resolves to. They are the primes the Proth
+ * search returns for the bit widths beside them, written out so that a
+ * context built from a preset searches and validates nothing; the custom
+ * parameter path still searches, and the preset SDV case checks that the
+ * search and these tables agree. */
+static const uint64_t kCipherMod_2048_48[] = {281474976694273ull};
 /* ---- 4096 / 2 x 44-bit chain ---- */
 static const uint32_t kCipherBits_4096_44x2[] = {44u, 44u};
+static const uint64_t kCipherMod_4096_44x2[] = {17592186028033ull, 17592185659393ull};
 /* ---- 8192 / 4-limb chain. Widths are 43,43,44,44 rather than a flat 44:
  * this is the chain the "44x4" preset has always carried, and the name is
  * kept so an existing caller's preset id still means the same ring. ---- */
 static const uint32_t kCipherBits_8192_44x4[] = {43u, 43u, 44u, 44u};
+static const uint64_t kCipherMod_8192_44x4[] = {8796092858369ull, 8796092792833ull, 17592186028033ull,
+                                                17592185438209ull};
+/* Proth primes of 17 and 20 bits for N = 2048 and 8192, as the search finds them. */
+#define PLAIN_MOD_17BIT_2048 114689ull
+#define PLAIN_MOD_20BIT_8192 1032193ull
+
+#define PRESET_CHAIN(o, bits, mods)                                          \
+    do {                                                                     \
+        (o)->cipherModBit = (bits);                                          \
+        (o)->cipherModBitSize = (uint32_t)(sizeof(bits) / sizeof((bits)[0])); \
+        (o)->cipherMod = (mods);                                             \
+        (o)->cipherModSize = (uint32_t)(sizeof(mods) / sizeof((mods)[0]));   \
+    } while (0)
 
 HIFHE_ERROR BGV_Preset_Load(BgvPresetPara *out, int32_t presetId)
 {
@@ -53,32 +73,28 @@ HIFHE_ERROR BGV_Preset_Load(BgvPresetPara *out, int32_t presetId)
     out->cipherModBitSize = 0u;
     out->cipherMod = NULL;
     out->cipherModSize = 0u;
+    out->vetted = 1u;
 
     switch (presetId) {
         case HIFHE_BGV_DEFAULT:
             out->polyDegree = 2048u;
             out->plainModBit = 17u;
-            out->plainMod = 0ull; /* fall back to Proth search */
-            out->cipherModBit = kCipherBits_2048_48;
-            out->cipherModBitSize = (uint32_t)(sizeof(kCipherBits_2048_48) / sizeof(uint32_t));
-            out->cipherMod = kCipherMod_default;
-            out->cipherModSize = (uint32_t)(sizeof(kCipherMod_default) / sizeof(uint64_t));
+            out->plainMod = PLAIN_MOD_17BIT_2048;
+            PRESET_CHAIN(out, kCipherBits_2048_48, kCipherMod_default);
             return HIFHE_SUCCESS;
 
         case HIFHE_BGV_2048_48:
             out->polyDegree = 2048u;
             out->plainModBit = 17u;
-            out->plainMod = 0ull; /* fall back to Proth search */
-            out->cipherModBit = kCipherBits_2048_48;
-            out->cipherModBitSize = (uint32_t)(sizeof(kCipherBits_2048_48) / sizeof(uint32_t));
+            out->plainMod = PLAIN_MOD_17BIT_2048;
+            PRESET_CHAIN(out, kCipherBits_2048_48, kCipherMod_2048_48);
             return HIFHE_SUCCESS;
 
         case HIFHE_BGV_8192_44x4:
             out->polyDegree = 8192u;
             out->plainModBit = 20u;
-            out->plainMod = 0ull; /* fall back to Proth search */
-            out->cipherModBit = kCipherBits_8192_44x4;
-            out->cipherModBitSize = (uint32_t)(sizeof(kCipherBits_8192_44x4) / sizeof(uint32_t));
+            out->plainMod = PLAIN_MOD_20BIT_8192;
+            PRESET_CHAIN(out, kCipherBits_8192_44x4, kCipherMod_8192_44x4);
             return HIFHE_SUCCESS;
 
         case HIFHE_BGV_2048_48_17BIT:
@@ -87,16 +103,14 @@ HIFHE_ERROR BGV_Preset_Load(BgvPresetPara *out, int32_t presetId)
             out->polyDegree = 2048u;
             out->plainModBit = 17u;
             out->plainMod = 65537ull;
-            out->cipherModBit = kCipherBits_2048_48;
-            out->cipherModBitSize = (uint32_t)(sizeof(kCipherBits_2048_48) / sizeof(uint32_t));
+            PRESET_CHAIN(out, kCipherBits_2048_48, kCipherMod_2048_48);
             return HIFHE_SUCCESS;
 
         case HIFHE_BGV_4096_44x2_17BIT:
             out->polyDegree = 4096u;
             out->plainModBit = 17u;
             out->plainMod = 65537ull;
-            out->cipherModBit = kCipherBits_4096_44x2;
-            out->cipherModBitSize = (uint32_t)(sizeof(kCipherBits_4096_44x2) / sizeof(uint32_t));
+            PRESET_CHAIN(out, kCipherBits_4096_44x2, kCipherMod_4096_44x2);
             return HIFHE_SUCCESS;
 
         case HIFHE_BGV_8192_44x4_17BIT:
@@ -105,8 +119,7 @@ HIFHE_ERROR BGV_Preset_Load(BgvPresetPara *out, int32_t presetId)
             out->polyDegree = 8192u;
             out->plainModBit = 17u;
             out->plainMod = 65537ull;
-            out->cipherModBit = kCipherBits_8192_44x4;
-            out->cipherModBitSize = (uint32_t)(sizeof(kCipherBits_8192_44x4) / sizeof(uint32_t));
+            PRESET_CHAIN(out, kCipherBits_8192_44x4, kCipherMod_8192_44x4);
             return HIFHE_SUCCESS;
 
         default:

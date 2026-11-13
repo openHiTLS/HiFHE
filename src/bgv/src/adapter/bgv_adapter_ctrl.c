@@ -136,6 +136,7 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
             return HIFHE_SUCCESS;
         }
 
+#ifdef HIFHE_CUSTOM_PARAM
         case HIFHE_CTRL_BGV_GET_RELIN_KEY_LEN:
         case HIFHE_CTRL_BGV_GET_GALOIS_KEYS_LEN:
             /* Depends on how many pieces / how many elements are present.
@@ -147,6 +148,8 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
             }
             *(uint32_t *)val = 0u;
             return HIFHE_SUCCESS;
+
+#endif
 
         case HIFHE_CTRL_BGV_SET_SEED: {
             if (val == NULL || valLen != HIFHE_CTX_SEED_LEN) {
@@ -160,6 +163,7 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
             return BGV_BGVContext_SetKeySeed(&ctx->bgv.context, (const uint8_t *)val, valLen);
         }
 
+#ifdef HIFHE_CUSTOM_PARAM
         case HIFHE_CTRL_BGV_SET_SLOT_MAP: {
             if (val == NULL || valLen != sizeof(uint32_t)) {
                 HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
@@ -257,10 +261,12 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
             return HIFHE_PARAM_INVALID;
         }
 
+#endif
         case HIFHE_CTRL_BGV_RERANDOMIZE:
             return Bgv_HERerand(ctx, (BSL_Param *)val);
         case HIFHE_CTRL_BGV_HE_MODSWITCH:
             return Bgv_HEModSwitch(ctx, (BSL_Param *)val);
+#ifdef HIFHE_CUSTOM_PARAM
         case HIFHE_CTRL_BGV_HE_RELINEARIZE:
             return Bgv_HERelinearize(ctx, (BSL_Param *)val);
 
@@ -269,6 +275,7 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
         case HIFHE_CTRL_BGV_HE_ROTATE_ELT:
             return Bgv_HERotateElt(ctx, (BSL_Param *)val);
 
+#endif
         default:
             HIFHE_ERR_PUSH_ERROR(HIFHE_NOT_SUPPORTED);
             return HIFHE_NOT_SUPPORTED;

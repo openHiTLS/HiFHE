@@ -23,6 +23,8 @@
  * Both operands must be in NTT form; the output is too.
  */
 
+#include "hifhe_config.h"
+#ifdef HIFHE_CUSTOM_PARAM
 #include <string.h>
 #include "hifhe_err_internal.h"
 #include "bgv/evaluator.h"
@@ -115,3 +117,5 @@ HIFHE_ERROR BGV_Evaluator_MulCtCt(Ciphertext *out, const Ciphertext *a, const Ci
     *out = prod;
     return HIFHE_SUCCESS;
 }
+
+#endif

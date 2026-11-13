@@ -19,6 +19,8 @@
  *   (c0 + d0) + (c1 + d1)*s  ~  c0 + c1*s + c2*s^2
  */
 
+#include "hifhe_config.h"
+#ifdef HIFHE_CUSTOM_PARAM
 #include <string.h>
 #include "hifhe_err_internal.h"
 #include "bgv/evaluator.h"
@@ -100,3 +102,5 @@ HIFHE_ERROR BGV_Evaluator_Relinearize(Ciphertext *out, const Ciphertext *in, con
     BGV_Ciphertext_Destroy(&delta);
     return r;
 }
+
+#endif

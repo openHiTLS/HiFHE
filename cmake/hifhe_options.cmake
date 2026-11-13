@@ -16,9 +16,29 @@ set(HITLS_LIB_DIR "${HITLS_ROOT_PATH}/build" CACHE PATH
 option(HIFHE_BUILD_SHARED "Build the shared provider library" ON)
 option(HIFHE_BUILD_STATIC "Build the static provider library" ON)
 option(HIFHE_BGV "Build BGV" ON)
-option(HITLS_PROVIDER "Build openHiTLS Provider integration" ON)
 option(HIFHE_BUILD_TESTS "Build regression tests" OFF)
-option(BUILD_BENCHMARK "Build the kernel benchmark" OFF)
+
+# Keep automatic defaults out of the cache so reconfiguring for tests enables
+# all features. Explicit cache entries (including -D overrides) always win.
+if(NOT DEFINED HIFHE_CUSTOM_PARAM)
+    if(HIFHE_BUILD_TESTS)
+        set(HIFHE_CUSTOM_PARAM ON)
+    else()
+        set(HIFHE_CUSTOM_PARAM OFF)
+    endif()
+endif()
+option(HIFHE_CUSTOM_PARAM "Enable custom parameters, interchange encoding and evaluation operations" OFF)
+if(NOT DEFINED HITLS_PROVIDER)
+    if(HIFHE_BUILD_TESTS)
+        set(HITLS_PROVIDER ON)
+    else()
+        set(HITLS_PROVIDER OFF)
+    endif()
+endif()
+option(HITLS_PROVIDER "Build openHiTLS Provider integration" OFF)
+
+message(STATUS "[HiFHE] HIFHE_CUSTOM_PARAM=${HIFHE_CUSTOM_PARAM} HITLS_PROVIDER=${HITLS_PROVIDER}")
+
 option(HIFHE_ENABLE_ASAN "Enable AddressSanitizer" OFF)
 option(HIFHE_ENABLE_GCOV "Enable coverage" OFF)
 

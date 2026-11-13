@@ -271,6 +271,13 @@ HIFHE_ERROR BGV_Encryptor_EncryptZeroAsymmetric(Ciphertext *out, const PublicKey
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
+    /* Both key components are multiplied as NTT values below. A
+     * coefficient-form key would encrypt to something no key decrypts, and
+     * still report success. */
+    if (pk->config.ciphertextSize != 2u || pk->config.crtConfig.dtype != HIFHE_NTT) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
+        return HIFHE_PARAM_INVALID;
+    }
     /* DRBG: under one seed u, e0 and e1 would come back identical. */
     BgvEntropy src = BgvEntropy_Drbg();
     CrtPoly u, e0, e1, pk0, pk1;
@@ -382,9 +389,10 @@ static void HornerStep(uint64_t *acc, const uint64_t *ck, const uint64_t *sp, co
  * The phase c0 + c1*s + ... + c[K-1]*s^(K-1) never leaves this function. It
  * is linear in s, so a caller holding a ciphertext could solve it for the
  * key. The output is the plaintext polynomial z = [phase]_Q mod t instead,
- * over the ciphertext's whole chain: every limb holds NTT_{q_i}(z), which is
- * the representation encoding produces, so the result decodes and encrypts
- * again exactly as an encoded plaintext does.
+ * over the ciphertext's whole chain: every limb holds NTT_{q_i} of z's
+ * centred representative in (-t/2, t/2], which is the representation
+ * encoding produces, so the result decodes and encrypts again exactly as an
+ * encoded plaintext does.
  *
  * The phase is evaluated by Horner's rule, one multiply-add per component, so
  * the work is linear in ciphertextSize and no power of s is materialised.
@@ -467,22 +475,12 @@ HIFHE_ERROR BGV_Encryptor_Decrypt(Plaintext *out, const Ciphertext *ct, const En
         rc = BGV_Encoder_CrtCenteredModT(out->data, phase, &ct->config.crtConfig.rnsbase, N,
                                          self->context->bgvParameter->plainMod);
     }
-    if (rc == HIFHE_SUCCESS && L == 1u) {
-        /* Decoding reads a single limb as centred mod q_0, so a value above
-         * q_0 / 2 (possible only when t > q_0 / 2) would come back as
-         * value - q_0. Store value + q_0 - t instead: congruent mod t, and
-         * centred to value - t. Branch-free, since value is secret. */
-        Modulus q = ct->config.crtConfig.rnsbase.data[0];
-        Modulus t = self->context->bgvParameter->plainMod;
-        for (uint32_t j = 0; j < N; ++j) {
-            uint64_t over = 0u - (uint64_t)(out->data[j] > (q >> 1));
-            out->data[j] += (q - t) & over;
-        }
+    if (rc == HIFHE_SUCCESS) {
+        /* z in [0, t) goes to every limb as its centred representative in
+         * (-t/2, t/2], the form encoding produces. */
+        BGV_Encoder_LiftCentred(out->data, out->data, &ct->config.crtConfig.rnsbase, N,
+                                self->context->bgvParameter->plainMod);
     }
-    for (uint32_t i = 1u; i < L && rc == HIFHE_SUCCESS; ++i) {
-        memcpy(out->data + (size_t)i * N, out->data, N * sizeof(uint64_t));
-    }
-    /* z < t < q_i, so the same coefficients are valid under every limb. */
     for (uint32_t i = 0; i < L && rc == HIFHE_SUCCESS; ++i) {
         rc = Kernel_Ntt_Forward(out->data + (size_t)i * N, tbl[i]);
     }

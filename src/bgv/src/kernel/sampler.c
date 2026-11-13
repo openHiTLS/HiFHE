@@ -160,7 +160,8 @@ HIFHE_ERROR Kernel_Sampler_Ternary(int64_t *out, uint32_t count, const BgvEntrop
     }
 
     /* Two bits per sample: 00, 11 -> 0; 01 -> +1; 10 -> -1.
-     * Weights 1/4, 1/2, 1/4 on {-1, 0, +1}. */
+     * Weights 1/4, 1/2, 1/4 on {-1, 0, +1}. The code maps arithmetically,
+     * low bit minus high bit, as the fixed-weight sampler unpacks its own. */
     uint32_t needBytes = (count + 3u) / 4u;
     Uint8Vector pool;
     int32_t r = DrawPool(&pool, needBytes, src);
@@ -172,20 +173,7 @@ HIFHE_ERROR Kernel_Sampler_Ternary(int64_t *out, uint32_t count, const BgvEntrop
     for (uint32_t i = 0; i < count; ++i) {
         uint8_t byte = buf[i >> 2];
         uint8_t bits = (byte >> ((i & 3u) << 1u)) & 3u;
-        switch (bits) {
-            case 0:
-                out[i] = 0;
-                break;
-            case 1:
-                out[i] = 1;
-                break;
-            case 2:
-                out[i] = -1;
-                break;
-            default:
-                out[i] = 0;
-                break;
-        }
+        out[i] = (int64_t)(bits & 1u) - (int64_t)(bits >> 1);
     }
     Uint8Vector_Cleanse(&pool);
     return HIFHE_SUCCESS;
@@ -196,6 +184,22 @@ HIFHE_ERROR Kernel_Sampler_Ternary(int64_t *out, uint32_t count, const BgvEntrop
 #define SAMPLER_CODE_MASK 3ull
 #define SAMPLER_CODE_POS  1ull
 #define SAMPLER_CODE_NEG  2ull
+
+/* w mod d for 1 <= d < 2^32, by restoring division over all 64 bits of w:
+ * the same number of steps whatever w is, and every step subtracts under a
+ * mask. Equal to w % d. */
+static uint32_t SamplerModU32(uint64_t w, uint32_t d)
+{
+    uint64_t r = 0u;
+    for (uint32_t b = 64u; b-- > 0u;) {
+        r = (r << 1) | ((w >> b) & 1u);
+        /* r < 2d < 2^33, so r - d borrows into the top bit iff r < d. */
+        uint64_t diff = r - d;
+        uint64_t keep = 0u - (diff >> 63);
+        r = (r & keep) | (diff & ~keep);
+    }
+    return (uint32_t)r;
+}
 
 HIFHE_ERROR Kernel_Sampler_TernaryFixedWeight(int64_t *out, uint32_t count, uint32_t weight, const BgvEntropy *src)
 {
@@ -263,7 +267,7 @@ HIFHE_ERROR Kernel_Sampler_TernaryFixedWeight(int64_t *out, uint32_t count, uint
         if (r != HIFHE_SUCCESS) {
             break;
         }
-        uint32_t j = (uint32_t)(w % (uint64_t)i);
+        uint32_t j = SamplerModU32(w, i);
         uint32_t jWord = j >> 5, jShift = (j & 31u) << 1;
         uint32_t iWord = (i - 1u) >> 5, iShift = ((i - 1u) & 31u) << 1;
         uint64_t keep = (packed[iWord] >> iShift) & SAMPLER_CODE_MASK;

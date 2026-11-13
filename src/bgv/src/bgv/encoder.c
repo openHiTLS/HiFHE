@@ -20,9 +20,11 @@
  *   0 (default)  at NTT position i, the predecessor's layout
  *   1            at slotMap[i], laying the slots out as a 2 x (N/2) matrix
  *
- * Encode leaves the plaintext on the full cipher base in NTT form. Decode
+ * Encode leaves the plaintext on the full cipher base in NTT form, each
+ * coefficient held as its centred representative in (-t/2, t/2]. Decode
  * reverses it, recovers each coefficient as the signed integer its RNS
- * residues represent, and divides out the plaintext scale factor.
+ * residues represent, reduces it to [0, t), and divides out the plaintext
+ * scale factor.
  */
 
 #include <string.h>
@@ -54,6 +56,23 @@ HIFHE_ERROR BGV_Encoder_Destroy(Encoder *self)
     }
     self->context = NULL;
     return HIFHE_SUCCESS;
+}
+
+void BGV_Encoder_LiftCentred(uint64_t *out, const uint64_t *coeff, const RnsBase *base, uint32_t N, Modulus t)
+{
+    const uint64_t half = t >> 1;
+    /* Limb 0 last, so `coeff` may be limb 0 of `out`. */
+    for (uint32_t i = base->size; i-- > 0u;) {
+        const uint64_t lift = base->data[i] - t;
+        uint64_t *dst = out + (size_t)i * N;
+        for (uint32_t j = 0; j < N; ++j) {
+            uint64_t c = coeff[j];
+            /* All ones when c > t/2. Both operands are below 2^63, so the
+             * borrow lands in the top bit. */
+            uint64_t neg = 0u - ((half - c) >> 63);
+            dst[j] = c + (lift & neg);
+        }
+    }
 }
 
 HIFHE_ERROR BGV_Encoder_Encode(Plaintext *out, const uint64_t *msg, uint32_t slotCount, const Encoder *self)
@@ -90,22 +109,28 @@ HIFHE_ERROR BGV_Encoder_Encode(Plaintext *out, const uint64_t *msg, uint32_t slo
     }
 
     Modulus t = ctx->bgvParameter->plainMod;
-    uint32_t L = out->config.crtConfig.rnsbase.size;
+    /* Message words are reduced without dividing: Barrett is exact for any
+     * 64-bit word, since t < 2^63. */
+    BarrettConst tBc;
+    int32_t cr = Kernel_BarrettConst_Init(&tBc, t);
+    if (cr != HIFHE_SUCCESS) {
+        return cr;
+    }
 
-    /* Coefficient vector in [0, t), built once and replicated into limbs. */
+    /* Coefficient vector in [0, t), built once and lifted into every limb. */
     Uint64Vector coeff;
-    int32_t cr = Uint64Vector_Create(&coeff, NULL, N);
+    cr = Uint64Vector_Create(&coeff, NULL, N);
     if (cr != HIFHE_SUCCESS) {
         return cr;
     }
     if (useMap) {
         const uint32_t *map = ctx->slotMap.data;
         for (uint32_t j = 0; j < N; ++j) {
-            coeff.data[map[j]] = msg[j] % t;
+            coeff.data[map[j]] = Kernel_BarrettReduce64Inl(msg[j], &tBc);
         }
     } else {
         for (uint32_t j = 0; j < N; ++j) {
-            coeff.data[j] = msg[j] % t;
+            coeff.data[j] = Kernel_BarrettReduce64Inl(msg[j], &tBc);
         }
     }
     cr = Kernel_Ntt_Inverse(coeff.data, &ctx->ptNtt);
@@ -114,10 +139,9 @@ HIFHE_ERROR BGV_Encoder_Encode(Plaintext *out, const uint64_t *msg, uint32_t slo
         return cr;
     }
 
-    for (uint32_t i = 0; i < L; ++i) {
-        /* coeff[j] < t < q_i, so the residue is the value itself. */
-        memcpy(out->data + i * N, coeff.data, N * sizeof(uint64_t));
-    }
+    /* Centred coefficients keep the plaintext's share of the noise in a
+     * ciphertext-plaintext product small. */
+    BGV_Encoder_LiftCentred(out->data, coeff.data, &out->config.crtConfig.rnsbase, N, t);
     Uint64Vector_Cleanse(&coeff);
 
     out->config.crtConfig.dtype = HIFHE_POLY;
@@ -328,7 +352,8 @@ HIFHE_ERROR BGV_Encoder_Decode(uint64_t *msg, uint32_t slotCount, const Plaintex
         for (uint32_t j = 0; j < N; ++j) {
             msg[j] = gathered.data[map[j]];
         }
-        Uint64Vector_Destroy(&gathered);
+        /* The copy holds the decoded slots in transform order. */
+        Uint64Vector_Cleanse(&gathered);
     }
     return HIFHE_SUCCESS;
 }

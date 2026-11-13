@@ -99,59 +99,13 @@ static int32_t BgvKeyGen(void *data)
     return Bgv_Gen(data);
 }
 
-static int32_t RawDump(uint32_t kind, const void *value, uint8_t **bytes, uint32_t *len)
-{
-    uint32_t n = 0;
-    int32_t ret = (kind == HIFHE_TEXT_PLAIN) ? BgvSerDes_DumpPlaintext(value, NULL, &n, HIFHE_BGV) :
-                                               BgvSerDes_DumpCiphertext(value, NULL, &n, HIFHE_BGV);
-    if (ret != HIFHE_BUFFER_TOO_SMALL) {
-        return ret;
-    }
-    *bytes = HifheMalloc(n);
-    if (*bytes == NULL) {
-        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
-        return HIFHE_MEMORY_ERROR;
-    }
-    ret = (kind == HIFHE_TEXT_PLAIN) ? BgvSerDes_DumpPlaintext(value, *bytes, &n, HIFHE_BGV) :
-                                       BgvSerDes_DumpCiphertext(value, *bytes, &n, HIFHE_BGV);
-    if (ret != HIFHE_SUCCESS) {
-        HifheFree(*bytes);
-        *bytes = NULL;
-        return ret;
-    }
-    *len = n;
-    return 0;
-}
-
 static int32_t LoadBody(uint32_t kind, const uint8_t *in, uint32_t len, void *value, BGVContext *ctx)
 {
     if (len > HIFHE_MAX_WIRE - 12) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_LIMIT_EXCEEDED);
         return HIFHE_LIMIT_EXCEEDED;
     }
-    uint8_t *raw = HifheCalloc(1, len + 12);
-    if (raw == NULL) {
-        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
-        return HIFHE_MEMORY_ERROR;
-    }
-    Hifhe_Put32(raw, HIFHE_SERDES_MAGIC);
-    Hifhe_Put32(raw + 4, (uint32_t)HIFHE_BGV);
-    uint32_t type = kind == HIFHE_TEXT_PLAIN ? HIFHE_SERDES_TYPE_PLAINTEXT : HIFHE_SERDES_TYPE_CIPHER;
-    Hifhe_Put32(raw + 8, 1u | type << 16);
-    memcpy(raw + 12, in, len);
-    int32_t ret = type == HIFHE_SERDES_TYPE_PLAINTEXT ? BgvSerDes_LoadPlaintext(value, raw, len + 12, ctx) :
-                                                        BgvSerDes_LoadCiphertext(value, raw, len + 12, ctx);
-    if (ret == HIFHE_SUCCESS) {
-        uint32_t expected =
-            type == HIFHE_SERDES_TYPE_PLAINTEXT ? BgvSerDes_PlaintextSize(value) : BgvSerDes_CiphertextSize(value);
-        if (expected != len + 12) {
-            ret = HIFHE_SERDES_FAIL;
-            HIFHE_ERR_PUSH_ERROR(ret);
-        }
-    }
-    HifheCleanse(raw, len + 12);
-    HifheFree(raw);
-    return ret;
+    return BgvSerDes_ReadBody(kind != HIFHE_TEXT_PLAIN, value, in, len, ctx);
 }
 
 static int32_t BgvEncode(const HIFHE_Ctx *ctx, const void *values, uint32_t count, void **out)
@@ -380,6 +334,7 @@ static const void *SerializeView(const HIFHE_Ctx *ctx, const void *data, HifheBg
 
 /* The interchange format as the Provider writes it: header included, no HiFHE
  * envelope, so depth and the slot index map are not carried. */
+#ifdef HIFHE_CUSTOM_PARAM
 static int32_t BgvSerializeNative(const HIFHE_Ctx *ctx, const void *data, uint8_t *out, uint32_t *len)
 {
     HifheBgvText view;
@@ -402,6 +357,7 @@ static int32_t BgvSerializeNative(const HIFHE_Ctx *ctx, const void *data, uint8_
     return view.meta.kind == HIFHE_TEXT_PLAIN ? BgvSerDes_DumpPlaintext(value, out, len, HIFHE_BGV) :
                                                 BgvSerDes_DumpCiphertext(value, out, len, HIFHE_BGV);
 }
+#endif
 
 static int32_t BgvSerialize(const HIFHE_Ctx *ctx, const void *data, uint8_t *out, uint32_t *len)
 {
@@ -418,16 +374,12 @@ static int32_t BgvSerialize(const HIFHE_Ctx *ctx, const void *data, uint8_t *out
         }
         return HIFHE_BUFFER_TOO_SMALL;
     }
-    uint8_t *raw = NULL;
-    int32_t ret = RawDump(t->meta.kind, value, &raw, &rawLen);
+    int32_t ret = BgvSerDes_WriteBody(t->meta.kind != HIFHE_TEXT_PLAIN, value, out + 8, need - 8);
     if (ret != HIFHE_SUCCESS) {
         return ret;
     }
     Hifhe_Put32(out, t->meta.depth);
     Hifhe_Put32(out + 4, caps);
-    memcpy(out + 8, raw + 12, rawLen - 12);
-    HifheCleanse(raw, rawLen);
-    HifheFree(raw);
     *len = need;
     return 0;
 }
@@ -497,6 +449,7 @@ static int32_t BgvDeserialize(const HIFHE_Ctx *ctx, uint32_t kind, const uint8_t
 }
 
 /* Magic, version and the declared wire type of an interchange buffer. */
+#ifdef HIFHE_CUSTOM_PARAM
 static int32_t NativeHeaderPeek(const uint8_t *in, uint32_t len, uint32_t *type)
 {
     if (len < 12u) {
@@ -516,6 +469,7 @@ static int32_t NativeHeaderPeek(const uint8_t *in, uint32_t len, uint32_t *type)
     *type = tag >> 16;
     return HIFHE_SUCCESS;
 }
+#endif
 
 static int32_t BgvKeyDump(const HIFHE_Ctx *ctx, uint32_t which, uint8_t *out, uint32_t *len)
 {
@@ -536,6 +490,7 @@ static int32_t BgvKeyLoad(HIFHE_Ctx *ctx, uint32_t which, const uint8_t *in, uin
  * payload is read as plain slot encoding. A buffer another implementation
  * wrote names its own algorithm in the header; that field is not checked,
  * because the point of this format is that the bodies agree. */
+#ifdef HIFHE_CUSTOM_PARAM
 static int32_t BgvDeserializeNative(const HIFHE_Ctx *ctx, const uint8_t *in, uint32_t len, uint32_t *kind, void **out)
 {
     uint32_t type = 0;
@@ -575,6 +530,7 @@ static int32_t BgvDeserializeNative(const HIFHE_Ctx *ctx, const uint8_t *in, uin
     }
     return FinishLoad(t, math, HIFHE_CAP_LUT, ret, out);
 }
+#endif
 
 static int32_t BgvGetOutputSize(const HIFHE_Ctx *ctx, uint32_t op, const void *data, uint32_t *len)
 {
@@ -594,7 +550,11 @@ static int32_t BgvGetOutputSize(const HIFHE_Ctx *ctx, uint32_t op, const void *d
                                                          BgvSerDes_CiphertextSizeFor(l, k * l * n);
     /* The interchange format is the raw dump; HiFHE's own replaces its
      * 12-byte header with a 44-byte one plus 8 bytes of its own state. */
+#ifdef HIFHE_CUSTOM_PARAM
     *len = ctx->wireFormat == HIFHE_WIRE_INTERCHANGE ? raw : HIFHE_WIRE_HEADER + 8 + raw - 12;
+#else
+    *len = HIFHE_WIRE_HEADER + 8 + raw - 12;
+#endif
     return 0;
 }
 
@@ -678,6 +638,12 @@ static int32_t BgvCtrl(HIFHE_Ctx *ctx, int32_t cmd, const HIFHE_HEText *text, vo
                 HIFHE_ERR_PUSH_ERROR(HIFHE_VALUE_OUT_OF_RANGE);
                 return HIFHE_VALUE_OUT_OF_RANGE;
             }
+#ifndef HIFHE_CUSTOM_PARAM
+            if (format == HIFHE_WIRE_INTERCHANGE) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_NOT_SUPPORTED);
+                return HIFHE_NOT_SUPPORTED;
+            }
+#endif
             ctx->wireFormat = format;
             return HIFHE_SUCCESS;
         }
@@ -722,8 +688,10 @@ const HifheAlgMethod g_hifheBgvMethod = {.algId = HIFHE_BGV,
                                          .mul = BgvMul,
                                          .serialize = BgvSerialize,
                                          .deserialize = BgvDeserialize,
+#ifdef HIFHE_CUSTOM_PARAM
                                          .serializeNative = BgvSerializeNative,
                                          .deserializeNative = BgvDeserializeNative,
+#endif
                                          .keysetId = BgvKeysetId,
                                          .keyDump = BgvKeyDump,
                                          .keyLoad = BgvKeyLoad,

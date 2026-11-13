@@ -62,14 +62,16 @@ typedef enum {
 
 /** BGV preset identifiers for HIFHE_SetParaById; these are not algorithm identifiers. */
 typedef enum {
-    HIFHE_BGV_DEFAULT = HIFHE_PRESET_BGV_BASE + 0, /* Same parameters as HIFHE_BGV_2048_48. */
+    /* 2048, one modulus of about 2^47 (q = 140786965118977), plainMod 114689.
+     * Same ring and plaintext modulus as HIFHE_BGV_2048_48, a smaller modulus. */
+    HIFHE_BGV_DEFAULT = HIFHE_PRESET_BGV_BASE + 0,
     HIFHE_BGV_2048_48 = HIFHE_PRESET_BGV_BASE + 1,
     HIFHE_BGV_8192_44x4 = HIFHE_PRESET_BGV_BASE + 2,
     /* 2048, 48-bit cipher, plainMod 65537. */
     HIFHE_BGV_2048_48_17BIT = HIFHE_PRESET_BGV_BASE + 3,
     /* 4096, 2 x 44-bit, plainMod 65537. */
     HIFHE_BGV_4096_44x2_17BIT = HIFHE_PRESET_BGV_BASE + 4,
-    /* 8192, 4 x 44-bit, plainMod 65537. */
+    /* 8192, 43-, 43-, 44- and 44-bit chain, plainMod 65537. */
     HIFHE_BGV_8192_44x4_17BIT = HIFHE_PRESET_BGV_BASE + 5,
 } HIFHE_BGV_PRESET;
 

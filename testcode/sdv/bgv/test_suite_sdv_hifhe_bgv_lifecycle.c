@@ -255,6 +255,7 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_SETPARA_BSL_TC001(void)
 {
+#ifdef HIFHE_CUSTOM_PARAM
     CRYPT_BGV_Ctx *ctx = NULL;
     uint32_t polyDegreeIn = 4096u;
     uint32_t plainModBit = 17u;
@@ -283,6 +284,9 @@ void SDV_CRYPTO_HIFHE_BGV_SETPARA_BSL_TC001(void)
 
 EXIT:
     CRYPT_BGV_FreeCtx(ctx);
+#else
+    SKIP_TEST();
+#endif
 }
 /* END_CASE */
 
@@ -545,6 +549,7 @@ void SDV_CRYPTO_HIFHE_BGV_ERROR_STACK_CLEAN_TC001(void)
 {
     CRYPT_BGV_Ctx *ctx = NULL;
     CRYPT_BGV_Ctx *preset = NULL;
+#ifdef HIFHE_CUSTOM_PARAM
     uint32_t polyDegreeIn = 2048u;
     uint32_t plainModBit = 17u;
     uint32_t relinDnum = 1u;
@@ -556,18 +561,21 @@ void SDV_CRYPTO_HIFHE_BGV_ERROR_STACK_CLEAN_TC001(void)
         {HIFHE_PARAM_BGV_RELIN_DNUM, BSL_PARAM_TYPE_UINT32, &relinDnum, sizeof(relinDnum), 0},
         {HIFHE_PARAM_BGV_CIPHER_MOD_BITS, BSL_PARAM_TYPE_OCTETS, cipherModBits, sizeof(cipherModBits), 0},
         BSL_PARAM_END};
+#endif
 
     TestMemInit();
     TestRandInit();
+    HIFHE_ErrClearError();
 
+#ifdef HIFHE_CUSTOM_PARAM
     ctx = CRYPT_BGV_NewCtx(HIFHE_BGV);
     ASSERT_TRUE(ctx != NULL);
 
-    HIFHE_ErrClearError();
     ASSERT_EQ(CRYPT_BGV_SetParaEx(ctx, params), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_ErrPeekLastError(NULL, NULL), 0);
     ASSERT_EQ(CRYPT_BGV_Gen(ctx), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_ErrPeekLastError(NULL, NULL), 0);
+#endif
 
     /* The same through a preset, whose moduli are pinned and so take the
      * other branch of the context build. */
@@ -577,6 +585,11 @@ void SDV_CRYPTO_HIFHE_BGV_ERROR_STACK_CLEAN_TC001(void)
     ASSERT_EQ(CRYPT_BGV_Gen(preset), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_ErrPeekLastError(NULL, NULL), 0);
 
+#ifndef HIFHE_CUSTOM_PARAM
+    HIFHE_ErrClearError();
+    CRYPT_BGV_FreeCtx(preset);
+    SKIP_TEST();
+#endif
 EXIT:
     HIFHE_ErrClearError();
     CRYPT_BGV_FreeCtx(ctx);
@@ -587,6 +600,7 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_MODSWITCHED_WIRE_TC001(void)
 {
+#ifdef HIFHE_CUSTOM_PARAM
     CRYPT_BGV_Ctx *native = NULL;
     HIFHE_Ctx *pub = NULL;
     HIFHE_HEText *loaded = NULL;
@@ -645,6 +659,9 @@ EXIT:
     free(pt);
     free(ct);
     free(shorter);
+#else
+    SKIP_TEST();
+#endif
 }
 
 /* END_CASE */

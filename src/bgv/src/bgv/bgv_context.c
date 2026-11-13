@@ -13,6 +13,7 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "hifhe_config.h"
 #include <string.h>
 #include "hifhe_mem.h"
 #include "hifhe_err_internal.h"
@@ -98,6 +99,7 @@ HIFHE_ERROR BGV_BGVContext_EnsurePlainNttWith(BGVContext *ctx, uint64_t *table)
     return HIFHE_SUCCESS;
 }
 
+#ifdef HIFHE_CUSTOM_PARAM
 static uint32_t BitRevU32(uint32_t x, uint32_t bits)
 {
     uint32_t r = 0u;
@@ -108,6 +110,7 @@ static uint32_t BitRevU32(uint32_t x, uint32_t bits)
     }
     return r;
 }
+#endif
 
 /* slotMap[i] = plaintext-NTT position of logical slot i. The slots form a
  * 2 x (N/2) matrix:
@@ -115,6 +118,7 @@ static uint32_t BitRevU32(uint32_t x, uint32_t bits)
  * NTT output is bit-reversed, so the position is brv((exponent - 1) / 2). */
 HIFHE_ERROR BGV_BGVContext_EnsureSlotMap(BGVContext *ctx)
 {
+#ifdef HIFHE_CUSTOM_PARAM
     if (ctx == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
@@ -149,6 +153,11 @@ HIFHE_ERROR BGV_BGVContext_EnsureSlotMap(BGVContext *ctx)
     }
     ctx->slotMapReady = 1u;
     return HIFHE_SUCCESS;
+#else
+    (void)ctx;
+    HIFHE_ERR_PUSH_ERROR(HIFHE_NOT_SUPPORTED);
+    return HIFHE_NOT_SUPPORTED;
+#endif
 }
 
 /* Everything that decides what a key means, in a fixed order: the degree, the

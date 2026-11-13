@@ -28,15 +28,12 @@ bash testcode/script/build_benchmark.sh clean
 bash testcode/script/build_benchmark.sh --enable bgv
 ```
 
-The script configures the root build and builds only the benchmark target. The binary lands in `testcode/output/`.
-
-Both `Kernel` and `Bgv` require `HIFHE_BGV=ON`; `Bgv` also requires `HITLS_PROVIDER=ON`.
-The script reuses the library configuration unless `--enable bgv` is specified.
-
-It also builds as part of the SDV tree with `-DBUILD_BENCHMARK=ON`, but that
-path pays for the test-suite generation and compiles the suites at `-O0`. The
-benchmark target forces `-O2` on itself either way — a benchmark at `-O0`
-measures the compiler, not the library.
+The script configures `testcode/benchmark` as a standalone CMake project in
+`build/benchmark` (override with `HIFHE_BENCHMARK_DIR`). It always uses
+`HIFHE_CUSTOM_PARAM=ON` and `HITLS_PROVIDER=ON`, independently of the library or SDV
+configuration. The options are independent; each defaults to OFF in release builds
+and ON in test builds. HITLS_PROVIDER builds the openHiTLS provider and BSL adapters. The benchmark and library objects compile at `-O2` with `-Werror`.
+The binary lands in `testcode/output/hifhe_benchmark`.
 
 ## Running
 
@@ -125,3 +122,20 @@ Define its operations with `DEFINE_HIFHE_OPS` and its parameter list with
 A module belongs in its algorithm's file, so another BGV module goes in
 `bgv_bench.c` alongside `Kernel` and `Bgv`. A new algorithm gets its own
 `<alg>_bench.c`, listed in `CMakeLists.txt` under that algorithm's switch.
+
+Test builds default to `HIFHE_CUSTOM_PARAM=ON` and `HITLS_PROVIDER=ON`; explicit CMake `-D` settings take precedence. The benchmark script always builds full features in a separate directory.
+
+
+Build options:
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `HIFHE_CUSTOM_PARAM` | `OFF`; `ON` with `HIFHE_BUILD_TESTS=ON` | `OFF` selects simple mode, removing custom parameters, prime search and validation, interchange wire format, evaluation keys, key switching, ciphertext/ciphertext multiplication, rotations and slot map. `ON` enables these features. |
+| `HITLS_PROVIDER` | Follows `HIFHE_CUSTOM_PARAM`: `OFF` in release builds, `ON` in test builds | Builds the openHiTLS provider integration and BSL parameter adapters, including `hifhe_provider_objects` in `libhifhe.so` / `libhifhe.a`, and enables provider-dependent SDV suites in test builds (the provider loading suite requires the shared library). Requires `HIFHE_CUSTOM_PARAM=ON` because the provider uses the interchange format. |
+
+Explicit CMake `-D` values take precedence. For a full release build, run from the repository root:
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHIFHE_CUSTOM_PARAM=ON -DHITLS_PROVIDER=ON
+cmake --build build --parallel
+```

@@ -6,6 +6,7 @@
  */
 
 /* BEGIN_HEADER */
+#include "hifhe_config.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -350,6 +351,11 @@ static void KatPrintDigest(int32_t preset, int op, const uint8_t *d)
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_KAT_TC001(int preset, int op, Hex *digest)
 {
+#ifndef HIFHE_CUSTOM_PARAM
+    if (op == KAT_MUL_CTCT || op == KAT_RELIN || op == KAT_ROTATE) {
+        SKIP_TEST();
+    }
+#endif
 #ifdef HITLS_PROVIDER
     KatEnv e = {0};
     uint8_t *out = NULL;
