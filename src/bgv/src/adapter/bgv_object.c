@@ -69,16 +69,16 @@ static void *BgvCtxDup(void *data, void *libCtx)
     return CRYPT_BGV_DupCtx(data);
 }
 
-static int32_t BgvCtxNew(HifheParamSnapshot *p, void *libCtx, void **out)
+static int32_t BgvCtxNew(HifheParamConfig *p, void *libCtx, void **out)
 {
+    (void)libCtx;
     CRYPT_BGV_Ctx *math = CRYPT_BGV_NewCtx(HIFHE_BGV);
     if (math == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
-    p->math = math;
-    math->lutCache = p->config.useLutCache ? &math->para : NULL;
-    int32_t ret = BgvUserPara_LoadPreset(&math->para, p->config.paramId);
+    math->useLutCache = p->useLutCache;
+    int32_t ret = BgvUserPara_LoadPreset(&math->para, p->paramId);
     if (ret == HIFHE_SUCCESS) {
         ret = Bgv_BuildContext(math);
     }
@@ -86,12 +86,13 @@ static int32_t BgvCtxNew(HifheParamSnapshot *p, void *libCtx, void **out)
         ret = BGV_BGVContext_EnsurePlainNtt(&math->bgv.context);
     }
     if (ret != HIFHE_SUCCESS) {
+        CRYPT_BGV_FreeCtx(math);
         return ret;
     }
-    p->config.slots = math->bgv.params.rlweParameter.polyDegree;
-    p->config.mulDepth = 0;
-    *out = BgvCtxDup(p->math, libCtx);
-    return *out == NULL ? HIFHE_MEMORY_ERROR : HIFHE_SUCCESS;
+    p->slots = math->bgv.params.rlweParameter.polyDegree;
+    p->mulDepth = 0;
+    *out = math;
+    return HIFHE_SUCCESS;
 }
 
 static int32_t BgvKeyGen(void *data)
@@ -110,7 +111,7 @@ static int32_t LoadBody(uint32_t kind, const uint8_t *in, uint32_t len, void *va
 
 static int32_t BgvEncode(const HIFHE_Ctx *ctx, const void *values, uint32_t count, void **out)
 {
-    CRYPT_BGV_Ctx *math = ctx->params->math;
+    CRYPT_BGV_Ctx *math = ctx->data;
     uint32_t n = math->bgv.params.rlweParameter.polyDegree;
     for (uint32_t i = 0; i < count; i++) {
         if (((const uint64_t *)values)[i] >= math->bgv.params.plainMod) {
@@ -142,7 +143,7 @@ static int32_t BgvEncode(const HIFHE_Ctx *ctx, const void *values, uint32_t coun
 static int32_t BgvDecode(const HIFHE_Ctx *ctx, const void *data, void *values, uint32_t *count)
 {
     const HifheBgvText *t = data;
-    CRYPT_BGV_Ctx *math = ctx->params->math;
+    CRYPT_BGV_Ctx *math = ctx->data;
     uint32_t n = math->bgv.params.rlweParameter.polyDegree;
     uint64_t *msg = HifheCalloc(n, sizeof(*msg));
     if (msg == NULL) {
@@ -156,7 +157,7 @@ static int32_t BgvDecode(const HIFHE_Ctx *ctx, const void *data, void *values, u
     int32_t ret = BGV_Encoder_Decode(msg, n, &view, &enc);
     if (ret == HIFHE_SUCCESS) {
         memcpy(values, msg, (size_t)n * sizeof(*msg));
-        *count = ctx->params->config.slots;
+        *count = ctx->params.slots;
     }
     HifheCleanse(msg, n * sizeof(*msg));
     HifheFree(msg);
@@ -314,11 +315,11 @@ static int32_t BgvKeysetId(const void *data, uint8_t *id, uint32_t idLen)
 }
 
 /* A text carries no context of its own; serializing needs one, so take a copy
- * of the text and point it at the parameter snapshot's. */
+ * of the text and point it at the context's. */
 static const void *SerializeView(const HIFHE_Ctx *ctx, const void *data, HifheBgvText *view, uint32_t *rawLen)
 {
     *view = *(const HifheBgvText *)data;
-    CRYPT_BGV_Ctx *math = ctx->params->math;
+    CRYPT_BGV_Ctx *math = ctx->data;
     const void *value;
     if (view->meta.kind == HIFHE_TEXT_PLAIN) {
         view->value.plaintext.context = &math->bgv.context;
@@ -431,11 +432,11 @@ static int32_t BgvDeserialize(const HIFHE_Ctx *ctx, uint32_t kind, const uint8_t
         return HIFHE_SERDES_FAIL;
     }
     uint32_t depth = Hifhe_Get32(in), caps = Hifhe_Get32(in + 4);
-    if (depth > ctx->params->config.mulDepth || (kind == HIFHE_TEXT_PLAIN && depth != 0) || caps != HIFHE_CAP_LUT) {
+    if (depth > ctx->params.mulDepth || (kind == HIFHE_TEXT_PLAIN && depth != 0) || caps != HIFHE_CAP_LUT) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
-    CRYPT_BGV_Ctx *math = ctx->params->math;
+    CRYPT_BGV_Ctx *math = ctx->data;
     HifheBgvText *t = HifheCalloc(1, sizeof(*t));
     if (t == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
@@ -506,7 +507,7 @@ static int32_t BgvDeserializeNative(const HIFHE_Ctx *ctx, const uint8_t *in, uin
         HIFHE_ERR_PUSH_ERROR(HIFHE_TEXT_TYPE_MISMATCH);
         return HIFHE_TEXT_TYPE_MISMATCH;
     }
-    CRYPT_BGV_Ctx *math = ctx->params->math;
+    CRYPT_BGV_Ctx *math = ctx->data;
     HifheBgvText *t = HifheCalloc(1, sizeof(*t));
     if (t == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
@@ -523,7 +524,7 @@ static int32_t BgvDeserializeNative(const HIFHE_Ctx *ctx, const uint8_t *in, uin
          * ciphertext that has already spent a level would load here and then
          * be refused on the way back in, the two readers disagreeing about
          * one object. */
-        if (t->meta.depth > ctx->params->config.mulDepth) {
+        if (t->meta.depth > ctx->params.mulDepth) {
             ret = HIFHE_SERDES_FAIL;
             HIFHE_ERR_PUSH_ERROR(ret);
         }
@@ -535,7 +536,7 @@ static int32_t BgvDeserializeNative(const HIFHE_Ctx *ctx, const uint8_t *in, uin
 static int32_t BgvGetOutputSize(const HIFHE_Ctx *ctx, uint32_t op, const void *data, uint32_t *len)
 {
     const HifheBgvText *a = data;
-    CRYPT_BGV_Ctx *math = ctx->params->math;
+    CRYPT_BGV_Ctx *math = ctx->data;
     uint32_t n = math->bgv.params.rlweParameter.polyDegree;
     uint32_t l = math->bgv.params.rlweParameter.cipherMod.size;
     uint32_t k = 2;
@@ -558,16 +559,28 @@ static int32_t BgvGetOutputSize(const HIFHE_Ctx *ctx, uint32_t op, const void *d
     return 0;
 }
 
+int32_t Hifhe_BgvOutputSize(const HIFHE_Ctx *ctx, uint32_t op, const HIFHE_HEText *text, uint32_t *len)
+{
+    if (ctx == NULL || len == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
+        return HIFHE_NULL_INPUT;
+    }
+    if (ctx->data == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_NOT_SET);
+        return HIFHE_PARAM_NOT_SET;
+    }
+    if (op > HIFHE_OP_NOISE) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
+        return HIFHE_PARAM_INVALID;
+    }
+    return BgvGetOutputSize(ctx, op, text == NULL ? NULL : text->data, len);
+}
+
 static int32_t BgvCheckCtrlArgs(const HIFHE_Ctx *ctx, int32_t cmd, const HIFHE_HEText *text, const void *value,
     uint32_t valueLen)
 {
     uint32_t expectedLen = sizeof(uint32_t);
     switch (cmd) {
-        case HIFHE_CTRL_BGV_RERANDOMIZE:
-            return HIFHE_SUCCESS;
-        case HIFHE_CTRL_GET_OUTPUT_LEN:
-            expectedLen = sizeof(HifheOutputLen);
-            break;
         case HIFHE_CTRL_BGV_SET_SEED:
             expectedLen = HIFHE_CTX_SEED_LEN;
             break;
@@ -581,7 +594,7 @@ static int32_t BgvCheckCtrlArgs(const HIFHE_Ctx *ctx, int32_t cmd, const HIFHE_H
             HIFHE_ERR_PUSH_ERROR(HIFHE_NOT_SUPPORTED);
             return HIFHE_NOT_SUPPORTED;
     }
-    if (cmd != HIFHE_CTRL_GET_OUTPUT_LEN && text != NULL) {
+    if (text != NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_INVALID_ARGUMENT);
         return HIFHE_INVALID_ARGUMENT;
     }
@@ -593,7 +606,7 @@ static int32_t BgvCheckCtrlArgs(const HIFHE_Ctx *ctx, int32_t cmd, const HIFHE_H
         HIFHE_ERR_PUSH_ERROR(HIFHE_INVALID_LENGTH);
         return HIFHE_INVALID_LENGTH;
     }
-    if (cmd != HIFHE_CTRL_BGV_SET_LUT_CACHE && cmd != HIFHE_CTRL_BGV_SET_WIRE_FORMAT && ctx->params == NULL) {
+    if (cmd != HIFHE_CTRL_BGV_SET_LUT_CACHE && cmd != HIFHE_CTRL_BGV_SET_WIRE_FORMAT && ctx->data == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_NOT_SET);
         return HIFHE_PARAM_NOT_SET;
     }
@@ -602,21 +615,56 @@ static int32_t BgvCheckCtrlArgs(const HIFHE_Ctx *ctx, int32_t cmd, const HIFHE_H
 
 static int32_t BgvCtrl(HIFHE_Ctx *ctx, int32_t cmd, const HIFHE_HEText *text, void *value, uint32_t valueLen)
 {
+    if (cmd == HIFHE_CTRL_BGV_SET_NEGATE) {
+        if (text == NULL) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
+            return HIFHE_NULL_INPUT;
+        }
+        if (value != NULL) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_INVALID_ARGUMENT);
+            return HIFHE_INVALID_ARGUMENT;
+        }
+        if (valueLen != 0) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_INVALID_LENGTH);
+            return HIFHE_INVALID_LENGTH;
+        }
+        int32_t ret = Hifhe_CheckText(ctx, text, true);
+        if (ret != HIFHE_SUCCESS) {
+            return ret;
+        }
+        if (text->data->kind != HIFHE_TEXT_CIPHER) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_TEXT_TYPE_MISMATCH);
+            return HIFHE_TEXT_TYPE_MISMATCH;
+        }
+        text->data->flags = HIFHE_TEXT_NEGATE;
+        return HIFHE_SUCCESS;
+    }
+    if (cmd == HIFHE_CTRL_BGV_RERANDOMIZE) {
+        if (text == NULL || value == NULL) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
+            return HIFHE_NULL_INPUT;
+        }
+        if (valueLen != sizeof(HIFHE_HEText *)) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_INVALID_LENGTH);
+            return HIFHE_INVALID_LENGTH;
+        }
+        HIFHE_HEText **out = value;
+        int32_t ret = Hifhe_CheckOut(out);
+        if (ret == HIFHE_SUCCESS) {
+            ret = Hifhe_CheckCompute(ctx, HIFHE_OP_NOISE, text, NULL);
+        }
+        if (ret != HIFHE_SUCCESS) {
+            return ret;
+        }
+        void *data = NULL;
+        ret = BgvRerandomize(ctx, text->data, &data);
+        return ret != HIFHE_SUCCESS ? ret : Hifhe_HETextNew(ctx, data, out);
+    }
     int32_t ret = BgvCheckCtrlArgs(ctx, cmd, text, value, valueLen);
     if (ret != HIFHE_SUCCESS) {
         return ret;
     }
     switch (cmd) {
-        case HIFHE_CTRL_BGV_RERANDOMIZE:
-            return BgvRerandomize(ctx, text->data, value);
-        case HIFHE_CTRL_GET_OUTPUT_LEN: {
-            HifheOutputLen *query = value;
-            if (query->op > HIFHE_OP_NOISE) {
-                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
-                return HIFHE_PARAM_INVALID;
-            }
-            return BgvGetOutputSize(ctx, query->op, text != NULL ? text->data : NULL, &query->len);
-        }
         case HIFHE_CTRL_BGV_SET_LUT_CACHE: {
             uint32_t enabled;
             memcpy(&enabled, value, sizeof(enabled));
@@ -624,7 +672,7 @@ static int32_t BgvCtrl(HIFHE_Ctx *ctx, int32_t cmd, const HIFHE_HEText *text, vo
                 HIFHE_ERR_PUSH_ERROR(HIFHE_VALUE_OUT_OF_RANGE);
                 return HIFHE_VALUE_OUT_OF_RANGE;
             }
-            if (ctx->params != NULL) {
+            if (ctx->data != NULL) {
                 HIFHE_ERR_PUSH_ERROR(HIFHE_BAD_STATE);
                 return HIFHE_BAD_STATE;
             }
@@ -656,7 +704,7 @@ static int32_t BgvCtrl(HIFHE_Ctx *ctx, int32_t cmd, const HIFHE_HEText *text, vo
             return BGV_BGVContext_SetKeySeed(&runtime->bgv.context, value, valueLen);
         }
         case HIFHE_CTRL_BGV_GET_POLY_DEGREE:
-            memcpy(value, &ctx->params->config.slots, sizeof(uint32_t));
+            memcpy(value, &ctx->params.slots, sizeof(uint32_t));
             return HIFHE_SUCCESS;
         case HIFHE_CTRL_BGV_GET_PLAINTEXT_LEN:
         case HIFHE_CTRL_BGV_GET_CIPHERTEXT_LEN: {

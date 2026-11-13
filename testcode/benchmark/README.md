@@ -31,8 +31,10 @@ bash testcode/script/build_benchmark.sh --enable bgv
 The script configures `testcode/benchmark` as a standalone CMake project in
 `build/benchmark` (override with `HIFHE_BENCHMARK_DIR`). It always uses
 `HIFHE_CUSTOM_PARAM=ON` and `HITLS_PROVIDER=ON`, independently of the library or SDV
-configuration. The options are independent; each defaults to OFF in release builds
-and ON in test builds. HITLS_PROVIDER builds the openHiTLS provider and BSL adapters. The benchmark and library objects compile at `-O2` with `-Werror`.
+configuration. `HIFHE_CUSTOM_PARAM` defaults to ON in test builds; `HITLS_PROVIDER`
+defaults to OFF regardless of test mode. The benchmark script enables both
+explicitly. HITLS_PROVIDER builds the openHiTLS provider and BSL adapters. The
+benchmark and library objects compile at `-O2` with `-Werror`.
 The binary lands in `testcode/output/hifhe_benchmark`.
 
 ## Running
@@ -83,15 +85,8 @@ includes the wire encoding on both ends, because that surface takes and
 returns serialized buffers. For the cheap operations that overhead is most of
 the number, which is worth knowing.
 
-Contexts are created with `CRYPT_BGV_NewCtxWithCache` against one handle held for
-the whole run, so the NTT tables are computed once and every later `setUp`
-reads them. That keeps table construction out of the per-operation rows — a
-row should measure the operation, not the ring it runs in — and it is how a
-caller that opens and closes contexts is meant to work. `CtxCreate+Free` is
-the row the cache exists to move: it is a full context build with the tables
-already in hand.
-
-The handle is released by `BgvBenchReleaseCache` when the driver exits.
+Each context owns its NTT tables. Setup builds the parameters and tables
+before timed operations; `CtxCreate+Free` measures that full construction.
 
 `MulCtCt` is labelled `(+relin)` when a relin key is installed, because
 `CRYPT_BGV_HEMul` relinearizes before returning in that case. `Relinearize`
@@ -123,7 +118,7 @@ A module belongs in its algorithm's file, so another BGV module goes in
 `bgv_bench.c` alongside `Kernel` and `Bgv`. A new algorithm gets its own
 `<alg>_bench.c`, listed in `CMakeLists.txt` under that algorithm's switch.
 
-Test builds default to `HIFHE_CUSTOM_PARAM=ON` and `HITLS_PROVIDER=ON`; explicit CMake `-D` settings take precedence. The benchmark script always builds full features in a separate directory.
+Test builds default `HIFHE_CUSTOM_PARAM` to `ON`; `HITLS_PROVIDER` defaults to `OFF`. The benchmark script enables both explicitly in a separate directory.
 
 
 Build options:
@@ -131,7 +126,7 @@ Build options:
 | Option | Default | Effect |
 | --- | --- | --- |
 | `HIFHE_CUSTOM_PARAM` | `OFF`; `ON` with `HIFHE_BUILD_TESTS=ON` | `OFF` selects simple mode, removing custom parameters, prime search and validation, interchange wire format, evaluation keys, key switching, ciphertext/ciphertext multiplication, rotations and slot map. `ON` enables these features. |
-| `HITLS_PROVIDER` | Follows `HIFHE_CUSTOM_PARAM`: `OFF` in release builds, `ON` in test builds | Builds the openHiTLS provider integration and BSL parameter adapters, including `hifhe_provider_objects` in `libhifhe.so` / `libhifhe.a`, and enables provider-dependent SDV suites in test builds (the provider loading suite requires the shared library). Requires `HIFHE_CUSTOM_PARAM=ON` because the provider uses the interchange format. |
+| `HITLS_PROVIDER` | `OFF` | Builds the openHiTLS provider integration and BSL parameter adapters, including `hifhe_provider_objects` in `libhifhe.so` / `libhifhe.a`. It is independent of `HIFHE_CUSTOM_PARAM`; interchange-format support requires `HIFHE_CUSTOM_PARAM=ON`. |
 
 Explicit CMake `-D` values take precedence. For a full release build, run from the repository root:
 

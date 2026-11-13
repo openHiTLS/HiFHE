@@ -3,7 +3,7 @@
 Two leaked-string demos using public headers only.
 Build with BGV enabled. The Provider demo also requires HITLS_PROVIDER and a shared
 library; it is omitted when Provider support is disabled.
-The two options are independent, each defaulting to OFF in release builds and ON in test builds.
+Test builds default `HIFHE_CUSTOM_PARAM` to `ON`; `HITLS_PROVIDER` defaults to `OFF` regardless of test mode. The Provider demo needs `HITLS_PROVIDER=ON` and a shared library. It does not require `HIFHE_CUSTOM_PARAM`.
 The native demo also works with the default `HIFHE_CUSTOM_PARAM=OFF` release build.
 
 | Source | Executable | FHE calls |
@@ -72,7 +72,7 @@ Build options:
 | Option | Default | Effect |
 | --- | --- | --- |
 | `HIFHE_CUSTOM_PARAM` | `OFF`; `ON` with `HIFHE_BUILD_TESTS=ON` | `OFF` selects simple mode, removing custom parameters, prime search and validation, interchange wire format, evaluation keys, key switching, ciphertext/ciphertext multiplication, rotations and slot map. `ON` enables these features. |
-| `HITLS_PROVIDER` | Follows `HIFHE_CUSTOM_PARAM`: `OFF` in release builds, `ON` in test builds | Builds the openHiTLS provider integration and BSL parameter adapters, including `hifhe_provider_objects` in `libhifhe.so` / `libhifhe.a`, and enables provider-dependent SDV suites in test builds (the provider loading suite requires the shared library). Requires `HIFHE_CUSTOM_PARAM=ON` because the provider uses the interchange format. |
+| `HITLS_PROVIDER` | `OFF` | Builds the openHiTLS provider integration and BSL parameter adapters, including `hifhe_provider_objects` in `libhifhe.so` / `libhifhe.a`. It is independent of `HIFHE_CUSTOM_PARAM`; interchange-format support requires `HIFHE_CUSTOM_PARAM=ON`. |
 
 Explicit CMake `-D` values take precedence. For a full release build, run from the repository root:
 

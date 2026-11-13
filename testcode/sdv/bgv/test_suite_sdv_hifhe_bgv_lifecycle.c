@@ -48,6 +48,7 @@
 
 /* Runs on a second thread for ERROR_STACK_PER_THREAD_TC001. Returns 0 when
  * everything it saw of the error stack was its own. */
+#ifdef HIFHE_ERR
 static void *ErrStackWorker(void *arg)
 {
     (void)arg;
@@ -64,6 +65,7 @@ static void *ErrStackWorker(void *arg)
     HIFHE_ErrClearError();
     return (void *)(intptr_t)0;
 }
+#endif
 
 static CRYPT_BGV_Ctx *BgvNewCtx(int withPreset)
 {
@@ -109,9 +111,10 @@ void SDV_CRYPTO_HIFHE_BGV_PUBLIC_CACHE_SEED_TC001(void)
     ASSERT_EQ(HIFHE_SetParaById(a, HIFHE_BGV_4096_44x2_17BIT), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_SetParaById(b, HIFHE_BGV_4096_44x2_17BIT), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_SetParaById(c, HIFHE_BGV_4096_44x2_17BIT), HIFHE_SUCCESS);
-    CRYPT_BGV_Ctx *am = a->params->math, *bm = b->params->math, *cm = c->params->math;
-    ASSERT_TRUE(am->lutCache != NULL && bm->lutCache != NULL && am->lutCache != bm->lutCache);
-    ASSERT_TRUE(cm->lutCache == NULL);
+    CRYPT_BGV_Ctx *am = a->data, *bm = b->data, *cm = c->data;
+    ASSERT_EQ(am->useLutCache, 1);
+    ASSERT_EQ(bm->useLutCache, 1);
+    ASSERT_EQ(cm->useLutCache, 0);
     ASSERT_TRUE(am->bgv.context.rlweContext.tableBuf[0] != bm->bgv.context.rlweContext.tableBuf[0]);
     ASSERT_TRUE(am->bgv.context.ptTableBuf != bm->bgv.context.ptTableBuf);
     ASSERT_TRUE(am->bgv.context.ptTableBuf != cm->bgv.context.ptTableBuf);
@@ -123,6 +126,8 @@ void SDV_CRYPTO_HIFHE_BGV_PUBLIC_CACHE_SEED_TC001(void)
     ASSERT_EQ(HIFHE_Ctrl(c, HIFHE_CTRL_BGV_SET_SEED, NULL, seed, sizeof(seed)), HIFHE_SUCCESS);
     dup = Hifhe_CtxDup(b);
     ASSERT_TRUE(dup != NULL);
+    ASSERT_EQ(dup->params.paramId, b->params.paramId);
+    ASSERT_TRUE(dup->data != b->data);
     HIFHE_Free(b);
     b = dup;
     dup = NULL;
@@ -130,8 +135,8 @@ void SDV_CRYPTO_HIFHE_BGV_PUBLIC_CACHE_SEED_TC001(void)
     ASSERT_EQ(HIFHE_KeyGen(b), HIFHE_SUCCESS);
     ASSERT_EQ(HIFHE_KeyGen(c), HIFHE_SUCCESS);
     CRYPT_BGV_Ctx *ar = a->data, *br = b->data, *cr = c->data;
-    ASSERT_TRUE(ar->bgv.context.ptTableBuf == am->bgv.context.ptTableBuf);
-    ASSERT_TRUE(br->bgv.context.rlweContext.tableBuf[0] == bm->bgv.context.rlweContext.tableBuf[0]);
+    ASSERT_EQ(ar->bgv.context.ownsPtTableBuf, 0);
+    ASSERT_EQ(br->bgv.context.rlweContext.ownsTableBuf, 0);
     ASSERT_EQ(ar->bgv.keygen.sk->dataSize, br->bgv.keygen.sk->dataSize);
     uint32_t bytes = ar->bgv.keygen.sk->dataSize * sizeof(uint64_t);
     ASSERT_EQ(memcmp(ar->bgv.keygen.sk->data, br->bgv.keygen.sk->data, bytes), 0);
@@ -139,7 +144,6 @@ void SDV_CRYPTO_HIFHE_BGV_PUBLIC_CACHE_SEED_TC001(void)
     ASSERT_EQ(ar->bgv.pk.dataSize, br->bgv.pk.dataSize);
     ASSERT_EQ(memcmp(ar->bgv.pk.data, br->bgv.pk.data, ar->bgv.pk.dataSize * sizeof(uint64_t)), 0);
     ASSERT_EQ(HIFHE_Encode(a, &message, 1, &pt), HIFHE_SUCCESS);
-    ASSERT_EQ(atomic_load(&a->params->references), 1);
     HIFHE_Free(a);
     a = NULL;
     HIFHE_Free(b);
@@ -409,6 +413,7 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_ERROR_REPORTED_TC001(void)
 {
+#ifdef HIFHE_ERR
     CRYPT_BGV_Ctx *ctx = NULL;
     int32_t badPreset = 0x7ffffff0;
     const char *originFile = NULL;
@@ -442,6 +447,9 @@ void SDV_CRYPTO_HIFHE_BGV_ERROR_REPORTED_TC001(void)
 EXIT:
     HIFHE_ErrClearError();
     CRYPT_BGV_FreeCtx(ctx);
+#else
+    SKIP_TEST();
+#endif
 }
 /* END_CASE */
 
@@ -457,6 +465,7 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_ERROR_STACK_WRAP_TC001(void)
 {
+#ifdef HIFHE_ERR
     const char *file = NULL;
     uint32_t line = 0u;
 
@@ -488,6 +497,9 @@ void SDV_CRYPTO_HIFHE_BGV_ERROR_STACK_WRAP_TC001(void)
 
 EXIT:
     HIFHE_ErrClearError();
+#else
+    SKIP_TEST();
+#endif
 }
 /* END_CASE */
 
@@ -503,6 +515,7 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_ERROR_STACK_PER_THREAD_TC001(void)
 {
+#ifdef HIFHE_ERR
     pthread_t worker;
     int started = 0;
 
@@ -530,6 +543,9 @@ EXIT:
         (void)pthread_join(worker, NULL);
     }
     HIFHE_ErrClearError();
+#else
+    SKIP_TEST();
+#endif
 }
 /* END_CASE */
 
@@ -547,6 +563,7 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_ERROR_STACK_CLEAN_TC001(void)
 {
+#ifdef HIFHE_ERR
     CRYPT_BGV_Ctx *ctx = NULL;
     CRYPT_BGV_Ctx *preset = NULL;
 #ifdef HIFHE_CUSTOM_PARAM
@@ -594,6 +611,9 @@ EXIT:
     HIFHE_ErrClearError();
     CRYPT_BGV_FreeCtx(ctx);
     CRYPT_BGV_FreeCtx(preset);
+#else
+    SKIP_TEST();
+#endif
 }
 /* END_CASE */
 

@@ -94,9 +94,9 @@ static void RepointKeyPieces(Ciphertext *pieces, uint32_t count, BGVContext *ctx
 }
 #endif
 
-HIFHE_ERROR Bgv_DupState(BgvState *dst, const BgvState *src)
+HIFHE_ERROR Bgv_DupState(BgvState *dst, const BgvState *src, const BgvUserPara *para)
 {
-    if (dst == NULL || src == NULL) {
+    if (dst == NULL || src == NULL || para == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
@@ -112,14 +112,25 @@ HIFHE_ERROR Bgv_DupState(BgvState *dst, const BgvState *src)
     }
     dst->haveParams = 1u;
 
-    uint64_t *const *tables = src->context.rlweContext.ownsTableBuf != 0 ? NULL : src->context.rlweContext.tableBuf;
+    uint64_t *cipherTables[HIFHE_BGV_MAX_CHAIN_LEN];
+    uint64_t *const *tables = NULL;
+    const ModulusVector *cipherMod = &dst->params.rlweParameter.cipherMod;
+    if (para->lutBlob != NULL && cipherMod->size != 0u && para->lutLimbs == cipherMod->size &&
+        cipherMod->size <= HIFHE_BGV_MAX_CHAIN_LEN) {
+        for (uint32_t i = 0u; i < cipherMod->size; ++i) {
+            cipherTables[i] = BgvUserPara_CipherLut(para, i);
+        }
+        tables = cipherTables;
+    }
+
     r = BGV_BGVContext_CreateWithTables(&dst->context, &dst->params, tables);
     if (r != HIFHE_SUCCESS) {
         goto fail;
     }
     dst->haveContext = 1u;
-    if (src->context.ptNttReady != 0 && src->context.ownsPtTableBuf == 0) {
-        r = BGV_BGVContext_EnsurePlainNttWith(&dst->context, src->context.ptTableBuf);
+    if (src->context.ptNttReady != 0) {
+        uint64_t *plainTable = tables == NULL ? NULL : BgvUserPara_PlainLut(para);
+        r = BGV_BGVContext_EnsurePlainNttWith(&dst->context, plainTable);
         if (r != HIFHE_SUCCESS) {
             goto fail;
         }
@@ -351,13 +362,12 @@ HIFHE_ERROR Bgv_BuildContext(CRYPT_BGV_Ctx *ctx)
     /* Initialize cache table. */
     uint64_t *cipherLuts[HIFHE_BGV_MAX_CHAIN_LEN];
     uint64_t *const *cipherArg = NULL;
-    const BgvUserPara *lut = NULL;
-    if (ctx->lutCache != NULL && BgvUserPara_EnsureLut(ctx->lutCache, &ctx->bgv.params, &lut) == HIFHE_SUCCESS) {
+    if (ctx->useLutCache && BgvUserPara_EnsureLut(&ctx->para, &ctx->bgv.params) == HIFHE_SUCCESS) {
         uint32_t limbs = ctx->bgv.params.rlweParameter.cipherMod.size;
         if (limbs <= HIFHE_BGV_MAX_CHAIN_LEN) {
             cipherArg = cipherLuts;
             for (uint32_t i = 0; i < limbs; ++i) {
-                cipherLuts[i] = BgvUserPara_CipherLut(lut, i);
+                cipherLuts[i] = BgvUserPara_CipherLut(&ctx->para, i);
                 if (cipherLuts[i] == NULL) {
                     cipherArg = NULL;
                     break;
@@ -375,7 +385,7 @@ HIFHE_ERROR Bgv_BuildContext(CRYPT_BGV_Ctx *ctx)
     ctx->bgv.haveContext = 1u;
     /* Otherwise, build plaintext table on the first encode. */
     if (cipherArg != NULL) {
-        uint64_t *ptLut = BgvUserPara_PlainLut(lut);
+        uint64_t *ptLut = BgvUserPara_PlainLut(&ctx->para);
         if (ptLut != NULL) {
             /* A table that cannot be built now is built on the first encode
              * instead, so this failure is not the caller's. The mark takes the

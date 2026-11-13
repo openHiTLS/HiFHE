@@ -90,7 +90,8 @@ CMake 配置：
 | `HIFHE_BUILD_STATIC` | `ON` | 生成 `libhifhe.a` |
 | `HIFHE_BGV` | `ON` | 必须启用；关闭时配置报错 |
 | `HIFHE_CUSTOM_PARAM` | `OFF`；`HIFHE_BUILD_TESTS=ON` 时为 `ON` | `OFF` 为简单模式，移除自定义参数、素数搜索与校验、原生 API 交换格式选择、评估密钥、密钥切换、密文与密文乘法、旋转和槽映射；`ON` 启用这些功能。 |
-| `HITLS_PROVIDER` | 发布构建为 `OFF`，测试构建为 `ON` | 构建 openHiTLS Provider 接入和 BSL 参数适配，将 `hifhe_provider_objects` 纳入 `libhifhe.so` / `libhifhe.a`，并在测试构建中启用依赖 Provider 的 SDV 套件（Provider 加载套件还需要共享库）。 |
+| `HITLS_PROVIDER` | `OFF` | 构建 openHiTLS Provider 接入和 BSL 参数适配，将 `hifhe_provider_objects` 纳入 `libhifhe.so` / `libhifhe.a`；关闭时依赖 Provider 的 SDV 用例会跳过（Provider 加载套件还需要共享库）。 |
+| `HIFHE_ERR` | `ON` | 记录错误详情；关闭后查询错误栈返回成功 |
 | `HIFHE_BUILD_TESTS` | `OFF` | 构建原生接口及内核白盒用例 |
 | `HIFHE_ENABLE_ASAN` | `OFF` | 启用 AddressSanitizer |
 | `HIFHE_ENABLE_GCOV` | `OFF` | 启用覆盖率 |
@@ -101,7 +102,7 @@ CMake 配置：
 bash testcode/script/build_hifhe.sh --disable provider
 ```
 
-发布脚本默认以 `HIFHE_CUSTOM_PARAM=OFF` 生成裁剪后的库；测试构建默认 `HIFHE_CUSTOM_PARAM=ON`。两个选项相互独立，各自在发布构建中默认为 `OFF`，测试构建中默认为 `ON`；显式 `-D` 设置分别优先（包括重新配置）。基准测试脚本在独立目录中构建完整特性。完整库构建：
+发布脚本默认以 `HIFHE_CUSTOM_PARAM=OFF` 生成裁剪后的库；测试构建默认 `HIFHE_CUSTOM_PARAM=ON`，而 `HITLS_PROVIDER` 无论测试模式如何都默认 `OFF`。两个选项相互独立，显式 `-D` 设置和已有 CMake 缓存值优先。ASan workflow 会将 provider 矩阵值传给 SDV 构建脚本。基准测试脚本在独立目录中构建完整特性。完整库构建：
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHIFHE_CUSTOM_PARAM=ON -DHITLS_PROVIDER=ON

@@ -131,6 +131,8 @@ void PrintResult(bool showDetail, char *vectorName, uint64_t useTime)
             Print("failed\n");
             Print("at: (%s) in %s\n", g_testResult.test, g_testResult.filename);
         }
+    } else if (g_testResult.result == TEST_RESULT_SKIPPED) {
+        Print("\nskip: %s\n", vectorName);
     } else if (g_testResult.result == TEST_RESULT_FAILED) {
         Print("\nfailed at vector: %s\n", vectorName);
         Print("at: (%s) in %s\n", g_testResult.test, g_testResult.filename);

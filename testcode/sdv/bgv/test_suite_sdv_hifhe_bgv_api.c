@@ -70,6 +70,7 @@ static void Put32(uint8_t *out, uint32_t value)
     }
 }
 
+#ifdef HIFHE_ERR
 static void *ErrorPeekWorker(void *arg)
 {
     const int *options = arg;
@@ -121,10 +122,12 @@ EXIT:
     HIFHE_Free(ctx);
     return NULL;
 }
+#endif
 
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_ERROR_PEEK_API_TC001(int last, int outputs)
 {
+#ifdef HIFHE_ERR
     pthread_t worker;
     int started = 0;
     int options[] = {last, outputs};
@@ -151,6 +154,18 @@ EXIT:
     if (started != 0) {
         (void)pthread_join(worker, NULL);
     }
+#else
+    const char *file = "sentinel";
+    const char *sentinel = file;
+    uint32_t line = UINT32_MAX;
+    int32_t (*peek)(const char **, uint32_t *) = last == 0 ? HIFHE_ErrPeekError : HIFHE_ErrPeekLastError;
+    ASSERT_EQ(HIFHE_KeyGen(NULL), HIFHE_NULL_INPUT);
+    ASSERT_EQ(peek((outputs & 1) != 0 ? &file : NULL, (outputs & 2) != 0 ? &line : NULL), HIFHE_SUCCESS);
+    ASSERT_TRUE(file == sentinel);
+    ASSERT_EQ(line, UINT32_MAX);
+EXIT:
+    return;
+#endif
 }
 /* END_CASE */
 
@@ -453,6 +468,8 @@ void SDV_CRYPTO_HIFHE_BGV_CTRL_API_TC001(void)
     after = malloc(len);
     ASSERT_TRUE(before != NULL && after != NULL);
     ASSERT_EQ(HIFHE_Serialize(a, ct, before, &len), HIFHE_SUCCESS);
+    uint32_t internalOutputLen[2] = {0};
+    ASSERT_EQ(HIFHE_Ctrl(a, -1, NULL, internalOutputLen, sizeof(internalOutputLen)), HIFHE_NOT_SUPPORTED);
     ASSERT_TRUE(HIFHE_Ctrl(a, (int32_t)0x6A02, ct, NULL, 0) == HIFHE_NOT_SUPPORTED);
     ASSERT_TRUE(HIFHE_Ctrl(b, HIFHE_CTRL_BGV_SET_NEGATE, ct, &control, sizeof(control)) == HIFHE_INVALID_ARGUMENT);
     ASSERT_TRUE(HIFHE_Ctrl(NULL, HIFHE_CTRL_BGV_SET_NEGATE, ct, NULL, 0) == HIFHE_NULL_INPUT);

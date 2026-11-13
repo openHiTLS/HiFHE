@@ -12,7 +12,6 @@
 
 #ifndef HIFHE_LOCAL_H
 #define HIFHE_LOCAL_H
-#include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
@@ -33,16 +32,6 @@
 #define HIFHE_OP_NOISE    5u
 #define HIFHE_TEXT_NEGATE 1u
 
-typedef enum {
-    HIFHE_CTRL_GET_OUTPUT_LEN = -1,
-} HifheInternalCmd;
-
-typedef struct {
-    uint32_t op;
-    uint32_t len;
-} HifheOutputLen;
-
-typedef struct HifheParamSnapshot HifheParamSnapshot;
 typedef struct HifheAlgMethod HifheAlgMethod;
 
 typedef struct {
@@ -52,16 +41,9 @@ typedef struct {
     bool useLutCache;
 } HifheParamConfig;
 
-struct HifheParamSnapshot {
-    atomic_uint references;
-    const HifheAlgMethod *method;
-    HifheParamConfig config;
-    void *math;
-};
-
 struct HIFHE_Ctx {
     const HifheAlgMethod *method;
-    HifheParamSnapshot *params;
+    HifheParamConfig params;
     void *data;
     void *libCtx;
     uint8_t keysetId[16];
@@ -88,7 +70,7 @@ struct HIFHE_HEText {
 
 struct HifheAlgMethod {
     int32_t algId;
-    int32_t (*ctxNew)(HifheParamSnapshot *params, void *libCtx, void **out);
+    int32_t (*ctxNew)(HifheParamConfig *params, void *libCtx, void **out);
     void *(*ctxDup)(void *data, void *libCtx);
     void (*ctxFree)(void *data);
     int32_t (*keyGen)(void *data);
@@ -116,12 +98,12 @@ struct HifheAlgMethod {
 };
 #ifdef HIFHE_ENABLE_BGV
 extern const HifheAlgMethod g_hifheBgvMethod;
+int32_t Hifhe_BgvOutputSize(const HIFHE_Ctx *ctx, uint32_t op, const HIFHE_HEText *text, uint32_t *len);
 #endif
 void Hifhe_Put32(uint8_t *out, uint32_t value);
 uint32_t Hifhe_Get32(const uint8_t *in);
-void Hifhe_ParamRetain(HifheParamSnapshot *params);
-void Hifhe_ParamRelease(HifheParamSnapshot *params);
 int32_t Hifhe_HETextNew(const HIFHE_Ctx *ctx, void *data, HIFHE_HEText **out);
+int32_t Hifhe_CheckOut(HIFHE_HEText **out);
 int32_t Hifhe_CheckCompute(const HIFHE_Ctx *ctx, uint32_t op, const HIFHE_HEText *a, const HIFHE_HEText *b);
 int32_t Hifhe_CheckText(const HIFHE_Ctx *ctx, const HIFHE_HEText *text, bool flags);
 int32_t Hifhe_SetParam(HIFHE_Ctx *ctx, const HifheParamConfig *param);

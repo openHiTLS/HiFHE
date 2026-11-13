@@ -58,13 +58,29 @@ typedef enum {
 } HIFHE_ERROR;
 
 /* ---- error stack ----
- * Every failure the library decides is recorded once, where the code is first
+ * When enabled, every failure the library decides is recorded once, where the code is first
  * returned, with the file and line that decided it. The stack is per thread,
  * holds HIFHE_ERR_STACK_DEPTH entries and drops its oldest when it wraps, and
  * is never cleared on its own, so read it right after the call that failed.
  * A successful call pushes nothing. A NULL-buffer size query also pushes nothing. */
-/* file and line may be NULL. The return is HIFHE_SUCCESS on an empty stack. */
+/**
+ * @brief Get the oldest error without removing it.
+ * @param[out] file Optional source file of the error.
+ * @param[out] line Optional source line of the error.
+ * @retval HIFHE_SUCCESS The stack is empty or error reporting is disabled.
+ * @retval Other The oldest error code.
+ * @note Outputs are unchanged when no error is available.
+ */
 int32_t HIFHE_ErrPeekError(const char **file, uint32_t *line);
+
+/**
+ * @brief Get the newest error without removing it.
+ * @param[out] file Optional source file of the error.
+ * @param[out] line Optional source line of the error.
+ * @retval HIFHE_SUCCESS The stack is empty or error reporting is disabled.
+ * @retval Other The newest error code.
+ * @note Outputs are unchanged when no error is available.
+ */
 int32_t HIFHE_ErrPeekLastError(const char **file, uint32_t *line);
 
 #ifdef __cplusplus
