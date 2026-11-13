@@ -3,6 +3,8 @@
 Two leaked-string demos using public headers only.
 Build with BGV enabled. The Provider demo also requires HITLS_PROVIDER and a shared
 library; it is omitted when Provider support is disabled.
+The two options are independent, each defaulting to OFF in release builds and ON in test builds.
+The native demo also works with the default `HIFHE_CUSTOM_PARAM=OFF` release build.
 
 | Source | Executable | FHE calls |
 |---|---|---|
@@ -11,6 +13,9 @@ library; it is omitted when Provider support is disabled.
 
 ```sh
 bash testcode/script/build_hifhe.sh
+# Enable all features for the Provider demo (release defaults are trimmed).
+cmake -S . -B build -DHIFHE_CUSTOM_PARAM=ON -DHITLS_PROVIDER=ON
+cmake --build build --parallel
 bash testcode/script/build_demo.sh
 ./testcode/output/demo/hifhe_bgv_provider_demo
 ./testcode/output/demo/hifhe_bgv_demo
@@ -60,3 +65,18 @@ Both demos initialize openHiTLS before creating FHE contexts. Algorithm kernels
 use their existing random interfaces; no service pointers are injected.
 
 Provider / native interoperability is covered by the [Provider SDV tests](../README.md).
+
+
+Build options:
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `HIFHE_CUSTOM_PARAM` | `OFF`; `ON` with `HIFHE_BUILD_TESTS=ON` | `OFF` selects simple mode, removing custom parameters, prime search and validation, interchange wire format, evaluation keys, key switching, ciphertext/ciphertext multiplication, rotations and slot map. `ON` enables these features. |
+| `HITLS_PROVIDER` | Follows `HIFHE_CUSTOM_PARAM`: `OFF` in release builds, `ON` in test builds | Builds the openHiTLS provider integration and BSL parameter adapters, including `hifhe_provider_objects` in `libhifhe.so` / `libhifhe.a`, and enables provider-dependent SDV suites in test builds (the provider loading suite requires the shared library). Requires `HIFHE_CUSTOM_PARAM=ON` because the provider uses the interchange format. |
+
+Explicit CMake `-D` values take precedence. For a full release build, run from the repository root:
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHIFHE_CUSTOM_PARAM=ON -DHITLS_PROVIDER=ON
+cmake --build build --parallel
+```

@@ -47,3 +47,14 @@ if(BUILD_DEMO)
     enable_testing()
     add_subdirectory(demo)
 endif()
+
+if(NOT HIFHE_CUSTOM_PARAM)
+    add_executable(hifhe_no_custom_param feature_options.c ${HIFHE_OBJECTS})
+    target_include_directories(hifhe_no_custom_param PRIVATE
+        ${HIFHE_ROOT}/include ${HIFHE_CONFIG_DIR}
+        ${HIFHE_ROOT}/src/common ${HIFHE_ROOT}/src/bgv/include
+        ${HIFHE_ROOT}/src/bgv/src ${HIFHE_ROOT}/src/bgv/src/include)
+    target_link_libraries(hifhe_no_custom_param PRIVATE _hifhe_public_headers SHARED_COMPILE_DEFS ${HITLS_CRYPTO_LIB} ${HITLS_BSL_LIB} Threads::Threads m)
+    add_test(NAME hifhe_no_custom_param COMMAND hifhe_no_custom_param)
+    set_tests_properties(hifhe_no_custom_param PROPERTIES LABELS sdv)
+endif()

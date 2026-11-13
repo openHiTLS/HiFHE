@@ -6,6 +6,7 @@
  */
 
 /* BEGIN_HEADER */
+#include "hifhe_config.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -461,6 +462,7 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_SEC_GALOIS_STEP_COUNT_TC001(void)
 {
+#ifdef HIFHE_CUSTOM_PARAM
     CRYPT_BGV_Ctx *ctx = NULL;
     int32_t *steps = NULL;
     uint64_t *elts = NULL;
@@ -501,6 +503,9 @@ EXIT:
     BSL_SAL_Free(steps);
     BSL_SAL_Free(elts);
     CRYPT_BGV_FreeCtx(ctx);
+#else
+    SKIP_TEST();
+#endif
 }
 /* END_CASE */
 
@@ -754,6 +759,7 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_SEC_GALOIS_SECRET_WIPED_TC001(void)
 {
+#ifdef HIFHE_CUSTOM_PARAM
     CRYPT_BGV_Ctx *ctx = NULL;
     CRYPT_BGV_Ctx *inner = NULL;
     uint8_t *needle = NULL;
@@ -828,6 +834,9 @@ EXIT:
     BSL_SAL_Free(ct);
     BSL_SAL_Free(back);
     CRYPT_BGV_FreeCtx(ctx);
+#else
+    SKIP_TEST();
+#endif
 }
 /* END_CASE */
 
@@ -981,6 +990,104 @@ EXIT:
         SecAllocHookRemove();
     }
     free(needle);
+    BSL_SAL_Free(slab);
+    BSL_SAL_Free(pt);
+    CRYPT_BGV_FreeCtx(ctx);
+}
+/* END_CASE */
+
+/* @
+* @test  SDV_CRYPTO_HIFHE_BGV_SEC_DECODE_MSG_COPY_WIPED_TC001
+* @title  The working copies of a decoded message are wiped before they are released.
+* @brief  Decoding into a buffer that is not 8-byte aligned goes through an
+*         aligned copy, and decoding a slot-mapped plaintext gathers the slots
+*         from a copy in transform order. Both copies hold the caller's
+*         cleartext. The recording allocator compares every released block
+*         against the message bytes in the layout that copy holds.
+*         layout 0: unaligned output; layout 1: slot-mapped plaintext.
+* @auto  TRUE
+@ */
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_SEC_DECODE_MSG_COPY_WIPED_TC001(int layout)
+{
+#ifndef HIFHE_CUSTOM_PARAM
+    if (layout == 1) {
+        SKIP_TEST();
+    }
+#endif
+    CRYPT_BGV_Ctx *ctx = NULL;
+    uint8_t *slab = NULL, *needle = NULL, *pt = NULL;
+    uint64_t *m = NULL;
+    SecDims d;
+    int installed = 0;
+
+    TestMemInit();
+    TestRandInit();
+    ctx = SecNewCtx(HIFHE_BGV_2048_48_17BIT, SEC_SEED_A, 0);
+    ASSERT_TRUE(ctx != NULL);
+    ASSERT_EQ(SecDimsGet(ctx, &d), 0);
+    if (layout == 1) {
+#ifdef HIFHE_CUSTOM_PARAM
+        uint32_t flag = 1u;
+        ASSERT_EQ(CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_SET_SLOT_MAP, &flag, sizeof(flag)), HIFHE_SUCCESS);
+#endif
+    }
+
+    m = (uint64_t *)BSL_SAL_Malloc(d.msgLen);
+    slab = (uint8_t *)BSL_SAL_Malloc(d.msgLen + sizeof(uint64_t));
+    needle = (uint8_t *)malloc(d.msgLen);
+    pt = (uint8_t *)BSL_SAL_Malloc(d.ptLen);
+    ASSERT_TRUE(m != NULL && slab != NULL && needle != NULL && pt != NULL);
+    for (uint32_t i = 0; i < d.n; ++i) {
+        m[i] = (uint64_t)((i * 7919u + 13u) % d.t);
+    }
+    uint32_t ptLen = 0u;
+    ASSERT_EQ(SecEncode(ctx, m, d.msgLen, pt, d.ptLen, &ptLen), 0);
+
+    /* Layout 0 decodes one odd byte in, so the output never starts on a word
+     * boundary. Layout 1 decodes into an aligned buffer, and its copy holds
+     * slot j at map[j]. */
+    uint8_t *dst = slab;
+    if (layout == 0) {
+        dst = slab + 1u;
+        ASSERT_TRUE(((uintptr_t)dst % sizeof(uint64_t)) != 0u);
+        memcpy(needle, m, d.msgLen);
+    } else {
+        CRYPT_BGV_Ctx *inner = NULL;
+        ASSERT_EQ(CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GET_INNER_CTX, &inner, sizeof(inner)), HIFHE_SUCCESS);
+        ASSERT_TRUE(inner != NULL && inner->bgv.context.slotMap.data != NULL);
+        ASSERT_EQ(inner->bgv.context.slotMap.size, d.n);
+        const uint32_t *map = inner->bgv.context.slotMap.data;
+        for (uint32_t j = 0; j < d.n; ++j) {
+            memcpy(needle + (size_t)map[j] * sizeof(uint64_t), &m[j], sizeof(uint64_t));
+        }
+    }
+
+    ASSERT_EQ(SecAllocHookInstall(), 0);
+    installed = 1;
+    g_secNeedle = needle;
+    g_secNeedleLen = d.msgLen;
+    g_secArmed = 1;
+    int rc = SecDecode(ctx, pt, ptLen, (uint64_t *)dst, d.msgLen);
+    int seen = g_secNeedleSeen;
+    int overflow = g_secOverflow;
+    g_secArmed = 0;
+    g_secNeedle = NULL;
+    SecAllocHookRemove();
+    installed = 0;
+
+    ASSERT_EQ(rc, 0);
+    ASSERT_EQ(overflow, 0);
+    ASSERT_EQ(seen, 0);
+    /* And the caller still gets the message. */
+    ASSERT_EQ(memcmp(dst, m, d.msgLen), 0);
+
+EXIT:
+    if (installed) {
+        SecAllocHookRemove();
+    }
+    free(needle);
+    BSL_SAL_Free(m);
     BSL_SAL_Free(slab);
     BSL_SAL_Free(pt);
     CRYPT_BGV_FreeCtx(ctx);
@@ -1189,5 +1296,119 @@ void SDV_CRYPTO_HIFHE_BGV_SEC_SEED_PARAM_WORD_TC001(int word)
     ASSERT_EQ(memcmp(ref, again, sizeof(ref)), 0);
 EXIT:
     CRYPT_BGV_FreeCtx(ctx);
+}
+/* END_CASE */
+
+/* @
+* @test  SDV_CRYPTO_HIFHE_BGV_SEC_PRESET_MODULI_TC001
+* @title  A preset's stored moduli are the ones the parameter search finds for it.
+* @brief  Presets carry their moduli so that building them searches and
+*         validates nothing. This rebuilds the preset through the custom
+*         parameter path, which validates the request and runs the Proth
+*         search, and requires the same chain and plaintext modulus. The
+*         default preset pins its modulus on purpose, so for it only the
+*         plaintext modulus is searched and the pinned chain is validated.
+* @auto  TRUE
+@ */
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_SEC_PRESET_MODULI_TC001(int preset)
+{
+#ifdef HIFHE_CUSTOM_PARAM
+    CRYPT_BGV_Ctx *stored = NULL, *searched = NULL;
+
+    TestMemInit();
+    TestRandInit();
+    stored = CRYPT_BGV_NewCtx(HIFHE_BGV);
+    searched = CRYPT_BGV_NewCtx(HIFHE_BGV);
+    ASSERT_TRUE(stored != NULL && searched != NULL);
+    ASSERT_EQ(BgvUserPara_LoadPreset(&stored->para, (int32_t)preset), HIFHE_SUCCESS);
+    ASSERT_EQ(BgvUserPara_LoadPreset(&searched->para, (int32_t)preset), HIFHE_SUCCESS);
+    ASSERT_TRUE(stored->para.vetted != 0);
+
+    searched->para.vetted = 0u;
+    if (preset != HIFHE_BGV_DEFAULT) {
+        Uint64Vector_Destroy(&searched->para.cipherMod);
+    }
+    if (searched->para.plainMod != 65537u) {
+        searched->para.plainMod = 0u;
+    }
+    ASSERT_EQ(Bgv_BuildContext(stored), HIFHE_SUCCESS);
+    ASSERT_EQ(Bgv_BuildContext(searched), HIFHE_SUCCESS);
+
+    const RlweParameter *a = &stored->bgv.params.rlweParameter;
+    const RlweParameter *b = &searched->bgv.params.rlweParameter;
+    ASSERT_EQ(stored->bgv.params.plainMod, searched->bgv.params.plainMod);
+    ASSERT_EQ(a->polyDegree, b->polyDegree);
+    ASSERT_EQ(a->cipherMod.size, b->cipherMod.size);
+    ASSERT_EQ(memcmp(a->cipherMod.data, b->cipherMod.data, a->cipherMod.size * sizeof(uint64_t)), 0);
+EXIT:
+    CRYPT_BGV_FreeCtx(stored);
+    CRYPT_BGV_FreeCtx(searched);
+#else
+    (void)preset;
+    SKIP_TEST();
+#endif
+}
+/* END_CASE */
+
+/* @
+* @test  SDV_CRYPTO_HIFHE_BGV_SEC_PLAIN_MOD_BELOW_CHAIN_TC001
+* @title  Custom parameters whose moduli cannot be kept apart are refused.
+* @brief  N = 32768 with two 20-bit limbs leaves room for a single 20-bit Proth
+*         prime, so the search for the second limb has to fail rather than
+*         return a narrower prime (which could equal the 17-bit plaintext
+*         modulus 65537). The same ring with a pinned chain is then checked
+*         on its own: a plaintext search that may only land on a chain prime
+*         fails, and a pinned plaintext modulus that is not below every chain
+*         modulus is refused.
+* @auto  TRUE
+@ */
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_SEC_PLAIN_MOD_BELOW_CHAIN_TC001(void)
+{
+#ifdef HIFHE_CUSTOM_PARAM
+    CRYPT_BGV_Ctx *ctx = NULL;
+    CRYPT_BGV_Ctx *pinned = NULL;
+
+    TestMemInit();
+    TestRandInit();
+    ctx = CRYPT_BGV_NewCtx(HIFHE_BGV);
+    ASSERT_TRUE(ctx != NULL);
+    uint32_t degree = 32768u;
+    uint32_t plainBit = 17u;
+    uint32_t bits[2] = {20u, 20u};
+    BSL_Param params[] = {{HIFHE_PARAM_BGV_POLY_DEGREE, BSL_PARAM_TYPE_UINT32, &degree, sizeof(degree), 0},
+                          {HIFHE_PARAM_BGV_PLAIN_MOD_BIT, BSL_PARAM_TYPE_UINT32, &plainBit, sizeof(plainBit), 0},
+                          {HIFHE_PARAM_BGV_CIPHER_MOD_BITS, BSL_PARAM_TYPE_OCTETS, bits, sizeof(bits), 0},
+                          BSL_PARAM_END};
+    ASSERT_EQ(CRYPT_BGV_SetParaEx(ctx, params), HIFHE_SUCCESS);
+    ASSERT_EQ(CRYPT_BGV_Gen(ctx), HIFHE_PARAM_INVALID);
+    ASSERT_TRUE(!ctx->bgv.haveContext);
+
+    /* The chain the old walk produced, pinned: 786433 (20 bits) and 65537. */
+    static const uint64_t chain[2] = {786433u, 65537u};
+    pinned = CRYPT_BGV_NewCtx(HIFHE_BGV);
+    ASSERT_TRUE(pinned != NULL);
+    ASSERT_EQ(BgvUserPara_LoadPreset(&pinned->para, HIFHE_BGV_2048_48_17BIT), HIFHE_SUCCESS);
+    pinned->para.vetted = 0u;
+    pinned->para.polyDegree = degree;
+    Uint32Vector_Destroy(&pinned->para.cipherModBit);
+    ASSERT_EQ(Uint32Vector_Create(&pinned->para.cipherModBit, bits, 2u), HIFHE_SUCCESS);
+    Uint64Vector_Destroy(&pinned->para.cipherMod);
+    ASSERT_EQ(Uint64Vector_Create(&pinned->para.cipherMod, chain, 2u), HIFHE_SUCCESS);
+    /* Searched: the only 17-bit candidate for this ring is a chain prime. */
+    pinned->para.plainMod = 0u;
+    ASSERT_EQ(Bgv_BuildContext(pinned), HIFHE_PARAM_INVALID);
+    ASSERT_TRUE(!pinned->bgv.haveContext);
+    /* Pinned: equal to a chain modulus. */
+    pinned->para.plainMod = 65537u;
+    ASSERT_EQ(Bgv_BuildContext(pinned), HIFHE_PARAM_INVALID);
+    ASSERT_TRUE(!pinned->bgv.haveContext);
+EXIT:
+    CRYPT_BGV_FreeCtx(ctx);
+    CRYPT_BGV_FreeCtx(pinned);
+#else
+    SKIP_TEST();
+#endif
 }
 /* END_CASE */

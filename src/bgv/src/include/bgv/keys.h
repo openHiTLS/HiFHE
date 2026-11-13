@@ -51,13 +51,6 @@ SecretKey *BGV_SecretKey_New(void);
 /* Destroy contents, release the handle, and NULL the caller's pointer. */
 void BGV_SecretKey_Free(SecretKey **self);
 
-/* ---- secret-key powers ----
- * Decrypting a size-K ciphertext evaluates c_0 + c_1*s + ... + c_{K-1}*s^(K-1):
- * size 3 needs s^2, size 4 needs s^3. The key is NTT-form, so this is one
- * modular power per slot. `out` is created here on the key's own RNS base
- * and destroyed by the caller. power >= 1; power 1 returns a copy. */
-HIFHE_ERROR BGV_SecretKey_GetPow(CrtPoly *out, const SecretKey *sk, uint32_t power);
-
 /* ---- Switch-key gadget shape ----
  * rnsSize * digits pieces, laid out pieces[i * digits + j]. Limb i carries
  * qhat_i = prod_{m != i} q_m, digit j carries T^j = 2^(16j). A single-limb

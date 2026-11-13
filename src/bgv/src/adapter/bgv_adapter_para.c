@@ -214,6 +214,10 @@ HIFHE_ERROR BgvUserPara_ParseFromBSL(BgvUserPara *p, const BSL_Param *param)
         return HIFHE_NULL_INPUT;
     }
 
+#ifndef HIFHE_CUSTOM_PARAM
+    HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
+    return HIFHE_PARAM_INVALID;
+#else
     /* Reset the para bag; the caller may re-SetPara across a lifetime. */
     BgvUserPara_Clear(p);
     BgvUserPara_Init(p);
@@ -284,6 +288,7 @@ HIFHE_ERROR BgvUserPara_ParseFromBSL(BgvUserPara *p, const BSL_Param *param)
     }
     p->set = 1u;
     return HIFHE_SUCCESS;
+#endif
 }
 
 #endif
@@ -307,6 +312,7 @@ HIFHE_ERROR BgvUserPara_LoadPreset(BgvUserPara *p, int32_t presetId)
     p->plainMod = preset.plainMod;
     p->correctionFactor = preset.correctionFactor;
     p->relinDnum = preset.relinDnum;
+    p->vetted = preset.vetted;
 
     if (preset.cipherModBit != NULL && preset.cipherModBitSize > 0) {
         ret = Uint32Vector_Create(&p->cipherModBit, preset.cipherModBit, preset.cipherModBitSize);

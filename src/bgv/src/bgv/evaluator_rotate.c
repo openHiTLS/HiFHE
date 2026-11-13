@@ -26,6 +26,8 @@
  * under direct-coefficient encoding it permutes coefficients with sign.
  */
 
+#include "hifhe_config.h"
+#ifdef HIFHE_CUSTOM_PARAM
 #include <string.h>
 #include "hifhe_mem.h"
 #include "hifhe_err_internal.h"
@@ -207,3 +209,5 @@ HIFHE_ERROR BGV_Evaluator_RotateByStep(Ciphertext *out, const Ciphertext *in, in
     uint64_t k = BGV_GaloisEltForStep(steps, N);
     return BGV_Evaluator_RotateByElt(out, in, k, self);
 }
+
+#endif

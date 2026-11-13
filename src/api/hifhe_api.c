@@ -10,6 +10,7 @@
  * See the Mulan PSL v2 for more details.
  */
 
+#include "hifhe_config.h"
 #include <limits.h>
 #include <stdint.h>
 #include "hifhe_local.h"
@@ -692,9 +693,11 @@ int32_t HIFHE_Serialize(const HIFHE_Ctx *ctx, const HIFHE_HEText *text, uint8_t 
         HIFHE_ERR_PUSH_ERROR(HIFHE_BUFFER_OVERLAP);
         return HIFHE_BUFFER_OVERLAP;
     }
+#ifdef HIFHE_CUSTOM_PARAM
     if (ctx->wireFormat == HIFHE_WIRE_INTERCHANGE) {
         return ctx->method->serializeNative(ctx, text->data, out, outLen);
     }
+#endif
     uint32_t n = 0;
     ret = ctx->method->serialize(ctx, text->data, NULL, &n);
     if (ret != HIFHE_SUCCESS && ret != HIFHE_BUFFER_TOO_SMALL) {
@@ -749,7 +752,12 @@ int32_t HIFHE_Deserialize(const HIFHE_Ctx *ctx, const uint8_t *in, uint32_t len,
             HIFHE_ERR_PUSH_ERROR(ret);
         }
         if (ret == HIFHE_SUCCESS) {
+#ifdef HIFHE_CUSTOM_PARAM
             ret = ctx->method->deserializeNative(ctx, in, len, &kind, &data);
+#else
+            ret = HIFHE_SERDES_FAIL;
+            HIFHE_ERR_PUSH_ERROR(ret);
+#endif
         }
     }
     if (ret != HIFHE_SUCCESS) {

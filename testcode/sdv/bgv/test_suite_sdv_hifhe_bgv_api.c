@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include "hifhe_config.h"
 #include "hifhe.h"
 #include "crypt_eal_init.h"
 #include "crypt_eal_rand.h"
@@ -538,6 +539,7 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_WIRE_INTERCHANGE_API_TC001(void)
 {
+#ifdef HIFHE_CUSTOM_PARAM
     HIFHE_Ctx *w = NULL, *r = NULL;
     HIFHE_HEText *pt = NULL, *ct = NULL, *back = NULL, *plain = NULL;
     uint8_t *wire = NULL;
@@ -586,6 +588,9 @@ EXIT:
     free(wire);
     free(values);
     CRYPT_EAL_Cleanup(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND);
+#else
+    SKIP_TEST();
+#endif
 }
 
 /* END_CASE */
@@ -654,6 +659,7 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_WIRE_FORMAT_ARGS_API_TC001(void)
 {
+#ifdef HIFHE_CUSTOM_PARAM
     HIFHE_Ctx *ctx = NULL, *early = NULL;
     HIFHE_HEText *pt = NULL, *bad = NULL;
     uint8_t *wire = NULL;
@@ -697,6 +703,9 @@ EXIT:
     HIFHE_Free(early);
     free(wire);
     CRYPT_EAL_Cleanup(CRYPT_EAL_INIT_CPU | CRYPT_EAL_INIT_BSL | CRYPT_EAL_INIT_RAND);
+#else
+    SKIP_TEST();
+#endif
 }
 
 /* END_CASE */

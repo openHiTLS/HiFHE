@@ -17,6 +17,7 @@
 #define BGV_LOCAL_H
 
 #include <stdint.h>
+#include "hifhe_config.h"
 #ifdef HITLS_PROVIDER
 #include "bsl_params.h"
 #endif
@@ -59,6 +60,9 @@ struct BgvUserPara {
     Uint64Vector cipherMod; /* owned; when non-empty it overrides the search */
     uint64_t plainMod; /* override when non-zero */
     uint8_t set;
+    /* From a preset: the moduli above are final, so nothing is searched or
+     * validated when a context is built. */
+    uint8_t vetted;
 
     /* NTT tables for the moduli these parameters resolve to. The fields
      * above determine the whole parameter set, so the tables have a fixed
@@ -83,15 +87,19 @@ typedef struct {
     BGVContext context;
     KeyGenerator keygen;
     PublicKey pk;
+#ifdef HIFHE_CUSTOM_PARAM
     RelinKeys relinKeys;
     GaloisKeys galoisKeys;
+#endif
 
     uint8_t haveParams;
     uint8_t haveContext;
     uint8_t haveKeygen;
     uint8_t havePk;
+#ifdef HIFHE_CUSTOM_PARAM
     uint8_t haveRelin;
     uint8_t haveGalois;
+#endif
 } BgvState;
 
 struct BGV_Ctx {
@@ -163,6 +171,10 @@ HIFHE_ERROR Bgv_GetMsgLen(CRYPT_BGV_Ctx *ctx, uint32_t *outLen);
 #endif
 
 /* ----- SerDes prototypes (hifhe_serdes.c) ----- */
+uint32_t BgvSerDes_BodySize(bool cipher, const void *obj);
+int32_t BgvSerDes_WriteBody(bool cipher, const void *obj, uint8_t *out, uint32_t len);
+/* The body reader must consume exactly len bytes. */
+int32_t BgvSerDes_ReadBody(bool cipher, void *obj, const uint8_t *in, uint32_t len, BGVContext *ctx);
 int32_t BgvSerDes_DumpPlaintext(const Plaintext *pt, uint8_t *buf, uint32_t *bufLen, int32_t algId);
 int32_t BgvSerDes_LoadPlaintext(Plaintext *pt, const uint8_t *buf, uint32_t bufLen, BGVContext *ctx);
 int32_t BgvSerDes_DumpCiphertext(const Ciphertext *ct, uint8_t *buf, uint32_t *bufLen, int32_t algId);

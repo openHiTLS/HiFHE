@@ -35,57 +35,6 @@ void BGV_SecretKey_Free(SecretKey **self)
     *self = NULL;
 }
 
-/* s^power, slot-wise since the key is NTT-form. The result rides on the
- * key's own RNS base. */
-HIFHE_ERROR BGV_SecretKey_GetPow(CrtPoly *out, const SecretKey *sk, uint32_t power)
-{
-    if (out == NULL || sk == NULL) {
-        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
-        return HIFHE_NULL_INPUT;
-    }
-    if (sk->context == NULL || sk->data == NULL) {
-        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
-        return HIFHE_NULL_INPUT;
-    }
-    if (power == 0u) {
-        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
-        return HIFHE_PARAM_INVALID;
-    }
-    if (sk->config.crtConfig.dtype != HIFHE_NTT) {
-        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
-        return HIFHE_PARAM_INVALID;
-    }
-
-    int32_t r = RLWE_CrtPoly_Create(out, &sk->config.crtConfig, &sk->context->rlweContext);
-    if (r != HIFHE_SUCCESS) {
-        return r;
-    }
-    if (out->dataSize != sk->dataSize) {
-        RLWE_CrtPoly_Destroy(out);
-        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
-        return HIFHE_PARAM_INVALID;
-    }
-
-    uint32_t N = sk->context->rlweContext.parameter->polyDegree;
-    uint32_t L = sk->config.crtConfig.rnsbase.size;
-    for (uint32_t i = 0; i < L; ++i) {
-        Modulus q = sk->config.crtConfig.rnsbase.data[i];
-        const uint64_t *src = sk->data + i * N;
-        uint64_t *dst = out->data + i * N;
-        if (power == 1u) {
-            memcpy(dst, src, N * sizeof(uint64_t));
-            continue;
-        }
-        /* Square-and-multiply: the cost grows with log(power), whatever the
-         * caller asks for. Decryption no longer calls this; it evaluates the
-         * phase by Horner's rule. */
-        for (uint32_t j = 0; j < N; ++j) {
-            dst[j] = Kernel_PowMod(src[j], power, q);
-        }
-    }
-    return HIFHE_SUCCESS;
-}
-
 HIFHE_ERROR BGV_RelinKeys_Create(RelinKeys *out, uint32_t rnsSize, uint32_t digits, BGVContext *ctx)
 {
     if (out == NULL || ctx == NULL || rnsSize == 0u || digits == 0u) {

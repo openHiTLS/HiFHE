@@ -94,11 +94,7 @@ HIFHE_ERROR RLWE_RnsPoly_Add(RnsPoly *out, const RnsPoly *a, const RnsPoly *b)
     }
     Modulus q = a->config.modulus;
     for (uint32_t i = 0; i < a->dataSize; ++i) {
-        uint64_t s = a->data[i] + b->data[i];
-        if (s >= q) {
-            s -= q;
-        }
-        out->data[i] = s;
+        out->data[i] = Kernel_CondSubInl(a->data[i] + b->data[i], q);
     }
     out->config = a->config;
     return HIFHE_SUCCESS;
@@ -116,11 +112,7 @@ HIFHE_ERROR RLWE_RnsPoly_Sub(RnsPoly *out, const RnsPoly *a, const RnsPoly *b)
     }
     Modulus q = a->config.modulus;
     for (uint32_t i = 0; i < a->dataSize; ++i) {
-        uint64_t d = a->data[i] + q - b->data[i];
-        if (d >= q) {
-            d -= q;
-        }
-        out->data[i] = d;
+        out->data[i] = Kernel_CondSubInl(a->data[i] + q - b->data[i], q);
     }
     out->config = a->config;
     return HIFHE_SUCCESS;
@@ -134,7 +126,8 @@ HIFHE_ERROR RLWE_RnsPoly_Neg(RnsPoly *out, const RnsPoly *a)
     }
     Modulus q = a->config.modulus;
     for (uint32_t i = 0; i < a->dataSize; ++i) {
-        out->data[i] = (a->data[i] == 0u) ? 0u : (q - a->data[i]);
+        /* q - 0 = q folds back to 0. */
+        out->data[i] = Kernel_CondSubInl(q - a->data[i], q);
     }
     out->config = a->config;
     return HIFHE_SUCCESS;
@@ -189,20 +182,12 @@ HIFHE_ERROR RLWE_RnsPoly_MulDotAcc(RnsPoly *out, const RnsPoly *a, const RnsPoly
     const BarrettConst *bc = LimbBarrett(a);
     if (bc != NULL) {
         for (uint32_t i = 0; i < a->dataSize; ++i) {
-            uint64_t s = out->data[i] + Kernel_BarrettMulModInl(a->data[i], b->data[i], bc);
-            if (s >= q) {
-                s -= q;
-            }
-            out->data[i] = s;
+            out->data[i] = Kernel_CondSubInl(out->data[i] + Kernel_BarrettMulModInl(a->data[i], b->data[i], bc), q);
         }
         return HIFHE_SUCCESS;
     }
     for (uint32_t i = 0; i < a->dataSize; ++i) {
-        uint64_t s = out->data[i] + Kernel_MulMod(a->data[i], b->data[i], q);
-        if (s >= q) {
-            s -= q;
-        }
-        out->data[i] = s;
+        out->data[i] = Kernel_CondSubInl(out->data[i] + Kernel_MulMod(a->data[i], b->data[i], q), q);
     }
     return HIFHE_SUCCESS;
 }
@@ -248,16 +233,12 @@ HIFHE_ERROR RLWE_RnsPoly_SetSigned(RnsPoly *self, const int64_t *v)
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
-    /* Sampler output is in [-2, 2] for CBD-2 and {-1, 0, 1} for ternary, so
-     * the reduction never runs in practice. The compare keeps the function
-     * correct for any input. */
+    /* Inputs are sampler output, |v[i]| < q: [-2, 2] for CBD-2 and
+     * {-1, 0, 1} for ternary. A negative value takes q added by mask, so
+     * the sign picks no branch. */
     for (uint32_t i = 0; i < self->dataSize; ++i) {
         int64_t s = v[i];
-        uint64_t m = (s >= 0) ? (uint64_t)s : (uint64_t)(-s);
-        if (m >= q) {
-            m %= q;
-        }
-        self->data[i] = (s >= 0) ? m : ((m == 0u) ? 0u : q - m);
+        self->data[i] = (uint64_t)s + (q & (0u - ((uint64_t)s >> 63)));
     }
     self->config.dtype = HIFHE_POLY;
     return HIFHE_SUCCESS;

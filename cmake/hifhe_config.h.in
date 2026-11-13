@@ -16,4 +16,6 @@
 #cmakedefine HITLS_PROVIDER 1
 #cmakedefine HIFHE_ENABLE_BGV
 
+#cmakedefine HIFHE_CUSTOM_PARAM
+
 #endif

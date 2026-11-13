@@ -34,10 +34,16 @@ typedef struct {
 HIFHE_ERROR BGV_Encoder_Create(Encoder *out, BGVContext *ctx);
 HIFHE_ERROR BGV_Encoder_Destroy(Encoder *self);
 
-/* msg[0..slotCount), each < plainMod. slotCount == polyDegree. */
+/* msg[0..slotCount), each < plainMod. slotCount == polyDegree. The plaintext
+ * holds every coefficient as its centred representative in (-t/2, t/2]. */
 HIFHE_ERROR BGV_Encoder_Encode(Plaintext *out, const uint64_t *msg, uint32_t slotCount, const Encoder *self);
 
 HIFHE_ERROR BGV_Encoder_Decode(uint64_t *msg, uint32_t slotCount, const Plaintext *pt, const Encoder *self);
+
+/* Write coefficients coeff[0..N), each in [0, t), to every limb of `out` as
+ * the residues of their centred representative: c for c <= t/2, else c - t,
+ * i.e. q_i - (t - c). Requires t < q_i. `coeff` may be limb 0 of `out`. */
+void BGV_Encoder_LiftCentred(uint64_t *out, const uint64_t *coeff, const RnsBase *base, uint32_t N, Modulus t);
 
 /* out[j] = centred CRT reconstruction of data[.. j] over `base`, mod t.
  * `data` holds base->size coefficient-form limbs of N words each. */

@@ -35,6 +35,9 @@ typedef struct {
     uint32_t cipherModBitSize;
     const uint64_t *cipherMod; /* cipherMod, primes of each bit */
     uint32_t cipherModSize;
+    /* Every modulus above is fixed and known good, so building a context
+     * from it needs no prime search and no parameter validation. */
+    uint8_t vetted;
 } BgvPresetPara;
 
 /* Fill `out` from a preset ID. `out->cipherModBit` points into loader-owned

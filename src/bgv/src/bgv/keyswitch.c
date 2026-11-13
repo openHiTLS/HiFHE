@@ -23,6 +23,8 @@
  *   4. NTT each digit polynomial and accumulate digit * kswPiece(i, j)
  */
 
+#include "hifhe_config.h"
+#ifdef HIFHE_CUSTOM_PARAM
 #include <stdbool.h>
 #include <string.h>
 #include "hifhe_mem.h"
@@ -358,3 +360,5 @@ HIFHE_ERROR BGV_KeySwitch_Run(Ciphertext *out, const CrtPoly *polyNtt, const Cip
     RLWE_CrtPoly_Destroy(&polyCoeff);
     return r;
 }
+
+#endif
