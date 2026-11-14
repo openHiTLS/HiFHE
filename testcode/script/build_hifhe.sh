@@ -4,22 +4,30 @@ set -euo pipefail
 
 HIFHE_ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 BUILD_TYPE=Release
-HIFHE_ENABLE_ASAN=OFF
-HIFHE_ENABLE_GCOV=OFF
 HIFHE_BUILD_SHARED=ON
 HIFHE_BUILD_STATIC=ON
 HIFHE_BGV=ON
-HIFHE_PROVIDER_FEATURE=""
+HIFHE_PROVIDER_FEATURE=ON
+HIFHE_INT128_FEATURE=""
 HITLS_ROOT_PATH=""
 BUILD_ARGS=""
+LINK_ARGS=""
 OPENHITLS_REPO=${OPENHITLS_REPO:-https://github.com/openHiTLS/openHiTLS.git}
 OPENHITLS_REF=${OPENHITLS_REF:-openhitls-0.4.0-alpha8}
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         debug) BUILD_TYPE=Debug; shift ;;
-        asan) HIFHE_ENABLE_ASAN=ON; shift ;;
-        gcov) HIFHE_ENABLE_GCOV=ON; shift ;;
+        asan)
+            BUILD_ARGS="${BUILD_ARGS} -fsanitize=address -fno-omit-frame-pointer"
+            LINK_ARGS="${LINK_ARGS} -fsanitize=address"
+            shift
+            ;;
+        gcov)
+            BUILD_ARGS="${BUILD_ARGS} --coverage"
+            LINK_ARGS="${LINK_ARGS} --coverage"
+            shift
+            ;;
         shared) HIFHE_BUILD_STATIC=OFF; shift ;;
         static) HIFHE_BUILD_SHARED=OFF; shift ;;
         --enable|--disable)
@@ -34,6 +42,7 @@ while [[ $# -gt 0 ]]; do
                     HIFHE_BGV=${STATE}
                     ;;
                 provider) HIFHE_PROVIDER_FEATURE=${STATE} ;;
+                int128) HIFHE_INT128_FEATURE=${STATE} ;;
                 *) echo "Unknown algorithm: $2" >&2; exit 1 ;;
             esac
             shift 2
@@ -43,14 +52,13 @@ while [[ $# -gt 0 ]]; do
             HITLS_ROOT_PATH=$(realpath "$2")
             shift 2
             ;;
-        --build_args)
-            [[ $# -ge 2 ]] || { echo "Missing build arguments" >&2; exit 1; }
-            BUILD_ARGS=$2
-            shift 2
+        add-options=*)
+            BUILD_ARGS="${BUILD_ARGS} ${1#add-options=}"
+            shift
             ;;
         -h|--help)
-            echo "Usage: $0 [debug] [asan] [gcov] [shared|static] [--enable bgv|provider] [--disable provider]"
-            echo "          [--hitls_dir PATH] [--build_args FLAGS]"
+            echo "Usage: $0 [debug] [asan] [gcov] [shared|static] [--enable|--disable bgv|provider|int128]"
+            echo "          [--hitls_dir PATH] [add-options=FLAGS]"
             exit 0
             ;;
         *) echo "Unknown option: $1" >&2; exit 1 ;;
@@ -71,18 +79,19 @@ if [[ ! -f "${HITLS_ROOT_PATH}/build/libhitls_crypto.so" ||
 fi
 
 CMAKE_FEATURE_ARGS=()
-if [[ -n "${HIFHE_PROVIDER_FEATURE}" ]]; then
-    CMAKE_FEATURE_ARGS+=("-DHITLS_PROVIDER=${HIFHE_PROVIDER_FEATURE}")
+if [[ -n "${HIFHE_INT128_FEATURE}" ]]; then
+    CMAKE_FEATURE_ARGS+=("-DHIFHE_INT128=${HIFHE_INT128_FEATURE}")
 fi
 cmake -E remove_directory "${HIFHE_ROOT_DIR}/build"
 cmake -S "${HIFHE_ROOT_DIR}" -B "${HIFHE_ROOT_DIR}/build" \
     -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
     -DCMAKE_C_FLAGS="${BUILD_ARGS}" \
-    -DHIFHE_ENABLE_ASAN="${HIFHE_ENABLE_ASAN}" \
-    -DHIFHE_ENABLE_GCOV="${HIFHE_ENABLE_GCOV}" \
+    -DCMAKE_EXE_LINKER_FLAGS="${LINK_ARGS}" \
+    -DCMAKE_SHARED_LINKER_FLAGS="${LINK_ARGS}" \
     -DHIFHE_BUILD_SHARED="${HIFHE_BUILD_SHARED}" \
     -DHIFHE_BUILD_STATIC="${HIFHE_BUILD_STATIC}" \
     -DHIFHE_BGV="${HIFHE_BGV}" \
+    -DHITLS_PROVIDER="${HIFHE_PROVIDER_FEATURE}" \
     "${CMAKE_FEATURE_ARGS[@]}" \
     -DHITLS_ROOT_PATH="${HITLS_ROOT_PATH}"
 cmake --build "${HIFHE_ROOT_DIR}/build" --parallel

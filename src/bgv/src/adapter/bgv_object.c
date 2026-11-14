@@ -78,7 +78,7 @@ static int32_t BgvCtxNew(HifheParamConfig *p, void *libCtx, void **out)
         return HIFHE_MEMORY_ERROR;
     }
     math->useLutCache = p->useLutCache;
-    int32_t ret = BgvUserPara_LoadPreset(&math->para, p->paramId);
+    int32_t ret = Bgv_SetPreset(math, p->paramId);
     if (ret == HIFHE_SUCCESS) {
         ret = Bgv_BuildContext(math);
     }

@@ -110,9 +110,10 @@ void BgvUserPara_Init(BgvUserPara *p);
 void BgvUserPara_Clear(BgvUserPara *p);
 HIFHE_ERROR BgvUserPara_Copy(BgvUserPara *dst, const BgvUserPara *src);
 #ifdef HITLS_PROVIDER
-HIFHE_ERROR BgvUserPara_ParseFromBSL(BgvUserPara *p, const BSL_Param *param);
+HIFHE_ERROR Bgv_SetParaFromBSL(CRYPT_BGV_Ctx *ctx, const BSL_Param *param);
 #endif
 HIFHE_ERROR BgvUserPara_LoadPreset(BgvUserPara *p, int32_t presetId);
+HIFHE_ERROR Bgv_SetPreset(CRYPT_BGV_Ctx *ctx, int32_t presetId);
 /* Find or build this context's NTT tables for the resolved parameters. */
 HIFHE_ERROR BgvUserPara_EnsureLut(BgvUserPara *p, const BGVParameter *param);
 /* Block for the i-th ciphertext modulus, or for the plaintext modulus.

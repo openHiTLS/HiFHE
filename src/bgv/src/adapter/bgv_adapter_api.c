@@ -15,7 +15,6 @@
 
 /* EAL entry points; dispatch to Bgv_* and BgvCtrl_Dispatch. */
 
-#include <string.h>
 #include "hifhe_mem.h"
 #include "hifhe_err_internal.h"
 #include "crypt_types.h"
@@ -73,26 +72,7 @@ CRYPT_BGV_Ctx *CRYPT_BGV_DupCtx(CRYPT_BGV_Ctx *src)
 #ifdef HITLS_PROVIDER
 int32_t CRYPT_BGV_SetParaEx(CRYPT_BGV_Ctx *ctx, const BSL_Param *param)
 {
-    if (ctx == NULL || param == NULL) {
-        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
-        return HIFHE_NULL_INPUT;
-    }
-    BgvUserPara next;
-    BgvUserPara_Init(&next);
-    int32_t r = BgvUserPara_ParseFromBSL(&next, param);
-    if (r != HIFHE_SUCCESS) {
-        BgvUserPara_Clear(&next);
-        return r;
-    }
-    /* Bgv_BuildContext returns early once a context exists, so anything built
-     * on the previous parameters would keep being used while the ctrl surface
-     * reports the new ring. */
-    Bgv_FreeState(&ctx->bgv);
-    BgvUserPara_Clear(&ctx->para);
-    ctx->para = next;
-    memset(&next, 0, sizeof(next));
-    ctx->role = HIFHE_ROLE_PARA;
-    return HIFHE_SUCCESS;
+    return Bgv_SetParaFromBSL(ctx, param);
 }
 
 int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t valLen);

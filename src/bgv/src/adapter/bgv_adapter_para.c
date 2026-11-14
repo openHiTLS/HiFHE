@@ -54,6 +54,14 @@ static bool BgvUserPara_IsEmpty(const BgvUserPara *p)
     return p->set == 0u && p->cipherModBit.data == NULL && p->cipherMod.data == NULL && p->lutBlob == NULL;
 }
 
+static void BgvUserPara_Commit(CRYPT_BGV_Ctx *ctx, const BgvUserPara *next)
+{
+    Bgv_FreeState(&ctx->bgv);
+    BgvUserPara_Clear(&ctx->para);
+    ctx->para = *next;
+    ctx->role = HIFHE_ROLE_PARA;
+}
+
 /* True when the tables held match what `param` needs. */
 static bool LutMatches(const BgvUserPara *p, const BGVParameter *param)
 {
@@ -197,7 +205,7 @@ HIFHE_ERROR BgvUserPara_Copy(BgvUserPara *dst, const BgvUserPara *src)
 }
 
 #ifdef HITLS_PROVIDER
-static HIFHE_ERROR BgvUserPara_ParseFromBSLInto(BgvUserPara *p, const BSL_Param *param)
+static HIFHE_ERROR BgvUserPara_ParseFromBSL(BgvUserPara *p, const BSL_Param *param)
 {
 #ifndef HIFHE_CUSTOM_PARAM
     (void)p;
@@ -274,23 +282,20 @@ static HIFHE_ERROR BgvUserPara_ParseFromBSLInto(BgvUserPara *p, const BSL_Param 
 #endif
 }
 
-HIFHE_ERROR BgvUserPara_ParseFromBSL(BgvUserPara *p, const BSL_Param *param)
+HIFHE_ERROR Bgv_SetParaFromBSL(CRYPT_BGV_Ctx *ctx, const BSL_Param *param)
 {
-    if (p == NULL || param == NULL) {
+    if (ctx == NULL || param == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
-    if (!BgvUserPara_IsEmpty(p)) {
-        HIFHE_ERR_PUSH_ERROR(HIFHE_BAD_STATE);
-        return HIFHE_BAD_STATE;
-    }
-    BgvUserPara_Init(p);
-    int32_t ret = BgvUserPara_ParseFromBSLInto(p, param);
+    BgvUserPara next;
+    BgvUserPara_Init(&next);
+    int32_t ret = BgvUserPara_ParseFromBSL(&next, param);
     if (ret != HIFHE_SUCCESS) {
-        BgvUserPara_Clear(p);
-        BgvUserPara_Init(p);
+        BgvUserPara_Clear(&next);
         return ret;
     }
+    BgvUserPara_Commit(ctx, &next);
     return HIFHE_SUCCESS;
 }
 
@@ -337,12 +342,27 @@ HIFHE_ERROR BgvUserPara_LoadPreset(BgvUserPara *p, int32_t presetId)
         HIFHE_ERR_PUSH_ERROR(HIFHE_BAD_STATE);
         return HIFHE_BAD_STATE;
     }
-    BgvUserPara_Init(p);
     int32_t ret = BgvUserPara_LoadPresetInto(p, presetId);
     if (ret != HIFHE_SUCCESS) {
         BgvUserPara_Clear(p);
         BgvUserPara_Init(p);
         return ret;
     }
+    return HIFHE_SUCCESS;
+}
+
+HIFHE_ERROR Bgv_SetPreset(CRYPT_BGV_Ctx *ctx, int32_t presetId)
+{
+    if (ctx == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
+        return HIFHE_NULL_INPUT;
+    }
+    BgvUserPara next;
+    BgvUserPara_Init(&next);
+    int32_t ret = BgvUserPara_LoadPreset(&next, presetId);
+    if (ret != HIFHE_SUCCESS) {
+        return ret;
+    }
+    BgvUserPara_Commit(ctx, &next);
     return HIFHE_SUCCESS;
 }

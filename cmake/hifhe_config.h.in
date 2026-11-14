@@ -18,5 +18,6 @@
 #cmakedefine HIFHE_ERR
 
 #cmakedefine HIFHE_CUSTOM_PARAM
+#cmakedefine HIFHE_INT128
 
 #endif

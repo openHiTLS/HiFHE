@@ -13,7 +13,6 @@ HiFHE 当前提供下面列出的能力，公共接口暂不提供密文×密文
 | BGV | 整数向量；运算结果按明文模数 t 取模 | 预设参数、编解码、密钥生成、加解密、密文加密文、密文加明文、密文×明文、取负和加噪 |
 
 - **数据传输**：支持明文、密文的序列化与反序列化，用于存储和传输；BGV 支持原生接口与 Provider 之间的密文互通。
-- **按需裁剪**：BGV 和 Provider 接入可独立启用或关闭。
 
 支持独立 C API 和 openHiTLS Provider 两种接入方式。C API 见 [hifhe.h](include/hifhe.h)，
 通过不透明的 `HIFHE_Ctx` 和 `HIFHE_HEText` 管理上下文、明文和密文，传输时转换为字节流。
@@ -44,8 +43,8 @@ Demo 中 A 加密查询，B 计算条目与查询的差值、乘以非零掩码�
 ## 构建
 
 依赖 CMake 3.16 或更高版本、C11 编译器和 openHiTLS。不传
-`--hitls_dir` 时，脚本会下载并编译 openHiTLS。默认同时生成
-`libhifhe.so` 和 `libhifhe.a`。
+`--hitls_dir` 时，脚本会下载并编译 openHiTLS。默认开启 Provider，同时生成
+`libhifhe.so` 和 `libhifhe.a`。可通过 `--disable provider` 关闭 Provider。
 
 ```sh
 bash testcode/script/build_hifhe.sh
@@ -55,8 +54,6 @@ bash testcode/script/build_hifhe.sh
 
 ```sh
 bash testcode/script/build_hifhe.sh --hitls_dir /path/to/openHiTLS
-# 当前工作区：
-bash testcode/script/build_hifhe.sh --hitls_dir /usr1/cq/openhitls/openhitls
 ```
 
 只生成一种库：
@@ -71,12 +68,7 @@ bash testcode/script/build_hifhe.sh static
 ```sh
 cmake -S . -B build \
     -DHITLS_ROOT_PATH=/path/to/openHiTLS \
-    -DHITLS_LIB_DIR=/path/to/openHiTLS/build \
-    -DHIFHE_BUILD_SHARED=ON \
-    -DHIFHE_BUILD_STATIC=ON \
-    -DHIFHE_BGV=ON \
-    -DHIFHE_ENABLE_ASAN=OFF \
-    -DHIFHE_ENABLE_GCOV=OFF
+    -DHITLS_LIB_DIR=/path/to/openHiTLS/build
 cmake --build build --parallel
 ```
 
@@ -89,23 +81,18 @@ CMake 配置：
 | `HIFHE_BUILD_SHARED` | `ON` | 生成 `libhifhe.so` |
 | `HIFHE_BUILD_STATIC` | `ON` | 生成 `libhifhe.a` |
 | `HIFHE_BGV` | `ON` | 必须启用；关闭时配置报错 |
-| `HIFHE_CUSTOM_PARAM` | `OFF`；`HIFHE_BUILD_TESTS=ON` 时为 `ON` | `OFF` 为简单模式，移除自定义参数、素数搜索与校验、原生 API 交换格式选择、评估密钥、密钥切换、密文与密文乘法、旋转和槽映射；`ON` 启用这些功能。 |
-| `HITLS_PROVIDER` | `OFF` | 构建 openHiTLS Provider 接入和 BSL 参数适配，将 `hifhe_provider_objects` 纳入 `libhifhe.so` / `libhifhe.a`；关闭时依赖 Provider 的 SDV 用例会跳过（Provider 加载套件还需要共享库）。 |
+| `HIFHE_CUSTOM_PARAM` | `ON` | `OFF` 时移除自定义参数、素数搜索与校验、原生 API 交换格式选择、评估密钥、密钥切换、密文与密文乘法、旋转和槽映射。 |
+| `HITLS_PROVIDER` | `OFF` | 构建 openHiTLS Provider 和 BSL 参数适配 |
 | `HIFHE_ERR` | `ON` | 记录错误详情；关闭后查询错误栈返回成功 |
-| `HIFHE_BUILD_TESTS` | `OFF` | 构建原生接口及内核白盒用例 |
-| `HIFHE_ENABLE_ASAN` | `OFF` | 启用 AddressSanitizer |
-| `HIFHE_ENABLE_GCOV` | `OFF` | 启用覆盖率 |
 
-至少启用一种库类型。BGV 是唯一算法，不能关闭。仅使用原生接口时，可以关闭 Provider：
+构建脚本通过 `asan` 和 `gcov` 直接添加对应编译、链接选项；`add-options=FLAGS` 可传入自定义编译选项。
 
-```sh
-bash testcode/script/build_hifhe.sh --disable provider
-```
+至少启用一种库类型。
 
-发布脚本默认以 `HIFHE_CUSTOM_PARAM=OFF` 生成裁剪后的库；测试构建默认 `HIFHE_CUSTOM_PARAM=ON`，而 `HITLS_PROVIDER` 无论测试模式如何都默认 `OFF`。两个选项相互独立，显式 `-D` 设置和已有 CMake 缓存值优先。ASan workflow 会将 provider 矩阵值传给 SDV 构建脚本。基准测试脚本在独立目录中构建完整特性。完整库构建：
+关闭自定义参数特性：
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHIFHE_CUSTOM_PARAM=ON -DHITLS_PROVIDER=ON
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHIFHE_CUSTOM_PARAM=OFF
 cmake --build build --parallel
 ```
 
@@ -122,37 +109,9 @@ cc -DHITLS_PROVIDER -I/path/to/prefix/include \
 通过 `add_subdirectory` 链接 `hifhe_provider` CMake 目标时，Provider 开启后会自动传递该宏。
 直接使用安装 SDK 的原生应用不需要定义此宏。
 
-## 测试
-
-所有用例统一放在 `testcode/sdv`，使用 `.c + .data` 和通用 SDV 断言、执行器。
-增加 `-DHIFHE_BUILD_TESTS=ON` 后，默认构建当前特性支持的全部套件：
-
-```sh
-cmake -S . -B build -DHIFHE_BUILD_TESTS=ON
-cmake --build build --parallel
-ctest --test-dir build --output-on-failure
-```
-
-公共接口用例链接正式库，内核用例直接链接实现对象，Provider 用例动态加载正式库。
-也可以通过脚本构建和执行同一批套件：
-
-```sh
-bash testcode/script/build_sdv.sh
-bash testcode/script/execute_sdv.sh
-```
-
-Provider 与原生 API 各有一套 Demo，均覆盖一次加密、无密钥服务端计算与客户端解密：
-
-```sh
-cmake -S . -B build -DHIFHE_CUSTOM_PARAM=ON -DHITLS_PROVIDER=ON
-cmake --build build --parallel
-bash testcode/script/build_demo.sh
-./testcode/output/demo/hifhe_bgv_provider_demo  # Provider
-./testcode/output/demo/hifhe_bgv_demo           # 原生 API
-```
+Demo 构建和运行方法见 [Demo 说明](testcode/demo/README.md)。
 
 随机数与 Hash 固定使用内置 openHiTLS 实现。
 
-原生参数仅使用 `HIFHE_SetParaById`；不提供参数对象和密文×密文能力。公私钥通过 `HIFHE_ExportPubKey`、`HIFHE_ExportPrvKey`、`HIFHE_ImportPubKey`、`HIFHE_ImportPrvKey` 导入导出，Provider 自身不注册密钥传递接口。
-`HIFHE_Mul` 支持密文×明文，原生接口不依赖 `BSL_Param`。
-`-DHITLS_PROVIDER=OFF` 关闭 Provider 及 BSL 参数适配，并裁剪相关用例。
+公私钥通过 `HIFHE_ExportPubKey`、`HIFHE_ExportPrvKey`、`HIFHE_ImportPubKey`、`HIFHE_ImportPrvKey` 导入导出，Provider 自身不注册密钥传递接口。
+原生接口不依赖 `BSL_Param`。

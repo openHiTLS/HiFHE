@@ -19,20 +19,17 @@
  * integer type holds on a 32-bit target such as armv7. The pair below is that
  * carrier everywhere, and these operations are the only code that knows how it
  * is built: one instruction each where the compiler has a 128-bit type, 32-bit
- * limbs where it has not. Define HIFHE_NO_INT128 to take the second path on a
- * target that offers the first, which is how it is tested. */
+ * limbs where it has not. Define HIFHE_INT128 to take the first path when the
+ * compiler supports it. */
 
 #ifndef HIFHE_KERNEL_UINT128_H
 #define HIFHE_KERNEL_UINT128_H
 
 #include <stdint.h>
+#include "hifhe_config.h"
 
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-#if defined(__SIZEOF_INT128__) && !defined(HIFHE_NO_INT128)
-#define HIFHE_U128_NATIVE 1
 #endif
 
 /* The low word first, then the high word. Conversion to and from the
@@ -55,7 +52,7 @@ static inline Uint128 Kernel_U128From64(uint64_t v)
     return Kernel_U128Make(0u, v);
 }
 
-#ifdef HIFHE_U128_NATIVE
+#ifdef HIFHE_INT128
 /* Every operation below goes through these two, so the generated code is the
  * compiler's own 128-bit arithmetic and nothing is paid for the pair. */
 typedef unsigned __int128 Uint128Native;
@@ -74,7 +71,7 @@ static inline Uint128 Kernel_U128FromNative(Uint128Native v)
 /* a * b, both words of it. */
 static inline Uint128 Kernel_U128Mul(uint64_t a, uint64_t b)
 {
-#ifdef HIFHE_U128_NATIVE
+#ifdef HIFHE_INT128
     return Kernel_U128FromNative((Uint128Native)a * (Uint128Native)b);
 #else
     uint64_t aLo = a & 0xffffffffu;
@@ -107,7 +104,7 @@ static inline uint64_t Kernel_MulHi64(uint64_t a, uint64_t b)
 
 static inline Uint128 Kernel_U128Add(Uint128 a, Uint128 b)
 {
-#ifdef HIFHE_U128_NATIVE
+#ifdef HIFHE_INT128
     return Kernel_U128FromNative(Kernel_U128ToNative(a) + Kernel_U128ToNative(b));
 #else
     Uint128 r;
@@ -119,7 +116,7 @@ static inline Uint128 Kernel_U128Add(Uint128 a, Uint128 b)
 
 static inline Uint128 Kernel_U128AddU64(Uint128 a, uint64_t v)
 {
-#ifdef HIFHE_U128_NATIVE
+#ifdef HIFHE_INT128
     return Kernel_U128FromNative(Kernel_U128ToNative(a) + (Uint128Native)v);
 #else
     Uint128 r;
@@ -131,7 +128,7 @@ static inline Uint128 Kernel_U128AddU64(Uint128 a, uint64_t v)
 
 static inline Uint128 Kernel_U128Sub(Uint128 a, Uint128 b)
 {
-#ifdef HIFHE_U128_NATIVE
+#ifdef HIFHE_INT128
     return Kernel_U128FromNative(Kernel_U128ToNative(a) - Kernel_U128ToNative(b));
 #else
     Uint128 r;
@@ -144,7 +141,7 @@ static inline Uint128 Kernel_U128Sub(Uint128 a, Uint128 b)
 /* acc + a * b, the accumulation the lazy key-switch loop runs per coefficient. */
 static inline Uint128 Kernel_U128MulAdd(Uint128 acc, uint64_t a, uint64_t b)
 {
-#ifdef HIFHE_U128_NATIVE
+#ifdef HIFHE_INT128
     return Kernel_U128FromNative(Kernel_U128ToNative(acc) + (Uint128Native)a * (Uint128Native)b);
 #else
     return Kernel_U128Add(acc, Kernel_U128Mul(a, b));
@@ -154,7 +151,7 @@ static inline Uint128 Kernel_U128MulAdd(Uint128 acc, uint64_t a, uint64_t b)
 /* The low 128 bits of a * b, for a multiplier that is itself wider than a word. */
 static inline Uint128 Kernel_U128MulU64(Uint128 a, uint64_t b)
 {
-#ifdef HIFHE_U128_NATIVE
+#ifdef HIFHE_INT128
     return Kernel_U128FromNative(Kernel_U128ToNative(a) * (Uint128Native)b);
 #else
     Uint128 r = Kernel_U128Mul(a.lo, b);
@@ -167,7 +164,7 @@ static inline Uint128 Kernel_U128MulU64(Uint128 a, uint64_t b)
  * constant it owns. */
 static inline Uint128 Kernel_U128Shl(Uint128 a, uint32_t n)
 {
-#ifdef HIFHE_U128_NATIVE
+#ifdef HIFHE_INT128
     return Kernel_U128FromNative(Kernel_U128ToNative(a) << n);
 #else
     if (n == 0u) {
@@ -182,7 +179,7 @@ static inline Uint128 Kernel_U128Shl(Uint128 a, uint32_t n)
 
 static inline Uint128 Kernel_U128Shr(Uint128 a, uint32_t n)
 {
-#ifdef HIFHE_U128_NATIVE
+#ifdef HIFHE_INT128
     return Kernel_U128FromNative(Kernel_U128ToNative(a) >> n);
 #else
     if (n == 0u) {
@@ -199,7 +196,7 @@ static inline Uint128 Kernel_U128Shr(Uint128 a, uint32_t n)
  * compares a secret-derived fraction here. */
 static inline uint64_t Kernel_U128Gt(Uint128 a, Uint128 b)
 {
-#ifdef HIFHE_U128_NATIVE
+#ifdef HIFHE_INT128
     return (uint64_t)(Kernel_U128ToNative(a) > Kernel_U128ToNative(b));
 #else
     uint64_t hiGt = (uint64_t)(a.hi > b.hi);

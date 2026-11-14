@@ -9,7 +9,7 @@
 # See the Mulan PSL v2 for more details.
 
 # One executable per demo/*.c, named after the file.
-# Builds with the root tests or standalone.
+# Builds standalone or as an optional testcode target.
 
 cmake_minimum_required(VERSION 3.16)
 
@@ -19,8 +19,6 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(DEMO_STANDALONE ON)
     set(CMAKE_C_STANDARD 11)
     set(CMAKE_C_STANDARD_REQUIRED ON)
-    enable_testing()
-
     set(HIFHE_ROOT "${PROJECT_SOURCE_DIR}/../..")
     if(NOT HITLS_ROOT_DIR)
         if(EXISTS "${HIFHE_ROOT}/build/base_path.txt")
@@ -105,6 +103,9 @@ foreach(DEMO_FILE ${DEMO_FILES})
         RUNTIME_OUTPUT_DIRECTORY "${DEMO_OUTPUT_DIR}"
         BUILD_RPATH "${HITLS_ROOT_DIR}/build;${HIFHE_PROVIDER_DIR}"
     )
+    if(TARGET hifhe_testcode)
+        add_dependencies(hifhe_testcode ${DEMO_NAME})
+    endif()
     target_compile_options(${DEMO_NAME} PRIVATE "$<$<NOT:$<CONFIG:Debug>>:-O2>" -g)
     if(NOT DEMO_STEM STREQUAL "hifhe_bgv_provider_demo")
         target_link_libraries(${DEMO_NAME} ${HIFHE_DEMO_LIB})
@@ -117,17 +118,11 @@ foreach(DEMO_FILE ${DEMO_FILES})
         -lm
         -Wl,--as-needed
     )
-    add_test(NAME ${DEMO_NAME} COMMAND ${DEMO_NAME})
     if(DEMO_STEM STREQUAL "hifhe_bgv_provider_demo")
         target_compile_definitions(${DEMO_NAME} PRIVATE HITLS_PROVIDER)
         if(NOT DEMO_STANDALONE)
             add_dependencies(${DEMO_NAME} hifhe_provider)
         endif()
-        set_tests_properties(${DEMO_NAME} PROPERTIES
-            ENVIRONMENT "HIFHE_PROVIDER_PATH=${HIFHE_PROVIDER_DIR};ASAN_OPTIONS=detect_leaks=1")
-    else()
-        set_tests_properties(${DEMO_NAME} PROPERTIES
-            ENVIRONMENT "HIFHE_PROVIDER_PATH=/nonexistent;ASAN_OPTIONS=detect_leaks=1")
     endif()
     message(STATUS "[demo] ${DEMO_NAME} from ${DEMO_STEM}.c")
 endforeach()

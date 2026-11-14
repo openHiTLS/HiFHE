@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include "hifhe_config.h"
 #include "hifhe.h"
 #include "crypt_eal_init.h"
 #include "crypt_eal_pkey.h"
@@ -22,6 +23,7 @@
 #include "crypt_errno.h"
 #include "test.h"
 /* END_HEADER */
+#if defined(HITLS_PROVIDER) && HIFHE_BUILD_SHARED
 
 /* The fixed part of HiFHE's own wire format, ahead of the algorithm's body.
  * The cases below reach into that body by offset. */
@@ -56,9 +58,14 @@ static void Put32(uint8_t *p, uint32_t value)
     }
 }
 
+#endif
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_CONTEXT_CTRL_PROVIDER_TC001(int cmd)
 {
+#if !defined(HITLS_PROVIDER) || !HIFHE_BUILD_SHARED
+    (void)cmd;
+    SKIP_TEST();
+#else
     CRYPT_EAL_PkeyCtx *ctx = NULL, *dup = NULL;
     uint8_t *pt = NULL, *ct = NULL, *decoded = NULL;
     uint8_t seed[32] = {1};
@@ -135,12 +142,16 @@ EXIT:
         }
     }
     CRYPT_EAL_Cleanup(CRYPT_EAL_INIT_ALL);
+#endif
 }
 /* END_CASE */
 
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_PROVIDER_TC001(void)
 {
+#if !defined(HITLS_PROVIDER) || !HIFHE_BUILD_SHARED
+    SKIP_TEST();
+#else
     HIFHE_Ctx *a = NULL;
     CRYPT_EAL_PkeyCtx *b = NULL;
     HIFHE_HEText *pt = NULL, *ct = NULL, *r = NULL, *decoded = NULL;
@@ -232,12 +243,17 @@ EXIT:
         }
     }
     CRYPT_EAL_Cleanup(CRYPT_EAL_INIT_ALL);
+#endif
 }
 /* END_CASE */
 
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_PROVIDER_MUL_SIZE_TC001(int components)
 {
+#if !defined(HITLS_PROVIDER) || !HIFHE_BUILD_SHARED
+    (void)components;
+    SKIP_TEST();
+#else
     HIFHE_Ctx *a = NULL;
     CRYPT_EAL_PkeyCtx *b = NULL;
     HIFHE_HEText *pt = NULL, *ct = NULL, *product = NULL, *decoded = NULL;
@@ -323,12 +339,16 @@ EXIT:
         }
     }
     CRYPT_EAL_Cleanup(CRYPT_EAL_INIT_ALL);
+#endif
 }
 /* END_CASE */
 
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_NATIVE_PROVIDER_INTEROP_TC001(void)
 {
+#if !defined(HITLS_PROVIDER) || !HIFHE_BUILD_SHARED
+    SKIP_TEST();
+#else
     HIFHE_Ctx *client = NULL;
     CRYPT_EAL_PkeyCtx *server = NULL;
     HIFHE_HEText *plain = NULL, *cipher = NULL, *reply = NULL, *answer = NULL;
@@ -421,12 +441,16 @@ EXIT:
         }
     }
     CRYPT_EAL_Cleanup(CRYPT_EAL_INIT_ALL);
+#endif
 }
 /* END_CASE */
 
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_PROVIDER_NATIVE_INTEROP_TC001(void)
 {
+#if !defined(HITLS_PROVIDER) || !HIFHE_BUILD_SHARED
+    SKIP_TEST();
+#else
     CRYPT_EAL_PkeyCtx *client = NULL;
     HIFHE_Ctx *server = NULL;
     HIFHE_HEText *received = NULL, *bucketPlain = NULL, *difference = NULL, *factorPlain = NULL;
@@ -508,5 +532,6 @@ EXIT:
         }
     }
     CRYPT_EAL_Cleanup(CRYPT_EAL_INIT_ALL);
+#endif
 }
 /* END_CASE */
