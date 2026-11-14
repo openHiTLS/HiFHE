@@ -46,15 +46,12 @@ void BgvUserPara_Clear(BgvUserPara *p)
     if (p->lutBlob != NULL) {
         HifheFree(p->lutBlob);
     }
-    BgvUserPara *next = p->lutNext;
-    while (next != NULL) {
-        BgvUserPara *after = next->lutNext;
-        next->lutNext = NULL;
-        BgvUserPara_Clear(next);
-        HifheFree(next);
-        next = after;
-    }
     memset(p, 0, sizeof(*p));
+}
+
+static bool BgvUserPara_IsEmpty(const BgvUserPara *p)
+{
+    return p->set == 0u && p->cipherModBit.data == NULL && p->cipherMod.data == NULL && p->lutBlob == NULL;
 }
 
 /* True when the tables held match what `param` needs. */
@@ -115,54 +112,24 @@ static HIFHE_ERROR BuildLutInto(BgvUserPara *p, const BGVParameter *param)
     return HIFHE_SUCCESS;
 }
 
-HIFHE_ERROR BgvUserPara_EnsureLut(BgvUserPara *p, const BGVParameter *param, const BgvUserPara **holder)
+HIFHE_ERROR BgvUserPara_EnsureLut(BgvUserPara *p, const BGVParameter *param)
 {
-    if (p == NULL || param == NULL || holder == NULL) {
+    if (p == NULL || param == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
-    *holder = NULL;
-    uint32_t entries = 0u;
-    BgvUserPara *tail = p;
-    for (BgvUserPara *n = p; n != NULL; n = n->lutNext) {
-        if (LutMatches(n, param)) {
-            *holder = n;
-            return HIFHE_SUCCESS;
-        }
-        if (n->lutBlob != NULL) {
-            entries++;
-        }
-        tail = n;
+    if (LutMatches(p, param)) {
+        return HIFHE_SUCCESS;
     }
-    /* An empty head takes the first set, as the single-entry cache did. */
-    if (p->lutBlob == NULL) {
-        int32_t r = BuildLutInto(p, param);
-        if (r == HIFHE_SUCCESS) {
-            *holder = p;
-        }
-        return r;
+    if (p->lutBlob != NULL) {
+        HifheFree(p->lutBlob);
+        p->lutBlob = NULL;
+        p->lutPolyDegree = 0u;
+        p->lutLimbs = 0u;
+        p->lutPlainMod = 0u;
     }
-    /* Tables already handed out stay put: contexts borrow pointers into
-     * them. A new set gets its own node. */
-    if (entries >= HIFHE_BGV_LUT_CACHE_ENTRIES) {
-        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
-        return HIFHE_PARAM_INVALID;
-    }
-    BgvUserPara *node = (BgvUserPara *)HifheMalloc((uint32_t)sizeof(BgvUserPara));
-    if (node == NULL) {
-        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
-        return HIFHE_MEMORY_ERROR;
-    }
-    BgvUserPara_Init(node);
-    int32_t r = BuildLutInto(node, param);
-    if (r != HIFHE_SUCCESS) {
-        BgvUserPara_Clear(node);
-        HifheFree(node);
-        return r;
-    }
-    tail->lutNext = node;
-    *holder = node;
-    return HIFHE_SUCCESS;
+    int32_t r = BuildLutInto(p, param);
+    return r;
 }
 
 uint64_t *BgvUserPara_CipherLut(const BgvUserPara *p, uint32_t index)
@@ -191,37 +158,53 @@ HIFHE_ERROR BgvUserPara_Copy(BgvUserPara *dst, const BgvUserPara *src)
     *dst = *src;
     memset(&dst->cipherModBit, 0, sizeof(dst->cipherModBit));
     memset(&dst->cipherMod, 0, sizeof(dst->cipherMod));
-    /* Shallow cache copy */
     dst->lutBlob = NULL;
-    dst->lutLimbs = 0u;
-    dst->lutPolyDegree = 0u;
-    dst->lutNext = NULL;
     int32_t r = Uint32Vector_Create(&dst->cipherModBit, src->cipherModBit.data, src->cipherModBit.size);
     if (r != HIFHE_SUCCESS) {
         return r;
     }
-    if (src->cipherMod.size == 0u) {
+    if (src->cipherMod.size != 0u) {
+        r = Uint64Vector_Create(&dst->cipherMod, src->cipherMod.data, src->cipherMod.size);
+        if (r != HIFHE_SUCCESS) {
+            return r;
+        }
+    }
+    if (src->lutBlob == NULL) {
+        dst->lutPolyDegree = 0u;
+        dst->lutLimbs = 0u;
+        dst->lutPlainMod = 0u;
+        memset(dst->lutCipherMod, 0, sizeof(dst->lutCipherMod));
         return HIFHE_SUCCESS;
     }
-    return Uint64Vector_Create(&dst->cipherMod, src->cipherMod.data, src->cipherMod.size);
+    if (src->lutPolyDegree == 0u || src->lutLimbs == 0u || src->lutLimbs > HIFHE_BGV_MAX_CHAIN_LEN) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
+        return HIFHE_PARAM_INVALID;
+    }
+    size_t wordsPerTable = HIFHE_NTT_TABLE_WORDS(src->lutPolyDegree);
+    size_t tableCount = (size_t)src->lutLimbs + 1u;
+    if (wordsPerTable > UINT32_MAX / sizeof(uint64_t) / tableCount) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
+        return HIFHE_PARAM_INVALID;
+    }
+    uint32_t bytes = (uint32_t)(wordsPerTable * tableCount * sizeof(uint64_t));
+    dst->lutBlob = HifheMalloc(bytes);
+    if (dst->lutBlob == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
+        return HIFHE_MEMORY_ERROR;
+    }
+    memcpy(dst->lutBlob, src->lutBlob, bytes);
+    return HIFHE_SUCCESS;
 }
 
 #ifdef HITLS_PROVIDER
-HIFHE_ERROR BgvUserPara_ParseFromBSL(BgvUserPara *p, const BSL_Param *param)
+static HIFHE_ERROR BgvUserPara_ParseFromBSLInto(BgvUserPara *p, const BSL_Param *param)
 {
-    if (p == NULL || param == NULL) {
-        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
-        return HIFHE_NULL_INPUT;
-    }
-
 #ifndef HIFHE_CUSTOM_PARAM
+    (void)p;
+    (void)param;
     HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
     return HIFHE_PARAM_INVALID;
 #else
-    /* Reset the para bag; the caller may re-SetPara across a lifetime. */
-    BgvUserPara_Clear(p);
-    BgvUserPara_Init(p);
-
     for (const BSL_Param *cur = param; cur->key != 0; ++cur) {
         switch (cur->key) {
             case HIFHE_PARAM_BGV_POLY_DEGREE:
@@ -291,22 +274,36 @@ HIFHE_ERROR BgvUserPara_ParseFromBSL(BgvUserPara *p, const BSL_Param *param)
 #endif
 }
 
-#endif
-
-HIFHE_ERROR BgvUserPara_LoadPreset(BgvUserPara *p, int32_t presetId)
+HIFHE_ERROR BgvUserPara_ParseFromBSL(BgvUserPara *p, const BSL_Param *param)
 {
-    if (p == NULL) {
+    if (p == NULL || param == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
+    if (!BgvUserPara_IsEmpty(p)) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_BAD_STATE);
+        return HIFHE_BAD_STATE;
+    }
+    BgvUserPara_Init(p);
+    int32_t ret = BgvUserPara_ParseFromBSLInto(p, param);
+    if (ret != HIFHE_SUCCESS) {
+        BgvUserPara_Clear(p);
+        BgvUserPara_Init(p);
+        return ret;
+    }
+    return HIFHE_SUCCESS;
+}
+
+#endif
+
+static HIFHE_ERROR BgvUserPara_LoadPresetInto(BgvUserPara *p, int32_t presetId)
+{
     BgvPresetPara preset;
     int32_t ret = BGV_Preset_Load(&preset, presetId);
     if (ret != HIFHE_SUCCESS) {
         return ret;
     }
 
-    BgvUserPara_Clear(p);
-    BgvUserPara_Init(p);
     p->polyDegree = preset.polyDegree;
     p->plainModBit = preset.plainModBit;
     p->plainMod = preset.plainMod;
@@ -327,5 +324,25 @@ HIFHE_ERROR BgvUserPara_LoadPreset(BgvUserPara *p, int32_t presetId)
         }
     }
     p->set = 1u;
+    return HIFHE_SUCCESS;
+}
+
+HIFHE_ERROR BgvUserPara_LoadPreset(BgvUserPara *p, int32_t presetId)
+{
+    if (p == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
+        return HIFHE_NULL_INPUT;
+    }
+    if (!BgvUserPara_IsEmpty(p)) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_BAD_STATE);
+        return HIFHE_BAD_STATE;
+    }
+    BgvUserPara_Init(p);
+    int32_t ret = BgvUserPara_LoadPresetInto(p, presetId);
+    if (ret != HIFHE_SUCCESS) {
+        BgvUserPara_Clear(p);
+        BgvUserPara_Init(p);
+        return ret;
+    }
     return HIFHE_SUCCESS;
 }

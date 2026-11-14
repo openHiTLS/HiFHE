@@ -63,26 +63,12 @@ HIFHE_Ctx *HIFHE_New(int32_t id)
     return Hifhe_CtxNew(id, NULL);
 }
 
-void Hifhe_ParamRetain(HifheParamSnapshot *p)
-{
-    atomic_fetch_add_explicit(&p->references, 1, memory_order_relaxed);
-}
-
-void Hifhe_ParamRelease(HifheParamSnapshot *p)
-{
-    if (p != NULL && atomic_fetch_sub_explicit(&p->references, 1, memory_order_acq_rel) == 1) {
-        p->method->ctxFree(p->math);
-        HifheFree(p);
-    }
-}
-
 void HIFHE_Free(HIFHE_Ctx *ctx)
 {
     if (ctx == NULL) {
         return;
     }
     ctx->method->ctxFree(ctx->data);
-    Hifhe_ParamRelease(ctx->params);
     HifheCleanse(ctx, sizeof(*ctx));
     HifheFree(ctx);
 }
@@ -93,24 +79,16 @@ int32_t Hifhe_SetParam(HIFHE_Ctx *ctx, const HifheParamConfig *p)
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
-    if (ctx->params != NULL) {
+    if (ctx->data != NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_REPEATED_SET);
         return HIFHE_PARAM_REPEATED_SET;
     }
-    HifheParamSnapshot *fresh = HifheCalloc(1, sizeof(*fresh));
-    if (fresh == NULL) {
-        HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
-        return HIFHE_MEMORY_ERROR;
-    }
-    atomic_init(&fresh->references, 1);
-    fresh->method = ctx->method;
-    fresh->config = *p;
-    fresh->config.useLutCache = ctx->useLutCache;
+    HifheParamConfig fresh = *p;
+    fresh.useLutCache = ctx->useLutCache;
     void *data = NULL;
-    int32_t ret = ctx->method->ctxNew(fresh, ctx->libCtx, &data);
+    int32_t ret = ctx->method->ctxNew(&fresh, ctx->libCtx, &data);
     if (ret != HIFHE_SUCCESS) {
         ctx->method->ctxFree(data);
-        Hifhe_ParamRelease(fresh);
         return ret;
     }
     ctx->params = fresh;
@@ -134,13 +112,12 @@ HIFHE_Ctx *Hifhe_CtxDup(const HIFHE_Ctx *src)
     if (dst == NULL) {
         return NULL;
     }
-    if (src->params != NULL) {
+    if (src->data != NULL) {
+        dst->params = src->params;
         dst->data = src->method->ctxDup(src->data, dst->libCtx);
         if (dst->data == NULL) {
             goto fail;
         }
-        dst->params = src->params;
-        Hifhe_ParamRetain(dst->params);
     }
     memcpy(dst->keysetId, src->keysetId, 16);
     dst->keyMask = src->keyMask;
@@ -158,7 +135,7 @@ int32_t HIFHE_KeyGen(HIFHE_Ctx *ctx)
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
-    if (ctx->params == NULL) {
+    if (ctx->data == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_NOT_SET);
         return HIFHE_PARAM_NOT_SET;
     }
@@ -202,7 +179,7 @@ int32_t Hifhe_HETextNew(const HIFHE_Ctx *ctx, void *data, HIFHE_HEText **out)
         HIFHE_ERR_PUSH_ERROR(HIFHE_MEMORY_ERROR);
         return HIFHE_MEMORY_ERROR;
     }
-    text->paramId = ctx->params->config.paramId;
+    text->paramId = ctx->params.paramId;
     text->method = ctx->method;
     text->data = data;
     *out = text;
@@ -224,7 +201,7 @@ static int32_t CheckCtx(const HIFHE_Ctx *ctx)
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
-    if (ctx->params == NULL) {
+    if (ctx->data == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_NOT_SET);
         return HIFHE_PARAM_NOT_SET;
     }
@@ -254,7 +231,7 @@ int32_t Hifhe_CheckText(const HIFHE_Ctx *ctx, const HIFHE_HEText *text, bool fla
         HIFHE_ERR_PUSH_ERROR(HIFHE_ALG_MISMATCH);
         return HIFHE_ALG_MISMATCH;
     }
-    if (text->paramId != ctx->params->config.paramId) {
+    if (text->paramId != ctx->params.paramId) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_MISMATCH);
         return HIFHE_PARAM_MISMATCH;
     }
@@ -277,7 +254,7 @@ static bool Overlap(const void *a, size_t an, const void *b, size_t bn)
     return a != NULL && b != NULL && (x <= y ? y - x < an : x - y < bn);
 }
 
-static int32_t CheckOut(HIFHE_HEText **out)
+int32_t Hifhe_CheckOut(HIFHE_HEText **out)
 {
     if (out == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
@@ -292,7 +269,7 @@ static int32_t CheckOut(HIFHE_HEText **out)
 
 int32_t HIFHE_Encode(const HIFHE_Ctx *ctx, const uint64_t *values, uint32_t count, HIFHE_HEText **out)
 {
-    int32_t ret = CheckOut(out);
+    int32_t ret = Hifhe_CheckOut(out);
     if (ret == HIFHE_SUCCESS) {
         ret = CheckCtx(ctx);
     }
@@ -303,11 +280,11 @@ int32_t HIFHE_Encode(const HIFHE_Ctx *ctx, const uint64_t *values, uint32_t coun
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
-    if (ctx->method->algId != HIFHE_BGV) {
+    if (ctx->method->encode == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_NOT_SUPPORTED);
         return HIFHE_NOT_SUPPORTED;
     }
-    if (count == 0 || count > ctx->params->config.slots) {
+    if (count == 0 || count > ctx->params.slots) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_INVALID_LENGTH);
         return HIFHE_INVALID_LENGTH;
     }
@@ -326,7 +303,7 @@ int32_t HIFHE_Decode(const HIFHE_Ctx *ctx, const HIFHE_HEText *text, uint64_t *v
     if (ret != HIFHE_SUCCESS) {
         return ret;
     }
-    if (ctx->method->algId != HIFHE_BGV) {
+    if (ctx->method->decode == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_NOT_SUPPORTED);
         return HIFHE_NOT_SUPPORTED;
     }
@@ -335,7 +312,7 @@ int32_t HIFHE_Decode(const HIFHE_Ctx *ctx, const HIFHE_HEText *text, uint64_t *v
         HIFHE_ERR_PUSH_ERROR(HIFHE_TEXT_TYPE_MISMATCH);
         return HIFHE_TEXT_TYPE_MISMATCH;
     }
-    uint32_t need = ctx->params->config.slots;
+    uint32_t need = ctx->params.slots;
     if (values == NULL || *count < need) {
         *count = need;
         if (values != NULL) {
@@ -403,7 +380,7 @@ int32_t Hifhe_CheckCompute(const HIFHE_Ctx *ctx, uint32_t op, const HIFHE_HEText
 
 int32_t HIFHE_Encrypt(HIFHE_Ctx *ctx, const HIFHE_HEText *plaintext, HIFHE_HEText **out)
 {
-    int32_t ret = CheckOut(out);
+    int32_t ret = Hifhe_CheckOut(out);
     if (ret == HIFHE_SUCCESS) {
         ret = Hifhe_CheckCompute(ctx, HIFHE_OP_ENCRYPT, plaintext, NULL);
     }
@@ -417,7 +394,7 @@ int32_t HIFHE_Encrypt(HIFHE_Ctx *ctx, const HIFHE_HEText *plaintext, HIFHE_HETex
 
 int32_t HIFHE_Decrypt(HIFHE_Ctx *ctx, const HIFHE_HEText *ciphertext, HIFHE_HEText **out)
 {
-    int32_t ret = CheckOut(out);
+    int32_t ret = Hifhe_CheckOut(out);
     if (ret == HIFHE_SUCCESS) {
         ret = Hifhe_CheckCompute(ctx, HIFHE_OP_DECRYPT, ciphertext, NULL);
     }
@@ -431,7 +408,7 @@ int32_t HIFHE_Decrypt(HIFHE_Ctx *ctx, const HIFHE_HEText *ciphertext, HIFHE_HETe
 
 int32_t HIFHE_Add(const HIFHE_Ctx *ctx, const HIFHE_HEText *para1, const HIFHE_HEText *para2, HIFHE_HEText **out)
 {
-    int32_t ret = CheckOut(out);
+    int32_t ret = Hifhe_CheckOut(out);
     if (ret == HIFHE_SUCCESS) {
         ret = Hifhe_CheckCompute(ctx, HIFHE_OP_ADD, para1, para2);
     }
@@ -449,7 +426,7 @@ int32_t HIFHE_Add(const HIFHE_Ctx *ctx, const HIFHE_HEText *para1, const HIFHE_H
 
 int32_t HIFHE_Mul(const HIFHE_Ctx *ctx, const HIFHE_HEText *para1, const HIFHE_HEText *para2, HIFHE_HEText **out)
 {
-    int32_t ret = CheckOut(out);
+    int32_t ret = Hifhe_CheckOut(out);
     if (ret == HIFHE_SUCCESS) {
         ret = Hifhe_CheckCompute(ctx, HIFHE_OP_MUL, para1, para2);
     }
@@ -471,60 +448,11 @@ int32_t HIFHE_Ctrl(HIFHE_Ctx *ctx, int32_t cmd, HIFHE_HEText *text, void *value,
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
-    if (ctx->method->algId != HIFHE_BGV) {
+    if (ctx->method->ctrl == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_NOT_SUPPORTED);
         return HIFHE_NOT_SUPPORTED;
     }
-    if (cmd != HIFHE_CTRL_BGV_SET_NEGATE && cmd != HIFHE_CTRL_BGV_RERANDOMIZE) {
-        if (cmd == HIFHE_CTRL_GET_OUTPUT_LEN) {
-            HIFHE_ERR_PUSH_ERROR(HIFHE_NOT_SUPPORTED);
-            return HIFHE_NOT_SUPPORTED;
-        }
-        return ctx->method->ctrl(ctx, cmd, text, value, valueLen);
-    }
-    if (text == NULL) {
-        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
-        return HIFHE_NULL_INPUT;
-    }
-    if (cmd == HIFHE_CTRL_BGV_SET_NEGATE) {
-        if (value != NULL) {
-            HIFHE_ERR_PUSH_ERROR(HIFHE_INVALID_ARGUMENT);
-            return HIFHE_INVALID_ARGUMENT;
-        }
-        if (valueLen != 0) {
-            HIFHE_ERR_PUSH_ERROR(HIFHE_INVALID_LENGTH);
-            return HIFHE_INVALID_LENGTH;
-        }
-        int32_t ret = Hifhe_CheckText(ctx, text, true);
-        if (ret != HIFHE_SUCCESS) {
-            return ret;
-        }
-        if (text->data->kind != HIFHE_TEXT_CIPHER) {
-            HIFHE_ERR_PUSH_ERROR(HIFHE_TEXT_TYPE_MISMATCH);
-            return HIFHE_TEXT_TYPE_MISMATCH;
-        }
-        text->data->flags = HIFHE_TEXT_NEGATE;
-        return HIFHE_SUCCESS;
-    }
-    if (value == NULL) {
-        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
-        return HIFHE_NULL_INPUT;
-    }
-    if (valueLen != sizeof(HIFHE_HEText *)) {
-        HIFHE_ERR_PUSH_ERROR(HIFHE_INVALID_LENGTH);
-        return HIFHE_INVALID_LENGTH;
-    }
-    HIFHE_HEText **out = value;
-    int32_t ret = CheckOut(out);
-    if (ret == HIFHE_SUCCESS) {
-        ret = Hifhe_CheckCompute(ctx, HIFHE_OP_NOISE, text, NULL);
-    }
-    if (ret != HIFHE_SUCCESS) {
-        return ret;
-    }
-    void *data = NULL;
-    ret = ctx->method->ctrl(ctx, cmd, text, &data, sizeof(data));
-    return ret != HIFHE_SUCCESS ? ret : Hifhe_HETextNew(ctx, data, out);
+    return ctx->method->ctrl(ctx, cmd, text, value, valueLen);
 }
 
 #define HIFHE_WIRE_TAG     "HFHE"
@@ -545,9 +473,9 @@ static void WriteHeader(const HIFHE_Ctx *ctx, uint32_t kind, uint32_t len, const
     Hifhe_Put32(p + 4, HIFHE_WIRE_VERSION | kind << 16);
     Hifhe_Put32(p + 8, (uint32_t)ctx->method->algId);
     Hifhe_Put32(p + 12, len);
-    Hifhe_Put32(p + 16, (uint32_t)ctx->params->config.paramId);
-    Hifhe_Put32(p + 20, ctx->params->config.slots);
-    Hifhe_Put32(p + 24, ctx->params->config.mulDepth);
+    Hifhe_Put32(p + 16, (uint32_t)ctx->params.paramId);
+    Hifhe_Put32(p + 20, ctx->params.slots);
+    Hifhe_Put32(p + 24, ctx->params.mulDepth);
     memcpy(p + HIFHE_WIRE_KEYSET, id, 16);
 }
 
@@ -586,8 +514,8 @@ static int32_t ReadHeader(const HIFHE_Ctx *ctx, const uint8_t *p, uint32_t len, 
         HIFHE_ERR_PUSH_ERROR(HIFHE_ALG_MISMATCH);
         return HIFHE_ALG_MISMATCH;
     }
-    if (Hifhe_Get32(p + 16) != (uint32_t)ctx->params->config.paramId ||
-        Hifhe_Get32(p + 20) != ctx->params->config.slots || Hifhe_Get32(p + 24) != ctx->params->config.mulDepth) {
+    if (Hifhe_Get32(p + 16) != (uint32_t)ctx->params.paramId ||
+        Hifhe_Get32(p + 20) != ctx->params.slots || Hifhe_Get32(p + 24) != ctx->params.mulDepth) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_MISMATCH);
         return HIFHE_PARAM_MISMATCH;
     }
@@ -733,7 +661,7 @@ int32_t HIFHE_Serialize(const HIFHE_Ctx *ctx, const HIFHE_HEText *text, uint8_t 
 
 int32_t HIFHE_Deserialize(const HIFHE_Ctx *ctx, const uint8_t *in, uint32_t len, HIFHE_HEText **out)
 {
-    int32_t ret = CheckOut(out);
+    int32_t ret = Hifhe_CheckOut(out);
     if (ret != HIFHE_SUCCESS) {
         return ret;
     }

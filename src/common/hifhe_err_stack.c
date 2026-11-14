@@ -14,6 +14,7 @@
 
 #include <stddef.h>
 
+#ifdef HIFHE_ERR
 typedef struct {
     int32_t error;
     const char *file;
@@ -101,3 +102,16 @@ void HIFHE_ErrPopToMark(void)
     }
     t_mark = 0u;
 }
+#else
+int32_t HIFHE_ErrPeekError(const char **file, uint32_t *line)
+{
+    (void)file;
+    (void)line;
+    return HIFHE_SUCCESS;
+}
+
+int32_t HIFHE_ErrPeekLastError(const char **file, uint32_t *line)
+{
+    return HIFHE_ErrPeekError(file, line);
+}
+#endif

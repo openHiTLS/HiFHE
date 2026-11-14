@@ -103,7 +103,8 @@ CMake options:
 | `HIFHE_BUILD_STATIC` | `ON` | Build `libhifhe.a` |
 | `HIFHE_BGV` | `ON` | Required; disabling BGV is a configuration error |
 | `HIFHE_CUSTOM_PARAM` | `OFF`; `ON` with `HIFHE_BUILD_TESTS=ON` | `OFF` selects simple mode, removing custom parameters, prime search and validation, native-API interchange format selection, evaluation keys, key switching, ciphertext/ciphertext multiplication, rotations and slot map. `ON` enables these features. |
-| `HITLS_PROVIDER` | `OFF` in release builds, `ON` in test builds | Builds the openHiTLS provider integration and BSL parameter adapters, including `hifhe_provider_objects` in `libhifhe.so` / `libhifhe.a`, and enables provider-dependent SDV suites in test builds (the provider loading suite requires the shared library). |
+| `HITLS_PROVIDER` | `OFF` | Builds the openHiTLS provider integration and BSL parameter adapters, including `hifhe_provider_objects` in `libhifhe.so` / `libhifhe.a`. Provider-dependent SDV cases are skipped when disabled; the provider loading suite also requires the shared library. |
+| `HIFHE_ERR` | `ON` | Record error details; when disabled, error peek returns success |
 | `HIFHE_BUILD_TESTS` | `OFF` | Build native tests and internal regressions |
 | `HIFHE_ENABLE_ASAN` | `OFF` | Enable AddressSanitizer |
 | `HIFHE_ENABLE_GCOV` | `OFF` | Enable coverage |
@@ -115,7 +116,7 @@ disabled. For native API use, Provider integration can be disabled:
 bash testcode/script/build_hifhe.sh --disable provider
 ```
 
-The release script builds trimmed `libhifhe.so` and `libhifhe.a` with `HIFHE_CUSTOM_PARAM=OFF`. Test builds default to `HIFHE_CUSTOM_PARAM=ON`. The two options are independent: each defaults to `OFF` in release builds and `ON` in test builds; explicit `-D` values take precedence independently, including on reconfiguration. The benchmark script builds full features in its own build directory. For a full library build:
+The release script builds trimmed `libhifhe.so` and `libhifhe.a` with `HIFHE_CUSTOM_PARAM=OFF`. Test builds default `HIFHE_CUSTOM_PARAM` to `ON`; `HITLS_PROVIDER` defaults to `OFF` regardless of test mode. The options are independent, and explicit `-D` values and existing cache values take precedence. The ASan workflow passes the provider matrix mode to the SDV build. The benchmark script builds full features in its own build directory. For a full library build:
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHIFHE_CUSTOM_PARAM=ON -DHITLS_PROVIDER=ON

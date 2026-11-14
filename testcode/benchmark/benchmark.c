@@ -37,10 +37,6 @@
 #include "benchmark.h"
 #include "benchmark_registry.h"
 
-#ifdef HITLS_PROVIDER
-void BgvBenchReleaseCache(void);
-#endif
-
 enum {
     BENCHMARK_COUNT =
 #define COUNT_BENCH(name) +1
@@ -363,9 +359,6 @@ int main(int argc, char **argv)
         }
     }
 
-#ifdef HITLS_PROVIDER
-    BgvBenchReleaseCache();
-#endif
     CRYPT_EAL_RandDeinit();
     if (!hasMatch) {
         printf("No benchmark matched: %s\n", (opts.algorithm != NULL) ? opts.algorithm : "*");

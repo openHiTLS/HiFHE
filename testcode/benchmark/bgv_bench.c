@@ -24,13 +24,10 @@
  * stays below q, so repeating it does identical work, and a reset would add a
  * memcpy the library never performs.
  *
- * Bgv measures what a caller going through CRYPT_BGV_* pays. Every context is
- * created through CRYPT_BGV_NewCtxWithCache against one handle held for the
- * life of the process, so the NTT tables are computed once and every later
- * setUp reads them, which keeps table construction out of the per-operation
- * rows. Each figure includes the wire encoding on both ends because this
- * surface takes and returns serialized buffers; for the cheap operations that
- * overhead dominates the number.
+ * Bgv measures what a caller going through CRYPT_BGV_* pays. Each context
+ * builds and owns its NTT tables. Each figure includes the wire encoding on
+ * both ends because this surface takes and returns serialized buffers; for
+ * the cheap operations that overhead dominates the number.
  */
 
 #include <stdlib.h>
@@ -312,20 +309,7 @@ DEFINE_BENCH_CTX_TIMES(Kernel, g_benchPresets, SIZEOF(g_benchPresets), 2000u);
 #ifdef HITLS_PROVIDER
 /* ================ Bgv: the CRYPT_BGV_* surface ========================= */
 
-int32_t BgvBenchBuildAndDrop(int32_t presetId);
-void BgvBenchReleaseCache(void);
-
-/* One handle for the whole run. The tables are a function of the preset and
- * every module below uses the same few presets. */
-static BgvUserPara *g_lutCache = NULL;
-
-void BgvBenchReleaseCache(void)
-{
-    if (g_lutCache != NULL) {
-        CRYPT_BGV_FreeCache(g_lutCache);
-        g_lutCache = NULL;
-    }
-}
+static int32_t BgvBenchBuildAndDrop(int32_t presetId);
 
 typedef struct {
     CRYPT_BGV_Ctx *hifhe;
@@ -379,7 +363,7 @@ static int32_t BgvSetUp(void **ctx, int32_t presetId)
     }
     st->presetId = presetId;
 
-    st->hifhe = (CRYPT_BGV_Ctx *)CRYPT_BGV_NewCtxWithCache(HIFHE_BGV, &g_lutCache);
+    st->hifhe = (CRYPT_BGV_Ctx *)CRYPT_BGV_NewCtx(HIFHE_BGV);
     if (st->hifhe == NULL) {
         BgvTearDown(st);
         return HIFHE_MEMORY_ERROR;
@@ -639,8 +623,7 @@ static int32_t BgvRerandomize(void *ctx, const BenchExecOptions *opts)
     return rc;
 }
 
-/* Context creation on its own. With a filled cache this is what a caller pays
- * to open a context. */
+/* Context creation on its own, including parameter and NTT table construction. */
 static int32_t BgvCtxBuild(void *ctx, const BenchExecOptions *opts)
 {
     BgvState *st = (BgvState *)ctx;
@@ -651,9 +634,9 @@ static int32_t BgvCtxBuild(void *ctx, const BenchExecOptions *opts)
     return rc;
 }
 
-int32_t BgvBenchBuildAndDrop(int32_t presetId)
+static int32_t BgvBenchBuildAndDrop(int32_t presetId)
 {
-    CRYPT_BGV_Ctx *c = (CRYPT_BGV_Ctx *)CRYPT_BGV_NewCtxWithCache(HIFHE_BGV, &g_lutCache);
+    CRYPT_BGV_Ctx *c = (CRYPT_BGV_Ctx *)CRYPT_BGV_NewCtx(HIFHE_BGV);
     if (c == NULL) {
         return HIFHE_MEMORY_ERROR;
     }

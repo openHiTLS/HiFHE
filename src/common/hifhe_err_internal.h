@@ -19,6 +19,7 @@
 
 #include <stdint.h>
 #include "hifhe_err.h"
+#include "hifhe_config.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,6 +28,7 @@ extern "C" {
 #define HIFHE_ERR_STACK_DEPTH 20u
 
 /* Not in the public surface yet, so not in cmake/hifhe.exports either. */
+#ifdef HIFHE_ERR
 void HIFHE_ErrPushError(int32_t error, const char *file, uint32_t line);
 uint32_t HIFHE_ErrDepth(void);
 void HIFHE_ErrClearError(void);
@@ -39,6 +41,11 @@ void HIFHE_ErrPopToMark(void);
 /* Brackets a call whose failure is an answer rather than a fault. */
 #define HIFHE_ERR_SET_MARK()    HIFHE_ErrSetMark()
 #define HIFHE_ERR_POP_TO_MARK() HIFHE_ErrPopToMark()
+#else
+#define HIFHE_ERR_PUSH_ERROR(e) ((void)(e))
+#define HIFHE_ERR_SET_MARK()    ((void)0)
+#define HIFHE_ERR_POP_TO_MARK() ((void)0)
+#endif
 
 #ifdef __cplusplus
 }

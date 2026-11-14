@@ -16,10 +16,10 @@ set(HITLS_LIB_DIR "${HITLS_ROOT_PATH}/build" CACHE PATH
 option(HIFHE_BUILD_SHARED "Build the shared provider library" ON)
 option(HIFHE_BUILD_STATIC "Build the static provider library" ON)
 option(HIFHE_BGV "Build BGV" ON)
+option(HIFHE_ERR "Record errors in a thread-local stack" ON)
 option(HIFHE_BUILD_TESTS "Build regression tests" OFF)
 
-# Keep automatic defaults out of the cache so reconfiguring for tests enables
-# all features. Explicit cache entries (including -D overrides) always win.
+# Custom parameter support defaults on for tests; explicit -D values win.
 if(NOT DEFINED HIFHE_CUSTOM_PARAM)
     if(HIFHE_BUILD_TESTS)
         set(HIFHE_CUSTOM_PARAM ON)
@@ -28,14 +28,7 @@ if(NOT DEFINED HIFHE_CUSTOM_PARAM)
     endif()
 endif()
 option(HIFHE_CUSTOM_PARAM "Enable custom parameters, interchange encoding and evaluation operations" OFF)
-if(NOT DEFINED HITLS_PROVIDER)
-    if(HIFHE_BUILD_TESTS)
-        set(HITLS_PROVIDER ON)
-    else()
-        set(HITLS_PROVIDER OFF)
-    endif()
-endif()
-option(HITLS_PROVIDER "Build openHiTLS Provider integration" OFF)
+option(HITLS_PROVIDER "Build openHiTLS Provider integration and BSL adapters" OFF)
 
 message(STATUS "[HiFHE] HIFHE_CUSTOM_PARAM=${HIFHE_CUSTOM_PARAM} HITLS_PROVIDER=${HITLS_PROVIDER}")
 

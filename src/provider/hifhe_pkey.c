@@ -74,16 +74,15 @@ static int32_t OutputSize(const HIFHE_Ctx *ctx, uint32_t op, const HIFHE_HEText 
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
-    if (ctx->params == NULL) {
+    if (ctx->data == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_NOT_SET);
         return HIFHE_PARAM_NOT_SET;
     }
-    HifheOutputLen query = {.op = op};
-    int32_t ret = ctx->method->ctrl((HIFHE_Ctx *)ctx, HIFHE_CTRL_GET_OUTPUT_LEN, text, &query, sizeof(query));
+    uint32_t n = 0;
+    int32_t ret = Hifhe_BgvOutputSize(ctx, op, text, &n);
     if (ret != HIFHE_SUCCESS) {
         return ret;
     }
-    uint32_t n = query.len;
     if (out == NULL || *len < n) {
         *len = n;
         if (out != NULL) {
@@ -101,7 +100,7 @@ static int32_t Encode(const void *data, const BSL_Param *input, uint8_t *out, ui
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
-    if (ctx->params == NULL) {
+    if (ctx->data == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_NOT_SET);
         return HIFHE_PARAM_NOT_SET;
     }
@@ -121,7 +120,7 @@ static int32_t Encode(const void *data, const BSL_Param *input, uint8_t *out, ui
         return HIFHE_INVALID_LENGTH;
     }
     uint32_t count = p[0]->valueLen / 8;
-    if (count > ctx->params->config.slots) {
+    if (count > ctx->params.slots) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_INVALID_LENGTH);
         return HIFHE_INVALID_LENGTH;
     }
@@ -171,7 +170,7 @@ static int32_t Decode(const void *data, const BSL_Param *input, uint8_t *out, ui
     if (ret != HIFHE_SUCCESS) {
         return ret;
     }
-    uint32_t count = ctx->params->config.slots, need = count * 8;
+    uint32_t count = ctx->params.slots, need = count * 8;
     if (text->data->kind != HIFHE_TEXT_PLAIN) {
         ret = HIFHE_TEXT_TYPE_MISMATCH;
         HIFHE_ERR_PUSH_ERROR(ret);
@@ -282,7 +281,7 @@ static int32_t Crypt(void *data, const uint8_t *input, uint32_t n, uint8_t *out,
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
-    if (ctx->params == NULL) {
+    if (ctx->data == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_NOT_SET);
         return HIFHE_PARAM_NOT_SET;
     }

@@ -29,26 +29,7 @@ typedef struct BGV_Ctx CRYPT_BGV_Ctx;
 
 /* ----- lifecycle ------------------------------------------------------ */
 
-/* Parameter set and the NTT tables derived from it. Opaque here, defined in
- * bgv_local.h. Created and released through the calls below. */
-typedef struct BgvUserPara BgvUserPara;
-
 void *CRYPT_BGV_NewCtx(int32_t algId);
-
-/* As NewCtx, with the context taking its NTT tables from *cache instead of
- * computing them. A context build then costs a few pointer stores rather than
- * a root-of-unity search and a twiddle fill per modulus.
- *
- * If *cache is NULL an empty handle is allocated and returned through it. The
- * handle stays empty until the first context built from it settles its
- * parameters. A non-NULL *cache is reused as is.
- *
- * The handle belongs to the caller. It must outlive every context created
- * from it and is released with CRYPT_BGV_FreeCache. Contexts sharing a handle must
- * agree on their parameters. One that does not match computes its own
- * tables. */
-void *CRYPT_BGV_NewCtxWithCache(int32_t algId, BgvUserPara **cache);
-void CRYPT_BGV_FreeCache(BgvUserPara *cache);
 void CRYPT_BGV_FreeCtx(CRYPT_BGV_Ctx *ctx);
 CRYPT_BGV_Ctx *CRYPT_BGV_DupCtx(CRYPT_BGV_Ctx *src);
 

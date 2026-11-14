@@ -37,38 +37,6 @@ void *CRYPT_BGV_NewCtx(int32_t algId)
     return ctx;
 }
 
-void *CRYPT_BGV_NewCtxWithCache(int32_t algId, BgvUserPara **cache)
-{
-    if (cache == NULL) {
-        return NULL;
-    }
-    CRYPT_BGV_Ctx *ctx = (CRYPT_BGV_Ctx *)CRYPT_BGV_NewCtx(algId);
-    if (ctx == NULL) {
-        return NULL;
-    }
-    if (*cache == NULL) {
-        BgvUserPara *fresh = (BgvUserPara *)HifheMalloc((uint32_t)sizeof(BgvUserPara));
-        if (fresh == NULL) {
-            CRYPT_BGV_FreeCtx(ctx);
-            return NULL;
-        }
-        BgvUserPara_Init(fresh);
-        *cache = fresh;
-    }
-    /* Held for the context's lifetime. CRYPT_BGV_FreeCtx does not free it. */
-    ctx->lutCache = *cache;
-    return ctx;
-}
-
-void CRYPT_BGV_FreeCache(BgvUserPara *cache)
-{
-    if (cache == NULL) {
-        return;
-    }
-    BgvUserPara_Clear(cache);
-    HifheFree(cache);
-}
-
 void CRYPT_BGV_FreeCtx(CRYPT_BGV_Ctx *ctx)
 {
     if (ctx == NULL) {
@@ -89,15 +57,12 @@ CRYPT_BGV_Ctx *CRYPT_BGV_DupCtx(CRYPT_BGV_Ctx *src)
     if (dst == NULL) {
         return NULL;
     }
-    /* Share the caller's cache handle rather than recomputing the tables: a
-     * duplicate carries identical parameters, which is what the cache
-     * contract asks for, and the handle outlives its contexts. */
-    dst->lutCache = src->lutCache;
     if (BgvUserPara_Copy(&dst->para, &src->para) != HIFHE_SUCCESS) {
         CRYPT_BGV_FreeCtx(dst);
         return NULL;
     }
-    if (Bgv_DupState(&dst->bgv, &src->bgv) != HIFHE_SUCCESS) {
+    dst->useLutCache = src->useLutCache;
+    if (Bgv_DupState(&dst->bgv, &src->bgv, &dst->para) != HIFHE_SUCCESS) {
         CRYPT_BGV_FreeCtx(dst);
         return NULL;
     }
@@ -112,14 +77,20 @@ int32_t CRYPT_BGV_SetParaEx(CRYPT_BGV_Ctx *ctx, const BSL_Param *param)
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
-    int32_t r = BgvUserPara_ParseFromBSL(&ctx->para, param);
+    BgvUserPara next;
+    BgvUserPara_Init(&next);
+    int32_t r = BgvUserPara_ParseFromBSL(&next, param);
     if (r != HIFHE_SUCCESS) {
+        BgvUserPara_Clear(&next);
         return r;
     }
     /* Bgv_BuildContext returns early once a context exists, so anything built
      * on the previous parameters would keep being used while the ctrl surface
      * reports the new ring. */
     Bgv_FreeState(&ctx->bgv);
+    BgvUserPara_Clear(&ctx->para);
+    ctx->para = next;
+    memset(&next, 0, sizeof(next));
     ctx->role = HIFHE_ROLE_PARA;
     return HIFHE_SUCCESS;
 }
