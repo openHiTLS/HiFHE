@@ -17,23 +17,18 @@ option(HIFHE_BUILD_SHARED "Build the shared provider library" ON)
 option(HIFHE_BUILD_STATIC "Build the static provider library" ON)
 option(HIFHE_BGV "Build BGV" ON)
 option(HIFHE_ERR "Record errors in a thread-local stack" ON)
-option(HIFHE_BUILD_TESTS "Build regression tests" OFF)
-
-# Custom parameter support defaults on for tests; explicit -D values win.
-if(NOT DEFINED HIFHE_CUSTOM_PARAM)
-    if(HIFHE_BUILD_TESTS)
-        set(HIFHE_CUSTOM_PARAM ON)
-    else()
-        set(HIFHE_CUSTOM_PARAM OFF)
-    endif()
-endif()
-option(HIFHE_CUSTOM_PARAM "Enable custom parameters, interchange encoding and evaluation operations" OFF)
+option(HIFHE_CUSTOM_PARAM "Enable custom parameters, interchange encoding and evaluation operations" ON)
 option(HITLS_PROVIDER "Build openHiTLS Provider integration and BSL adapters" OFF)
 
-message(STATUS "[HiFHE] HIFHE_CUSTOM_PARAM=${HIFHE_CUSTOM_PARAM} HITLS_PROVIDER=${HITLS_PROVIDER}")
+include(CheckCSourceCompiles)
+check_c_source_compiles("int main(void) { unsigned __int128 value = 1; return (int)value; }"
+    HIFHE_COMPILER_HAS_INT128)
+option(HIFHE_INT128 "Use native 128-bit integer arithmetic" ${HIFHE_COMPILER_HAS_INT128})
+if(HIFHE_INT128 AND NOT HIFHE_COMPILER_HAS_INT128)
+    message(FATAL_ERROR "HIFHE_INT128 is enabled, but the compiler does not support __int128")
+endif()
 
-option(HIFHE_ENABLE_ASAN "Enable AddressSanitizer" OFF)
-option(HIFHE_ENABLE_GCOV "Enable coverage" OFF)
+message(STATUS "[HiFHE] HIFHE_CUSTOM_PARAM=${HIFHE_CUSTOM_PARAM} HITLS_PROVIDER=${HITLS_PROVIDER}")
 
 if(NOT HIFHE_BGV)
     message(FATAL_ERROR "BGV is the only algorithm and cannot be disabled")

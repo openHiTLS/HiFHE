@@ -15,22 +15,14 @@ target_compile_options(_hifhe_compile_options INTERFACE
     -fno-strict-aliasing -funwind-tables -fno-short-enums -fno-ident -fno-common
     -fvisibility=default -no-canonical-prefixes -gdwarf-3 -g2 -ggnu-pubnames
     "$<$<NOT:$<CONFIG:Debug>>:-O2;-fstack-protector-strong;-ftrapv;-ffunction-sections;-fdata-sections>")
-if(NOT HIFHE_ENABLE_ASAN)
+if(CMAKE_C_FLAGS MATCHES "-fsanitize=address")
+    target_compile_options(_hifhe_compile_options INTERFACE "$<$<NOT:$<CONFIG:Debug>>:-fno-omit-frame-pointer>")
+else()
     target_compile_options(_hifhe_compile_options INTERFACE "$<$<NOT:$<CONFIG:Debug>>:-fomit-frame-pointer>")
 endif()
 target_compile_definitions(_hifhe_compile_options INTERFACE "$<$<NOT:$<CONFIG:Debug>>:_FORTIFY_SOURCE=2>")
 target_link_options(_hifhe_compile_options INTERFACE
     "$<$<NOT:$<CONFIG:Debug>>:-Wl,-z,relro;-Wl,-z,now;-Wl,-z,noexecstack;-s>")
-
-if(HIFHE_ENABLE_ASAN)
-    target_compile_options(_hifhe_compile_options INTERFACE
-        -fsanitize=address -fno-omit-frame-pointer)
-    target_link_options(_hifhe_compile_options INTERFACE -fsanitize=address)
-endif()
-if(HIFHE_ENABLE_GCOV)
-    target_compile_options(_hifhe_compile_options INTERFACE --coverage)
-    target_link_options(_hifhe_compile_options INTERFACE --coverage)
-endif()
 
 add_library(_hifhe_public_headers INTERFACE)
 target_include_directories(_hifhe_public_headers INTERFACE

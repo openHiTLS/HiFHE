@@ -67,6 +67,7 @@ static void *ErrStackWorker(void *arg)
 }
 #endif
 
+#ifdef HITLS_PROVIDER
 static CRYPT_BGV_Ctx *BgvNewCtx(int withPreset)
 {
     CRYPT_BGV_Ctx *ctx =
@@ -83,6 +84,7 @@ static CRYPT_BGV_Ctx *BgvNewCtx(int withPreset)
     }
     return ctx;
 }
+#endif
 
 /* @
 * @test  SDV_CRYPTO_HIFHE_BGV_NEWCTX_TC001
@@ -192,6 +194,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_CTRL_PRESET_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint32_t polyDegree = 0u;
     uint64_t plainMod = 0ull;
@@ -215,6 +220,7 @@ void SDV_CRYPTO_HIFHE_BGV_CTRL_PRESET_TC001(void)
 
 EXIT:
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -229,6 +235,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_CTRL_17BIT_PLAINMOD_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t plainMod = 0ull;
     int32_t presetId = HIFHE_BGV_2048_48_17BIT;
@@ -245,6 +254,7 @@ void SDV_CRYPTO_HIFHE_BGV_CTRL_17BIT_PLAINMOD_TC001(void)
 
 EXIT:
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -259,7 +269,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_SETPARA_BSL_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint32_t polyDegreeIn = 4096u;
     uint32_t plainModBit = 17u;
@@ -288,8 +300,6 @@ void SDV_CRYPTO_HIFHE_BGV_SETPARA_BSL_TC001(void)
 
 EXIT:
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -305,6 +315,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_GEN_STUB_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
 
     TestMemInit();
@@ -317,6 +330,7 @@ void SDV_CRYPTO_HIFHE_BGV_GEN_STUB_TC001(void)
 
 EXIT:
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -330,6 +344,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_DUPCTX_PARA_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *src = NULL;
     CRYPT_BGV_Ctx *dst = NULL;
     uint32_t srcDeg = 0u, dstDeg = 0u;
@@ -350,6 +367,7 @@ void SDV_CRYPTO_HIFHE_BGV_DUPCTX_PARA_TC001(void)
 EXIT:
     CRYPT_BGV_FreeCtx(dst);
     CRYPT_BGV_FreeCtx(src);
+#endif
 }
 /* END_CASE */
 
@@ -366,6 +384,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_INHERITED_PRIMES_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint32_t polyDegree = 0u, level = 0u;
     uint64_t plainMod = 0ull;
@@ -398,6 +419,7 @@ void SDV_CRYPTO_HIFHE_BGV_INHERITED_PRIMES_TC001(void)
     ASSERT_EQ(level, 4u);
 EXIT:
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -413,7 +435,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_ERROR_REPORTED_TC001(void)
 {
-#ifdef HIFHE_ERR
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_ERR)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     int32_t badPreset = 0x7ffffff0;
     const char *originFile = NULL;
@@ -447,8 +471,6 @@ void SDV_CRYPTO_HIFHE_BGV_ERROR_REPORTED_TC001(void)
 EXIT:
     HIFHE_ErrClearError();
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -563,7 +585,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_ERROR_STACK_CLEAN_TC001(void)
 {
-#ifdef HIFHE_ERR
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_ERR)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     CRYPT_BGV_Ctx *preset = NULL;
 #ifdef HIFHE_CUSTOM_PARAM
@@ -611,8 +635,6 @@ EXIT:
     HIFHE_ErrClearError();
     CRYPT_BGV_FreeCtx(ctx);
     CRYPT_BGV_FreeCtx(preset);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -620,7 +642,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_MODSWITCHED_WIRE_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *native = NULL;
     HIFHE_Ctx *pub = NULL;
     HIFHE_HEText *loaded = NULL;
@@ -679,8 +703,6 @@ EXIT:
     free(pt);
     free(ct);
     free(shorter);
-#else
-    SKIP_TEST();
 #endif
 }
 

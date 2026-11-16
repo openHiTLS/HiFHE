@@ -16,7 +16,6 @@ or bootstrapping and cannot execute computations of arbitrary depth.
 
 - **Data transport:** plaintext and ciphertext serialization/deserialization for
   storage and transport. BGV ciphertexts interoperate between native and Provider APIs.
-- **Build options:** BGV is always built; Provider integration is optional.
 
 HiFHE provides a native C API and an openHiTLS Provider. The C API in
 [hifhe.h](include/hifhe.h) uses opaque `HIFHE_Ctx` and `HIFHE_HEText` types for
@@ -58,7 +57,8 @@ and resource cleanup.
 
 Requirements: CMake 3.16 or newer, a C11 compiler, and openHiTLS. The helper
 script clones and builds openHiTLS when `--hitls_dir` is omitted. By default it
-builds both `libhifhe.so` and `libhifhe.a`.
+enables Provider support and builds both `libhifhe.so` and `libhifhe.a`.
+Use `--disable provider` to disable Provider support.
 
 ```sh
 bash testcode/script/build_hifhe.sh
@@ -68,8 +68,6 @@ Use an existing openHiTLS checkout:
 
 ```sh
 bash testcode/script/build_hifhe.sh --hitls_dir /path/to/openHiTLS
-# This workspace:
-bash testcode/script/build_hifhe.sh --hitls_dir /usr1/cq/openhitls/openhitls
 ```
 
 Build one library type:
@@ -84,12 +82,7 @@ Use CMake directly with an already-built openHiTLS checkout:
 ```sh
 cmake -S . -B build \
     -DHITLS_ROOT_PATH=/path/to/openHiTLS \
-    -DHITLS_LIB_DIR=/path/to/openHiTLS/build \
-    -DHIFHE_BUILD_SHARED=ON \
-    -DHIFHE_BUILD_STATIC=ON \
-    -DHIFHE_BGV=ON \
-    -DHIFHE_ENABLE_ASAN=OFF \
-    -DHIFHE_ENABLE_GCOV=OFF
+    -DHITLS_LIB_DIR=/path/to/openHiTLS/build
 cmake --build build --parallel
 ```
 
@@ -102,24 +95,19 @@ CMake options:
 | `HIFHE_BUILD_SHARED` | `ON` | Build `libhifhe.so` |
 | `HIFHE_BUILD_STATIC` | `ON` | Build `libhifhe.a` |
 | `HIFHE_BGV` | `ON` | Required; disabling BGV is a configuration error |
-| `HIFHE_CUSTOM_PARAM` | `OFF`; `ON` with `HIFHE_BUILD_TESTS=ON` | `OFF` selects simple mode, removing custom parameters, prime search and validation, native-API interchange format selection, evaluation keys, key switching, ciphertext/ciphertext multiplication, rotations and slot map. `ON` enables these features. |
-| `HITLS_PROVIDER` | `OFF` | Builds the openHiTLS provider integration and BSL parameter adapters, including `hifhe_provider_objects` in `libhifhe.so` / `libhifhe.a`. Provider-dependent SDV cases are skipped when disabled; the provider loading suite also requires the shared library. |
+| `HIFHE_CUSTOM_PARAM` | `ON` | `OFF` removes custom parameters, prime search and validation, native-API interchange format selection, evaluation keys, key switching, ciphertext/ciphertext multiplication, rotations and slot map. |
+| `HITLS_PROVIDER` | `OFF` | Build the openHiTLS Provider and BSL parameter adapters |
 | `HIFHE_ERR` | `ON` | Record error details; when disabled, error peek returns success |
-| `HIFHE_BUILD_TESTS` | `OFF` | Build native tests and internal regressions |
-| `HIFHE_ENABLE_ASAN` | `OFF` | Enable AddressSanitizer |
-| `HIFHE_ENABLE_GCOV` | `OFF` | Enable coverage |
 
-At least one library type must be enabled. BGV is the only algorithm and cannot be
-disabled. For native API use, Provider integration can be disabled:
+The build script accepts `asan` and `gcov` to add their compiler and linker flags,
+and `add-options=FLAGS` to pass custom compiler flags.
 
-```sh
-bash testcode/script/build_hifhe.sh --disable provider
-```
+At least one library type must be enabled.
 
-The release script builds trimmed `libhifhe.so` and `libhifhe.a` with `HIFHE_CUSTOM_PARAM=OFF`. Test builds default `HIFHE_CUSTOM_PARAM` to `ON`; `HITLS_PROVIDER` defaults to `OFF` regardless of test mode. The options are independent, and explicit `-D` values and existing cache values take precedence. The ASan workflow passes the provider matrix mode to the SDV build. The benchmark script builds full features in its own build directory. For a full library build:
+Disable custom-parameter features:
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHIFHE_CUSTOM_PARAM=ON -DHITLS_PROVIDER=ON
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DHIFHE_CUSTOM_PARAM=OFF
 cmake --build build --parallel
 ```
 
@@ -139,42 +127,10 @@ Applications linking the `hifhe_provider` CMake target through `add_subdirectory
 inherit this definition when Provider support is enabled. Native applications
 using the installed SDK do not need this definition.
 
-## Test
-
-All tests use the shared SDV assertions and runner, with `.c + .data` files under `testcode/sdv`.
-Set `-DHIFHE_BUILD_TESTS=ON` to build all suites supported by the selected features:
-
-```sh
-cmake -S . -B build -DHIFHE_BUILD_TESTS=ON
-cmake --build build --parallel
-ctest --test-dir build --output-on-failure
-```
-
-Public API tests link the production library, kernel tests link implementation objects,
-and Provider tests load the production library dynamically. The scripts run the same suites:
-
-```sh
-bash testcode/script/build_sdv.sh
-bash testcode/script/execute_sdv.sh
-```
-
-Separate Provider and native API demos cover one encryption, a server with no
-keys, byte transport, and client decryption:
-
-```sh
-cmake -S . -B build -DHIFHE_CUSTOM_PARAM=ON -DHITLS_PROVIDER=ON
-cmake --build build --parallel
-bash testcode/script/build_demo.sh
-./testcode/output/demo/hifhe_bgv_provider_demo  # Provider
-./testcode/output/demo/hifhe_bgv_demo           # Native API
-```
+See the [demo guide](testcode/demo/README.md) for build and run instructions.
 
 Random and Hash operations use the built-in openHiTLS implementation.
 
-Native parameters use `HIFHE_SetParaById`; custom parameter objects are
-omitted. Public and private keys move with `HIFHE_ExportPubKey`,
+Public and private keys move with `HIFHE_ExportPubKey`,
 `HIFHE_ExportPrvKey`, `HIFHE_ImportPubKey` and `HIFHE_ImportPrvKey`; the
-Provider registers no key transfer of its own. `HIFHE_Mul` supports
-ciphertext/plaintext products.
-Native APIs do not use `BSL_Param`. `-DHITLS_PROVIDER=OFF` removes the Provider, BSL adapters,
-and their tests.
+Provider registers no key transfer of its own. Native APIs do not use `BSL_Param`.

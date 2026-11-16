@@ -13,7 +13,6 @@
  * See the Mulan PSL v2 for more details.
  */
 
-#include <string.h>
 #include "hifhe_err_internal.h"
 #include "crypt_types.h"
 
@@ -35,20 +34,7 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
                 return HIFHE_PARAM_INVALID;
             }
             int32_t presetId = *(const int32_t *)val;
-            BgvUserPara next;
-            BgvUserPara_Init(&next);
-            int32_t r = BgvUserPara_LoadPreset(&next, presetId);
-            if (r != HIFHE_SUCCESS) {
-                BgvUserPara_Clear(&next);
-                return r;
-            }
-            /* Drop the old context before releasing its borrowed NTT tables. */
-            Bgv_FreeState(&ctx->bgv);
-            BgvUserPara_Clear(&ctx->para);
-            ctx->para = next;
-            memset(&next, 0, sizeof(next));
-            ctx->role = HIFHE_ROLE_PARA;
-            return HIFHE_SUCCESS;
+            return Bgv_SetPreset(ctx, presetId);
         }
 
         case HIFHE_CTRL_BGV_GET_POLY_DEGREE: {

@@ -43,6 +43,7 @@ target_compile_definitions(SHARED_COMPILE_DEFS INTERFACE
     HITLS_CRYPTO_SHA256
     HITLS_NO_CONFIG_CHECK
     PRINT_TO_TERMINAL
+    HIFHE_BUILD_SHARED=$<BOOL:${HIFHE_BUILD_SHARED}>
 )
 if(HITLS_PROVIDER)
     target_compile_definitions(SHARED_COMPILE_DEFS INTERFACE HITLS_PROVIDER)
@@ -51,15 +52,11 @@ target_link_libraries(TESTCASE_PRE PRIVATE SHARED_COMPILE_DEFS)
 
 file(MAKE_DIRECTORY "${HIFHE_ROOT}/testcode/output")
 file(MAKE_DIRECTORY "${HIFHE_ROOT}/testcode/output/log")
-if(GEN_TEST_FILES)
-    separate_arguments(TEST_FILES UNIX_COMMAND "${GEN_TEST_FILES}")
-else()
-    file(GLOB_RECURSE TEST_DATA CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.data")
-    foreach(DATA_FILE ${TEST_DATA})
-        string(REGEX REPLACE "\\.data$" "" TEST_SUITE "${DATA_FILE}")
-        list(APPEND TEST_FILES "${TEST_SUITE}")
-    endforeach()
-endif()
+file(GLOB_RECURSE TEST_DATA CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.data")
+foreach(DATA_FILE ${TEST_DATA})
+    string(REGEX REPLACE "\\.data$" "" TEST_SUITE "${DATA_FILE}")
+    list(APPEND TEST_FILES "${TEST_SUITE}")
+endforeach()
 
 foreach(TEST_SUITE ${TEST_FILES})
     get_filename_component(SUITE_NAME ${TEST_SUITE} NAME)
@@ -67,14 +64,6 @@ foreach(TEST_SUITE ${TEST_FILES})
     if(SUITE_NAME MATCHES "_(api|provider)$" OR
        (SUITE_NAME STREQUAL "test_suite_sdv_hifhe_bgv_kat" AND NOT HITLS_PROVIDER))
         set(PUBLIC_SUITE ON)
-    endif()
-    if((SUITE_NAME MATCHES "_bgv" AND NOT HIFHE_BGV) OR
-       (SUITE_NAME MATCHES "_bgv" AND NOT PUBLIC_SUITE AND NOT HITLS_PROVIDER) OR
-       (SUITE_NAME MATCHES "_provider$" AND (NOT HITLS_PROVIDER OR NOT HIFHE_BUILD_SHARED)))
-        message(STATUS "skip ${SUITE_NAME}: required feature disabled")
-        # Drop any binary an earlier, wider build left behind.
-        file(REMOVE "${HIFHE_ROOT}/testcode/output/${SUITE_NAME}")
-        continue()
     endif()
     file(TOUCH "${HIFHE_ROOT}/testcode/output/${SUITE_NAME}.c")
     add_custom_target(${SUITE_NAME}_generate
@@ -85,6 +74,7 @@ foreach(TEST_SUITE ${TEST_FILES})
 
     add_executable(${SUITE_NAME} "${HIFHE_ROOT}/testcode/output/${SUITE_NAME}.c")
     add_dependencies(${SUITE_NAME} ${SUITE_NAME}_generate)
+    add_dependencies(hifhe_testcode ${SUITE_NAME})
     set_target_properties(${SUITE_NAME} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${HIFHE_ROOT}/testcode/output"
     )
@@ -116,9 +106,4 @@ foreach(TEST_SUITE ${TEST_FILES})
     if(NOT APPLE)
         target_link_options(${SUITE_NAME} PRIVATE "$<$<NOT:$<CONFIG:Debug>>:LINKER:-z,noexecstack>")
     endif()
-    add_test(NAME ${SUITE_NAME} COMMAND ${SUITE_NAME} NO_DETAIL)
-    set_tests_properties(${SUITE_NAME} PROPERTIES
-        WORKING_DIRECTORY "${HIFHE_ROOT}/testcode/output"
-        LABELS sdv
-        ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}:${HITLS_LIB_DIR};HIFHE_PROVIDER_PATH=${CMAKE_BINARY_DIR};ASAN_OPTIONS=detect_leaks=1")
 endforeach()

@@ -9,22 +9,28 @@
 # See the Mulan PSL v2 for more details.
 
 cmake_minimum_required(VERSION 3.16)
+project(HiFHETest C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-set(HIFHE_ROOT "${PROJECT_SOURCE_DIR}")
+get_filename_component(HIFHE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
+if(NOT DEFINED HIFHE_CUSTOM_PARAM)
+    set(HIFHE_CUSTOM_PARAM ON CACHE BOOL "Enable custom parameters in test builds")
+endif()
+if(NOT DEFINED HITLS_PROVIDER)
+    set(HITLS_PROVIDER ON CACHE BOOL "Enable Provider integration in test builds")
+endif()
+add_subdirectory("${HIFHE_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}/hifhe")
+
+set(HIFHE_CONFIG_DIR "${CMAKE_BINARY_DIR}/include")
 set(HITLS_ROOT_DIR "${HITLS_ROOT_PATH}")
+get_property(HIFHE_OBJECT_TARGETS GLOBAL PROPERTY HIFHE_OBJECT_TARGETS)
+foreach(OBJECT_TARGET ${HIFHE_OBJECT_TARGETS})
+    list(APPEND HIFHE_OBJECTS $<TARGET_OBJECTS:${OBJECT_TARGET}>)
+endforeach()
 find_package(Threads REQUIRED)
 add_compile_options(-Wall -Wextra -Werror -Wno-enum-conversion)
-if(HIFHE_ENABLE_ASAN)
-    add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
-    add_link_options(-fsanitize=address)
-endif()
-if(HIFHE_ENABLE_GCOV)
-    add_compile_options(--coverage)
-    add_link_options(--coverage)
-endif()
 
 include(ExternalProject)
 ExternalProject_Add(gen_testcase
@@ -40,21 +46,11 @@ ExternalProject_Add(gen_testcase
     EXCLUDE_FROM_ALL TRUE
 )
 
+add_custom_target(hifhe_testcode)
+
 option(BUILD_DEMO "Build the demos alongside the test suites" OFF)
 
 add_subdirectory(sdv)
 if(BUILD_DEMO)
-    enable_testing()
     add_subdirectory(demo)
-endif()
-
-if(NOT HIFHE_CUSTOM_PARAM)
-    add_executable(hifhe_no_custom_param feature_options.c ${HIFHE_OBJECTS})
-    target_include_directories(hifhe_no_custom_param PRIVATE
-        ${HIFHE_ROOT}/include ${HIFHE_CONFIG_DIR}
-        ${HIFHE_ROOT}/src/common ${HIFHE_ROOT}/src/bgv/include
-        ${HIFHE_ROOT}/src/bgv/src ${HIFHE_ROOT}/src/bgv/src/include)
-    target_link_libraries(hifhe_no_custom_param PRIVATE _hifhe_public_headers SHARED_COMPILE_DEFS ${HITLS_CRYPTO_LIB} ${HITLS_BSL_LIB} Threads::Threads m)
-    add_test(NAME hifhe_no_custom_param COMMAND hifhe_no_custom_param)
-    set_tests_properties(hifhe_no_custom_param PROPERTIES LABELS sdv)
 endif()

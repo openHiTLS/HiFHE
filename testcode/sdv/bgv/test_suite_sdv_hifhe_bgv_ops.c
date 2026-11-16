@@ -49,6 +49,7 @@
 
 #define HIFHE_N 2048u
 
+#ifdef HITLS_PROVIDER
 static CRYPT_BGV_Ctx *BgvNewCtx(int32_t preset)
 {
     CRYPT_BGV_Ctx *ctx =
@@ -180,6 +181,7 @@ out:
     CRYPT_BGV_FreeCtx(ctx);
     return rc;
 }
+#endif
 
 /* @
 * @test  SDV_CRYPTO_HIFHE_BGV_ENCDEC_DEFAULT_TC001
@@ -189,10 +191,14 @@ out:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_ENCDEC_DEFAULT_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     TestMemInit();
     TestRandInit();
     ASSERT_EQ(RunEncDec(HIFHE_BGV_DEFAULT), 0);
 EXIT:;
+#endif
 }
 /* END_CASE */
 
@@ -204,10 +210,14 @@ EXIT:;
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_ENCDEC_17BIT_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     TestMemInit();
     TestRandInit();
     ASSERT_EQ(RunEncDec(HIFHE_BGV_2048_48_17BIT), 0);
 EXIT:;
+#endif
 }
 /* END_CASE */
 
@@ -219,6 +229,9 @@ EXIT:;
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_HEADD_CTPT_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m1 = NULL, *m2 = NULL, *mo = NULL;
     uint8_t *pt1 = NULL, *pt2 = NULL, *ct1 = NULL, *ctSum = NULL, *ptOut = NULL;
@@ -291,6 +304,7 @@ EXIT:
     BSL_SAL_Free(ctSum);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -302,6 +316,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_HEADD_NEG_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL, *mo = NULL;
     uint8_t *pt = NULL, *ct = NULL, *ctNeg = NULL, *ptOut = NULL;
@@ -366,6 +383,7 @@ EXIT:
     BSL_SAL_Free(ctNeg);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -377,6 +395,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_HEMUL_CTPT_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m1 = NULL, *m2 = NULL, *mo = NULL;
     uint8_t *pt1 = NULL, *pt2 = NULL, *ct1 = NULL, *ctMul = NULL, *ptOut = NULL;
@@ -449,6 +470,7 @@ EXIT:
     BSL_SAL_Free(ctMul);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -460,6 +482,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_ERR_MODSWITCH_EXHAUSTED_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL;
     uint8_t *pt = NULL, *ct = NULL, *ctOut = NULL;
@@ -502,6 +527,7 @@ EXIT:
     BSL_SAL_Free(ct);
     BSL_SAL_Free(ctOut);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -513,6 +539,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_SEEDED_KEYGEN_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *a = NULL, *b = NULL;
     uint8_t seed[HIFHE_BGV_SEED_LEN];
     uint8_t *pkA = NULL, *pkB = NULL;
@@ -548,6 +577,7 @@ EXIT:
     BSL_SAL_Free(pkB);
     CRYPT_BGV_FreeCtx(a);
     CRYPT_BGV_FreeCtx(b);
+#endif
 }
 /* END_CASE */
 
@@ -559,7 +589,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_HEMUL_CTCT_RELIN_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m1 = NULL, *m2 = NULL, *mo = NULL;
     uint8_t *pt1 = NULL, *pt2 = NULL, *ct1 = NULL, *ct2 = NULL, *ctMul = NULL, *ptOut = NULL;
@@ -645,8 +677,6 @@ EXIT:
     BSL_SAL_Free(ctMul);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -659,10 +689,14 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_MULTIMOD_ENCDEC_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     TestMemInit();
     TestRandInit();
     ASSERT_EQ(RunEncDec(HIFHE_BGV_4096_44x2_17BIT), 0);
 EXIT:;
+#endif
 }
 /* END_CASE */
 
@@ -674,6 +708,9 @@ EXIT:;
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_MULTIMOD_LEVEL_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     TestMemInit();
     TestRandInit();
@@ -691,6 +728,7 @@ void SDV_CRYPTO_HIFHE_BGV_MULTIMOD_LEVEL_TC001(void)
     ASSERT_EQ(d.ctLen, 12u + 4u + 8u + 32u + 4u + 4u + 4u + 2u * 8u + 2u * 2u * 4096u * 8u);
 EXIT:
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -703,6 +741,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_MODSWITCH_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL, *mo = NULL;
     uint8_t *pt = NULL, *ct = NULL, *ctMs = NULL, *ctMs2 = NULL, *ptOut = NULL;
@@ -764,6 +805,7 @@ EXIT:
     BSL_SAL_Free(ctMs2);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -776,7 +818,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_MULTIMOD_MUL_RELIN_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m1 = NULL, *m2 = NULL, *mo = NULL;
     uint8_t *pt1 = NULL, *pt2 = NULL, *ct1 = NULL, *ct2 = NULL, *ctMul = NULL, *ptOut = NULL;
@@ -843,8 +887,6 @@ EXIT:
     BSL_SAL_Free(ctMul);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -858,7 +900,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_SLOT_MAP_ENCDEC_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL, *mo = NULL;
     uint8_t *ptMapped = NULL, *ptPlain = NULL, *ct = NULL, *ptOut = NULL;
@@ -934,8 +978,6 @@ EXIT:
     BSL_SAL_Free(ct);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -949,6 +991,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_LUT_SLOTWISE_MUL_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m1 = NULL, *m2 = NULL, *mo = NULL;
     uint8_t *pt1 = NULL, *pt2 = NULL, *ct1 = NULL, *ctMul = NULL, *ptOut = NULL;
@@ -1007,6 +1052,7 @@ EXIT:
     BSL_SAL_Free(ctMul);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -1022,6 +1068,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_SCALE_RECONCILE_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m1 = NULL, *m2 = NULL, *mo = NULL;
     uint8_t *pt1 = NULL, *pt2 = NULL, *ct1 = NULL, *ct2 = NULL, *ctSum = NULL, *ptOut = NULL;
@@ -1093,6 +1142,7 @@ EXIT:
     BSL_SAL_Free(ctSum);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -1106,6 +1156,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_PARAM_CHECK_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     TestMemInit();
     TestRandInit();
@@ -1177,6 +1230,7 @@ void SDV_CRYPTO_HIFHE_BGV_PARAM_CHECK_TC001(void)
 #endif
 EXIT:
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -1194,7 +1248,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_SK_POW3_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m1 = NULL, *m2 = NULL, *m3 = NULL, *mo = NULL;
     uint8_t *pt1 = NULL, *pt2 = NULL, *pt3 = NULL;
@@ -1289,8 +1345,6 @@ EXIT:
     BSL_SAL_Free(ctCube);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -1307,7 +1361,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_DUPCTX_DEEP_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *src = NULL, *dup = NULL;
     uint8_t *pkSrc = NULL, *pkDup = NULL;
     uint64_t *m1 = NULL, *m2 = NULL, *mo = NULL;
@@ -1423,8 +1479,6 @@ EXIT:
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(dup);
     CRYPT_BGV_FreeCtx(src);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -1450,6 +1504,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_WIRE_DOMAIN_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL, *mo = NULL;
     uint8_t *pt = NULL;
@@ -1519,6 +1576,7 @@ EXIT:
     BSL_SAL_Free(mo);
     BSL_SAL_Free(pt);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -1540,6 +1598,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_SECRET_WEIGHT_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint8_t *prv = NULL;
     uint64_t *coeff = NULL;
@@ -1617,6 +1678,7 @@ EXIT:
     BSL_SAL_Free(prv);
     BSL_SAL_Free(coeff);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -1645,7 +1707,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_DROPIN_CALLING_CONVENTION_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL, *mo = NULL;
     uint8_t *pt = NULL, *ct = NULL, *ctNeg = NULL, *ptOut = NULL;
@@ -1715,8 +1779,6 @@ EXIT:
     BSL_SAL_Free(ctNeg);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -1733,6 +1795,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_HE_RERANDOMIZE_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL, *mo = NULL;
     uint8_t *pt = NULL, *ct = NULL, *ctR1 = NULL, *ctR2 = NULL, *ptOut = NULL;
@@ -1799,6 +1864,7 @@ EXIT:
     BSL_SAL_Free(ctR2);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -1815,6 +1881,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_DEFAULT_CHAIN_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL;
     uint8_t *pt = NULL, *ct = NULL;
@@ -1859,6 +1928,7 @@ EXIT:
     BSL_SAL_Free(pt);
     BSL_SAL_Free(ct);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -1876,6 +1946,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_SEED_SCOPE_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL, *mo = NULL;
     uint8_t *pt = NULL, *ct1 = NULL, *ct2 = NULL, *ptOut = NULL;
@@ -1932,6 +2005,7 @@ EXIT:
     BSL_SAL_Free(ct2);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -1948,7 +2022,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_KEY_DOMAIN_SEP_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     CRYPT_BGV_Ctx *inner = NULL;
     uint8_t seed[HIFHE_BGV_SEED_LEN];
@@ -1987,14 +2063,12 @@ void SDV_CRYPTO_HIFHE_BGV_KEY_DOMAIN_SEP_TC001(void)
     ASSERT_TRUE(memcmp(inner->bgv.pk.data + half, rk->pieces[0].data + half, half * sizeof(uint64_t)) != 0);
 EXIT:
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
 
 /* Bit-reverse over `bits` bits, matching the NTT's output ordering. */
-#ifdef HIFHE_CUSTOM_PARAM
+#if defined(HITLS_PROVIDER) && defined(HIFHE_CUSTOM_PARAM)
 static uint32_t RotBitRev(uint32_t x, uint32_t bits)
 {
     uint32_t r = 0u;
@@ -2005,11 +2079,9 @@ static uint32_t RotBitRev(uint32_t x, uint32_t bits)
     }
     return r;
 }
-#endif
 
 /* Slot j evaluates at zeta^(2*brv(j)+1). sigma_k multiplies that exponent,
  * so out[j] takes the value that was in the slot at exponent k*(2*brv(j)+1). */
-#ifdef HIFHE_CUSTOM_PARAM
 static uint32_t RotSrcSlot(uint32_t j, uint64_t k, uint32_t n, uint32_t logn)
 {
     uint64_t twoN = 2ull * (uint64_t)n;
@@ -2034,7 +2106,9 @@ static uint32_t RotSrcSlot(uint32_t j, uint64_t k, uint32_t n, uint32_t logn)
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_ROTATE_SLOT_PERM_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL, *mo = NULL;
     uint8_t *pt = NULL, *ct = NULL, *ctR = NULL, *ptOut = NULL;
@@ -2154,8 +2228,6 @@ EXIT:
     BSL_SAL_Free(ctR);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -2175,7 +2247,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_SLOT_MAP_ROTATE_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL, *mo = NULL;
     uint8_t *pt = NULL, *ct = NULL, *ctR = NULL, *ptOut = NULL;
@@ -2275,8 +2349,6 @@ EXIT:
     BSL_SAL_Free(ctR);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -2292,6 +2364,7 @@ EXIT:
 
 /* State a BGV-level rotation case needs, taken from a provider context that
  * has already generated a key. */
+#ifdef HITLS_PROVIDER
 typedef struct {
     CRYPT_BGV_Ctx *outer;
     CRYPT_BGV_Ctx *inner;
@@ -2425,6 +2498,7 @@ static int BgvRotDecrypt(BgvRotEnv *e, const Ciphertext *ct, uint64_t *msg)
     BGV_Plaintext_Destroy(&pt);
     return rc;
 }
+#endif
 
 /* @
 * @test  SDV_CRYPTO_HIFHE_BGV_ROTATE_STEP_TC001
@@ -2439,7 +2513,9 @@ static int BgvRotDecrypt(BgvRotEnv *e, const Ciphertext *ct, uint64_t *msg)
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_ROTATE_STEP_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     BgvRotEnv e;
     memset(&e, 0, sizeof(e));
     uint64_t *m = NULL, *mo = NULL;
@@ -2483,8 +2559,6 @@ EXIT:
     BgvRotEnvFree(&e);
     BSL_SAL_Free(m);
     BSL_SAL_Free(mo);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -2502,7 +2576,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_ROTATE_ELT_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     BgvRotEnv e;
     memset(&e, 0, sizeof(e));
     uint64_t *m = NULL, *viaStep = NULL, *viaElt = NULL, *twice = NULL;
@@ -2560,8 +2636,6 @@ EXIT:
     BSL_SAL_Free(viaStep);
     BSL_SAL_Free(viaElt);
     BSL_SAL_Free(twice);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -2579,7 +2653,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_ROTATE_COMPOSE_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     BgvRotEnv e;
     memset(&e, 0, sizeof(e));
     uint64_t *m = NULL, *chained = NULL, *direct = NULL, *back = NULL;
@@ -2643,8 +2719,6 @@ EXIT:
     BSL_SAL_Free(chained);
     BSL_SAL_Free(direct);
     BSL_SAL_Free(back);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -2661,7 +2735,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_ROTATE_ERR_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     BgvRotEnv e;
     memset(&e, 0, sizeof(e));
     uint64_t *m = NULL;
@@ -2703,8 +2779,6 @@ void SDV_CRYPTO_HIFHE_BGV_ROTATE_ERR_TC001(void)
 EXIT:
     BgvRotEnvFree(&e);
     BSL_SAL_Free(m);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -2714,7 +2788,7 @@ EXIT:
  * ========================================================================= */
 
 /* Generate Galois keys for `steps` on a provider context. */
-#ifdef HIFHE_CUSTOM_PARAM
+#if defined(HITLS_PROVIDER) && defined(HIFHE_CUSTOM_PARAM)
 static int BgvGenGaloisSteps(CRYPT_BGV_Ctx *ctx, const int32_t *steps, uint32_t count)
 {
     BSL_Param gk[] = {{HIFHE_PARAM_BGV_ROTATE_STEPS, BSL_PARAM_TYPE_OCTETS, (void *)(uintptr_t)steps,
@@ -2768,7 +2842,9 @@ static int BgvRotateElt(CRYPT_BGV_Ctx *ctx, const uint8_t *ct, uint32_t ctLen, u
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_ROTATE_ELT_CTRL_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL, *byStep = NULL, *byElt = NULL;
     uint8_t *pt = NULL, *ct = NULL, *ctA = NULL, *ctB = NULL, *ptOut = NULL;
@@ -2827,8 +2903,6 @@ EXIT:
     BSL_SAL_Free(ctA);
     BSL_SAL_Free(ctB);
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -2846,7 +2920,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_ROTATE_MULTI_STEP_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL, *mo = NULL;
     uint8_t *pt = NULL, *ct = NULL, *ctR = NULL, *ptOut = NULL;
@@ -2901,8 +2977,6 @@ EXIT:
     BSL_SAL_Free(ct);
     BSL_SAL_Free(ctR);
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -2919,7 +2993,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_ROTATE_NO_KEY_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL;
     uint8_t *pt = NULL, *ct = NULL, *ctR = NULL;
@@ -2969,8 +3045,6 @@ EXIT:
     BSL_SAL_Free(ct);
     BSL_SAL_Free(ctR);
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -2987,7 +3061,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_ROTATE_ADD_COMMUTE_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *ma = NULL, *mb = NULL, *lhs = NULL, *rhs = NULL;
     uint8_t *pta = NULL, *ptb = NULL, *ptOut = NULL;
@@ -3084,18 +3160,18 @@ EXIT:
     BSL_SAL_Free(rotB);
     BSL_SAL_Free(sumRot);
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
 
+#ifdef HITLS_PROVIDER
 static int32_t FailingRand(uint8_t *buf, uint32_t len)
 {
     (void)buf;
     (void)len;
     return -1;
 }
+#endif
 
 /* @
 * @test  SDV_CRYPTO_HIFHE_BGV_SK_DRBG_FAIL_TC001
@@ -3108,6 +3184,9 @@ static int32_t FailingRand(uint8_t *buf, uint32_t len)
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_SK_DRBG_FAIL_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     CRYPT_BGV_Ctx *inner = NULL;
     int32_t r = HIFHE_SUCCESS;
@@ -3128,6 +3207,7 @@ void SDV_CRYPTO_HIFHE_BGV_SK_DRBG_FAIL_TC001(void)
 EXIT:
     TestRandInit();
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -3184,6 +3264,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_RERAND_SK_ONLY_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *full = NULL, *skOnly = NULL;
     CRYPT_BGV_Ctx *inner = NULL;
     uint8_t *prv = NULL, *pt = NULL, *ct = NULL, *ctR = NULL, *ptOut = NULL;
@@ -3249,6 +3332,7 @@ EXIT:
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(full);
     CRYPT_BGV_FreeCtx(skOnly);
+#endif
 }
 /* END_CASE */
 
@@ -3263,6 +3347,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_CT_WIRE_SIZE_OVERFLOW_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL;
     uint8_t *pt = NULL, *ct = NULL, *ptOut = NULL;
@@ -3310,6 +3397,7 @@ EXIT:
     BSL_SAL_Free(ct);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -3323,6 +3411,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_PRVKEY_SHORT_CHAIN_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *src = NULL, *dst = NULL;
     uint8_t *sk = NULL;
 
@@ -3354,6 +3445,7 @@ EXIT:
     BSL_SAL_Free(sk);
     CRYPT_BGV_FreeCtx(src);
     CRYPT_BGV_FreeCtx(dst);
+#endif
 }
 /* END_CASE */
 
@@ -3368,7 +3460,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_RELIN_DNUM_SMALL_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m1 = NULL, *m2 = NULL, *mo = NULL;
     uint8_t *pt1 = NULL, *pt2 = NULL, *ct1 = NULL, *ct2 = NULL, *ctMul = NULL, *ptOut = NULL;
@@ -3450,8 +3544,6 @@ EXIT:
     BSL_SAL_Free(ctMul);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -3467,7 +3559,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_RELIN_DNUM_HUGE_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
 
     TestMemInit();
@@ -3483,8 +3577,6 @@ void SDV_CRYPTO_HIFHE_BGV_RELIN_DNUM_HUGE_TC001(void)
     ASSERT_TRUE(CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GEN_RELIN_KEY, NULL, 0) != HIFHE_SUCCESS);
 EXIT:
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -3500,7 +3592,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_GALOIS_EVEN_ELT_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     GaloisKeys glk;
     memset(&glk, 0, sizeof(glk));
@@ -3525,8 +3619,6 @@ void SDV_CRYPTO_HIFHE_BGV_GALOIS_EVEN_ELT_TC001(void)
 EXIT:
     BGV_GaloisKeys_Destroy(&glk);
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -3541,6 +3633,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_SETPRV_FAIL_KEEPS_KEY_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL, *mo = NULL;
     uint8_t *pt = NULL, *ct = NULL, *ptOut = NULL, *bad = NULL;
@@ -3598,6 +3693,7 @@ EXIT:
     BSL_SAL_Free(ptOut);
     BSL_SAL_Free(bad);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -3611,6 +3707,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_ADDCTCT_ALIAS_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     BgvRotEnv e;
     memset(&e, 0, sizeof(e));
     uint64_t *m1 = NULL, *m2 = NULL, *mo = NULL;
@@ -3658,6 +3757,7 @@ EXIT:
     BSL_SAL_Free(m1);
     BSL_SAL_Free(m2);
     BSL_SAL_Free(mo);
+#endif
 }
 /* END_CASE */
 
@@ -3671,7 +3771,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_REGEN_CLEARS_EVAL_KEYS_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m1 = NULL, *m2 = NULL, *mo = NULL;
     uint8_t *pt1 = NULL, *pt2 = NULL, *ct1 = NULL, *ct2 = NULL, *ctMul = NULL, *ptOut = NULL;
@@ -3747,8 +3849,6 @@ EXIT:
     BSL_SAL_Free(ctMul);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -3764,6 +3864,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_SETPARA_RESETS_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL, *mo = NULL;
     uint8_t *pt = NULL, *ct = NULL, *ptOut = NULL;
@@ -3823,6 +3926,7 @@ EXIT:
     BSL_SAL_Free(ct);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -3837,6 +3941,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_MULSCALAR_REDUCE_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL, *mo = NULL;
     uint8_t *pt = NULL, *ct = NULL, *ctMul = NULL, *ptOut = NULL;
@@ -3901,6 +4008,7 @@ EXIT:
     BSL_SAL_Free(ctMul);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -3916,6 +4024,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_SEEDED_LIMB_INDEP_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
 
     TestMemInit();
@@ -3949,6 +4060,7 @@ void SDV_CRYPTO_HIFHE_BGV_SEEDED_LIMB_INDEP_TC001(void)
     ASSERT_TRUE(same <= 4u);
 EXIT:
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -4005,7 +4117,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_SMALL_CIPHER_MOD_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL, *mo = NULL;
     uint8_t *pt = NULL, *ct = NULL, *ptOut = NULL;
@@ -4062,8 +4176,6 @@ EXIT:
     BSL_SAL_Free(ct);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -4079,7 +4191,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_VECTOR_SIZE_OVERFLOW_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
 
     TestMemInit();
@@ -4095,8 +4209,6 @@ void SDV_CRYPTO_HIFHE_BGV_VECTOR_SIZE_OVERFLOW_TC001(void)
     ASSERT_TRUE(CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_GEN_GALOIS_KEYS, genIn, 0) != HIFHE_SUCCESS);
 EXIT:
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -4114,7 +4226,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_RELIN_KEEPS_CAPS_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL, *mo = NULL;
     Encoder enc;
@@ -4187,8 +4301,6 @@ EXIT:
     BSL_SAL_Free(m);
     BSL_SAL_Free(mo);
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -4204,6 +4316,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_DECRYPT_REJECTS_POLY_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL;
     uint8_t *pt = NULL, *ct = NULL, *ptOut = NULL;
@@ -4245,6 +4360,7 @@ EXIT:
     BSL_SAL_Free(ct);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -4260,7 +4376,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_MODSWITCH_MUL_RELIN_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m1 = NULL, *m2 = NULL, *mo = NULL;
     uint8_t *pt1 = NULL, *pt2 = NULL, *ct1 = NULL, *ct2 = NULL;
@@ -4340,8 +4458,6 @@ EXIT:
     BSL_SAL_Free(ctMul);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -4357,6 +4473,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_DUP_KEEPS_SEED_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *a = NULL, *b = NULL;
     uint8_t *pkA = NULL, *pkB = NULL;
 
@@ -4394,6 +4513,7 @@ EXIT:
     BSL_SAL_Free(pkB);
     CRYPT_BGV_FreeCtx(a);
     CRYPT_BGV_FreeCtx(b);
+#endif
 }
 /* END_CASE */
 
@@ -4447,6 +4567,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_DECRYPT_REVEALS_NO_PHASE_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL, *mo = NULL, *limb0 = NULL, *limb = NULL;
     Encoder enc;
@@ -4538,6 +4661,7 @@ EXIT:
     BSL_SAL_Free(limb0);
     BSL_SAL_Free(limb);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -4553,7 +4677,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_CT_SIZE_CAP_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL, *mo = NULL;
     uint8_t *wire = NULL, *ptBuf = NULL;
@@ -4684,8 +4810,6 @@ EXIT:
     BSL_SAL_Free(wire);
     BSL_SAL_Free(ptBuf);
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -4702,7 +4826,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_GALOIS_COUNT_CAP_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     int32_t *steps = NULL;
     uint64_t *elts = NULL;
@@ -4739,8 +4865,6 @@ EXIT:
     BSL_SAL_Free(steps);
     BSL_SAL_Free(elts);
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -4756,6 +4880,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_DECRYPT_REENCRYPT_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     const int32_t presets[] = {HIFHE_BGV_4096_44x2_17BIT, HIFHE_BGV_8192_44x4_17BIT};
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL, *mo = NULL;
@@ -4832,6 +4959,7 @@ EXIT:
     BSL_SAL_Free(ct2);
     BSL_SAL_Free(ptOut2);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -4847,7 +4975,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_SEEDED_GADGET_LABEL_TC001(void)
 {
-#ifdef HIFHE_CUSTOM_PARAM
+#if !defined(HITLS_PROVIDER) || !defined(HIFHE_CUSTOM_PARAM)
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint8_t seed[HIFHE_BGV_SEED_LEN];
     uint64_t *a3 = NULL;
@@ -4887,8 +5017,6 @@ void SDV_CRYPTO_HIFHE_BGV_SEEDED_GADGET_LABEL_TC001(void)
 EXIT:
     BSL_SAL_Free(a3);
     CRYPT_BGV_FreeCtx(ctx);
-#else
-    SKIP_TEST();
 #endif
 }
 /* END_CASE */
@@ -4904,6 +5032,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_HE_OPERAND_COUNT_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *msg = NULL;
     uint8_t *pt = NULL, *ct1 = NULL, *ct2 = NULL, *out = NULL;
@@ -5009,9 +5140,11 @@ EXIT:
     BSL_SAL_Free(ct2);
     BSL_SAL_Free(out);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
+#ifdef HITLS_PROVIDER
 static uint64_t CtPtNext(uint64_t *s)
 {
     uint64_t z = (*s += 0x9e3779b97f4a7c15ull);
@@ -5019,6 +5152,7 @@ static uint64_t CtPtNext(uint64_t *s)
     z = (z ^ (z >> 27)) * 0x94d049bb133111ebull;
     return z ^ (z >> 31);
 }
+#endif
 
 #define CTPT_DENSE_CTS 16u
 #define CTPT_DENSE_PTS 128u
@@ -5037,6 +5171,9 @@ static uint64_t CtPtNext(uint64_t *s)
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_HEMUL_CTPT_DENSE_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL, *encCtx = NULL;
     uint64_t *a = NULL, *b = NULL, *mo = NULL;
     uint8_t *pt = NULL, *ct = NULL, *ctMul = NULL, *ptOut = NULL, *pk = NULL;
@@ -5121,6 +5258,7 @@ EXIT:
     BSL_SAL_Free(ctMul);
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */
 
@@ -5137,6 +5275,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_PUBKEY_POLY_IMPORT_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *owner = NULL, *encCtx = NULL;
     uint64_t *m = NULL, *mo = NULL;
     uint8_t *wire = NULL, *pt = NULL, *ct = NULL, *ptOut = NULL;
@@ -5220,6 +5361,7 @@ EXIT:
     BSL_SAL_Free(ptOut);
     CRYPT_BGV_FreeCtx(owner);
     CRYPT_BGV_FreeCtx(encCtx);
+#endif
 }
 /* END_CASE */
 
@@ -5233,6 +5375,10 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_PUBKEY_SHAPE_TC001(int shape)
 {
+#ifndef HITLS_PROVIDER
+    (void)shape;
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *owner = NULL, *encCtx = NULL;
     uint8_t *wire = NULL;
     Ciphertext bad;
@@ -5301,6 +5447,7 @@ EXIT:
     BSL_SAL_Free(wire);
     CRYPT_BGV_FreeCtx(owner);
     CRYPT_BGV_FreeCtx(encCtx);
+#endif
 }
 /* END_CASE */
 
@@ -5316,6 +5463,9 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_WIRE_UNREDUCED_WORDS_TC001(void)
 {
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
     CRYPT_BGV_Ctx *ctx = NULL;
     uint64_t *m = NULL, *mo = NULL, *mw = NULL;
     uint8_t *pt = NULL, *wide = NULL;
@@ -5368,5 +5518,6 @@ EXIT:
     BSL_SAL_Free(pt);
     BSL_SAL_Free(wide);
     CRYPT_BGV_FreeCtx(ctx);
+#endif
 }
 /* END_CASE */

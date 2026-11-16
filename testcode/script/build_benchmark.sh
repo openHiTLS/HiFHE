@@ -17,12 +17,13 @@ set -euo pipefail
 usage()
 {
     cat <<'USAGE'
-Usage: build_benchmark.sh [asan] [clean] [run]
+Usage: build_benchmark.sh [asan] [clean] [run] [add-options=FLAGS]
                           [--enable bgv] [--disable bgv]
 
   asan       build with AddressSanitizer
   clean      remove the benchmark binary, then exit
   run        build, then run every benchmark
+  add-options=FLAGS  add compiler flags
   --enable   force an algorithm's modules on  (-DHIFHE_<ALG>=ON)
   --disable  force an algorithm's modules off (-DHIFHE_<ALG>=OFF)
 
@@ -44,14 +45,19 @@ if [[ -z "${HITLS_ROOT_DIR}" && -f "${HIFHE_PROVIDER_DIR}/base_path.txt" ]]; the
 fi
 HITLS_ROOT_DIR=${HITLS_ROOT_DIR:-"${HIFHE_ROOT_DIR}/platform/openhitls"}
 
-ENABLE_ASAN=OFF
+BUILD_ARGS=""
+LINK_ARGS=""
 DO_RUN="no"
 # BGV is enabled by default.
 HIFHE_BGV=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        asan) ENABLE_ASAN=ON ;;
+        asan)
+            BUILD_ARGS="${BUILD_ARGS} -fsanitize=address -fno-omit-frame-pointer"
+            LINK_ARGS="${LINK_ARGS} -fsanitize=address"
+            ;;
+        add-options=*) BUILD_ARGS="${BUILD_ARGS} ${1#add-options=}" ;;
         run)  DO_RUN="yes" ;;
         clean)
             rm -f "${HIFHE_ROOT_DIR}/testcode/output/hifhe_benchmark"
@@ -86,7 +92,8 @@ CMAKE_FEATURE_ARGS+=("-DHITLS_ROOT_PATH=${HITLS_ROOT_DIR}")
 BENCHMARK_BUILD_DIR=${HIFHE_BENCHMARK_DIR:-"${HIFHE_ROOT_DIR}/build/benchmark"}
 cmake -S "${HIFHE_ROOT_DIR}/testcode/benchmark" -B "${BENCHMARK_BUILD_DIR}" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DHIFHE_ENABLE_ASAN="${ENABLE_ASAN}" \
+    -DCMAKE_C_FLAGS="${BUILD_ARGS}" \
+    -DCMAKE_EXE_LINKER_FLAGS="${LINK_ARGS}" \
     "${CMAKE_FEATURE_ARGS[@]}"
 cmake --build "${BENCHMARK_BUILD_DIR}" --target hifhe_benchmark --parallel "$(nproc)"
 

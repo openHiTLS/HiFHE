@@ -30,8 +30,3 @@ message(STATUS "[HiFHE] BGV: ${HIFHE_BGV}")
 message(STATUS "[HiFHE] Provider: ${HITLS_PROVIDER}")
 message(STATUS "[HiFHE] shared: ${HIFHE_BUILD_SHARED}")
 message(STATUS "[HiFHE] static: ${HIFHE_BUILD_STATIC}")
-
-if(HIFHE_BUILD_TESTS)
-    enable_testing()
-    add_subdirectory(testcode)
-endif()

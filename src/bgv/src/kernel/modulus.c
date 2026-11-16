@@ -19,7 +19,7 @@
 /* Division of a 128-bit value, declared in kernel/uint128.h. Only the setup
  * paths divide, so it is not inline. */
 
-#ifndef HIFHE_U128_NATIVE
+#ifndef HIFHE_INT128
 
 /* Leading zero count, without a compiler builtin. */
 static uint32_t Nlz64(uint64_t x)
@@ -114,14 +114,14 @@ static void DivModU64(Uint128 x, uint64_t d, Uint128 *quo, uint64_t *rem)
     *quo = Kernel_U128Make(qHi, qLo);
 }
 
-#endif /* HIFHE_U128_NATIVE */
+#endif /* HIFHE_INT128 */
 
 Uint128 Kernel_U128DivU64(Uint128 x, uint64_t d)
 {
     if (d == 0u) {
         return Kernel_U128From64(0u);
     }
-#ifdef HIFHE_U128_NATIVE
+#ifdef HIFHE_INT128
     return Kernel_U128FromNative(Kernel_U128ToNative(x) / (Uint128Native)d);
 #else
     Uint128 quo;
@@ -136,7 +136,7 @@ uint64_t Kernel_U128ModU64(Uint128 x, uint64_t d)
     if (d == 0u) {
         return 0u;
     }
-#ifdef HIFHE_U128_NATIVE
+#ifdef HIFHE_INT128
     return (uint64_t)(Kernel_U128ToNative(x) % (Uint128Native)d);
 #else
     Uint128 quo;
@@ -151,7 +151,7 @@ Uint128 Kernel_U128Div(Uint128 x, Uint128 d)
     if (d.hi == 0u) {
         return Kernel_U128DivU64(x, d.lo);
     }
-#ifdef HIFHE_U128_NATIVE
+#ifdef HIFHE_INT128
     return Kernel_U128FromNative(Kernel_U128ToNative(x) / Kernel_U128ToNative(d));
 #else
     /* Restoring division, one bit of quotient per step. A divisor wider than a

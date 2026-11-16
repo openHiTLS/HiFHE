@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "hifhe_config.h"
 #include "hifhe.h"
 #include "crypt_eal_init.h"
 #include "crypt_eal_pkey.h"
@@ -24,6 +25,7 @@
 #include "crypt_errno.h"
 #include "test.h"
 /* END_HEADER */
+#if defined(HITLS_PROVIDER) && HIFHE_BUILD_SHARED
 
 /* What the shared library offers a consumer: the provider entry point the
  * loader calls, and the native API. */
@@ -108,9 +110,13 @@ EXIT:
     return ret;
 }
 
+#endif
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_PROVIDER_SYMBOLS_TC001(void)
 {
+#if !defined(HITLS_PROVIDER) || !HIFHE_BUILD_SHARED
+    SKIP_TEST();
+#else
     void *handle = NULL;
     char file[512];
     const char *path = getenv("HIFHE_PROVIDER_PATH");
@@ -133,6 +139,7 @@ EXIT:
     if (handle != NULL) {
         dlclose(handle);
     }
+#endif
 }
 
 /* END_CASE */
@@ -140,6 +147,10 @@ EXIT:
 /* BEGIN_CASE */
 void SDV_CRYPTO_HIFHE_BGV_PROVIDER_LIBCTX_TC001(int paramId)
 {
+#if !defined(HITLS_PROVIDER) || !HIFHE_BUILD_SHARED
+    (void)paramId;
+    SKIP_TEST();
+#else
     CRYPT_EAL_LibCtx *libCtx = NULL;
     bool loaded = false;
     const char *path = getenv("HIFHE_PROVIDER_PATH");
@@ -166,6 +177,7 @@ EXIT:
     }
     CRYPT_EAL_LibCtxFree(libCtx);
     CRYPT_EAL_Cleanup(CRYPT_EAL_INIT_ALL);
+#endif
 }
 
 /* END_CASE */
