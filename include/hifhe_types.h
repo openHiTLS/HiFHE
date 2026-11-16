@@ -128,6 +128,10 @@ typedef enum {
      * so the same seed under two presets yields two unrelated key pairs and
      * two origins. A seed is private-key material either way: whoever holds
      * it can regenerate the private key of every preset it was used with.
+     * Successful HIFHE_KeyGen, which Provider key generation also uses, erases
+     * the stored seed after deriving the origin. Keys generated afterwards on
+     * the same context, such as evaluation keys, use fresh DRBG entropy and
+     * cannot be regenerated from the seed.
      */
     HIFHE_CTRL_BGV_SET_SEED = 100007,
     /**

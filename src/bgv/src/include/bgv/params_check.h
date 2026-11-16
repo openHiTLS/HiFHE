@@ -32,8 +32,7 @@ extern "C" {
  * the Proth search and the per-limb scratch in key switching. */
 #define HIFHE_BGV_MAX_CHAIN_LEN   8u
 #define HIFHE_BGV_MIN_CIPHER_BITS 20u
-/* 59 is the ceiling the Proth search works within, so validation and
- * generation agree on where the band ends. */
+/* Public parameter policy; the NTT kernel independently requires q < 2^62. */
 #define HIFHE_BGV_MAX_CIPHER_BITS 59u
 #define HIFHE_BGV_MIN_PLAIN_BITS  2u
 #define HIFHE_BGV_MAX_PLAIN_BITS  59u

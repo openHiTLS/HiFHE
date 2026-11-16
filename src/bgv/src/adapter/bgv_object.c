@@ -298,9 +298,9 @@ static int32_t BgvRerandomize(const HIFHE_Ctx *ctx, const void *data, void **out
  * only thing that makes BGV keys reproducible, so it is what the id is
  * derived from, under its own label; without one the keys are unrepeatable
  * and so is the id. */
-static int32_t BgvKeysetId(const void *data, uint8_t *id, uint32_t idLen)
+static int32_t BgvKeysetId(void *data, uint8_t *id, uint32_t idLen)
 {
-    const CRYPT_BGV_Ctx *runtime = data;
+    CRYPT_BGV_Ctx *runtime = data;
     const uint8_t *seed = BgvContext_GetSeed(&runtime->bgv.context.rlweContext.seedCtx);
     if (seed == NULL) {
         return BgvRand_Drbg(id, idLen);
@@ -311,7 +311,13 @@ static int32_t BgvKeysetId(const void *data, uint8_t *id, uint32_t idLen)
         HIFHE_ERR_PUSH_ERROR(HIFHE_INTERNAL);
         return HIFHE_INTERNAL;
     }
-    return BgvRand_Seeded(seed, HIFHE_CTX_SEED_LEN, (const uint8_t *)label, (uint32_t)strlen(label), id, idLen);
+    int32_t ret = BgvRand_Seeded(seed, HIFHE_CTX_SEED_LEN, (const uint8_t *)label, (uint32_t)strlen(label), id, idLen);
+    if (ret == HIFHE_SUCCESS) {
+        /* Native key generation is complete and the reproducible origin is
+         * now held separately. Encryption always uses fresh DRBG entropy. */
+        BgvContext_ClearSeed(&runtime->bgv.context.rlweContext.seedCtx);
+    }
+    return ret;
 }
 
 /* A text carries no context of its own; serializing needs one, so take a copy
@@ -449,7 +455,7 @@ static int32_t BgvDeserialize(const HIFHE_Ctx *ctx, uint32_t kind, const uint8_t
     return FinishLoad(t, math, caps, ret, out);
 }
 
-/* Magic, version and the declared wire type of an interchange buffer. */
+/* Validate the interchange header and read its declared object type. */
 #ifdef HIFHE_CUSTOM_PARAM
 static int32_t NativeHeaderPeek(const uint8_t *in, uint32_t len, uint32_t *type)
 {

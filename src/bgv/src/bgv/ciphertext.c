@@ -166,6 +166,7 @@ HIFHE_ERROR BGV_Ciphertext_Destroy(Ciphertext *self)
         return HIFHE_NULL_INPUT;
     }
     if (self->ownsData && self->data != NULL) {
+        HifheCleanse(self->data, self->dataSize * (uint32_t)sizeof(uint64_t));
         HifheFree(self->data);
     }
     BGV_CiphertextConfig_Destroy(&self->config);

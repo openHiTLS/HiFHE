@@ -34,13 +34,15 @@
 /* HIFHE_BGV_MAX_CIPHERTEXT_SIZE, and the modular helpers the key-recovery
  * attempt needs to do its own arithmetic on the wire. */
 #include "bgv/bgv.h"
+#include "bgv/evaluator.h"
+#include "bgv/ciphertext.h"
 #include "kernel/modulus.h"
 #include "crypto_test_util.h"
 #include "test.h"
 /* END_HEADER */
 
 /* Wire layout, per the format comment at the top of bgv_adapter_serdes.c:
- *   header(12)   magic(4) algId(4) version(2) type(2)
+ *   header(12)   magic(4) algId(4) format(2) type(2)
  *   plaintext    scaleFactor(8) polyDegree(4) rnsSize(4) dtype(4)
  *                | rnsBase[rnsSize](8) | data[rnsSize * polyDegree](8)
  *   ciphertext   ciphertextSize(4) correctionFactor(8) seed[4](8)
@@ -596,12 +598,12 @@ EXIT:
  * so a case can fail the n-th allocation, check the balance afterwards, and
  * look inside a block on its way to free(). Blocks taken before arming are
  * passed straight through. */
-#ifdef HITLS_PROVIDER
 #define SEC_ALLOC_SLOTS 4096u
 
 typedef struct {
     void *ptr;
     uint32_t size;
+    int zeroed;
 } SecBlock;
 
 static SecBlock g_secBlocks[SEC_ALLOC_SLOTS];
@@ -633,6 +635,12 @@ static uint32_t SecBlockTake(void *p)
     for (uint32_t i = 0; i < SEC_ALLOC_SLOTS; ++i) {
         if (g_secBlocks[i].ptr == p) {
             uint32_t size = g_secBlocks[i].size;
+            const uint8_t *bytes = p;
+            uint8_t nonzero = 0u;
+            for (uint32_t j = 0; j < size; ++j) {
+                nonzero |= bytes[j];
+            }
+            g_secBlocks[i].zeroed = nonzero == 0u;
             g_secBlocks[i].ptr = NULL;
             g_secBlocks[i].size = 0u;
             g_secLive--;
@@ -702,7 +710,6 @@ static void SecAllocHookRemove(void)
     g_secNeedle = NULL;
     (void)HIFHE_SetMemFuncs(NULL, NULL);
 }
-#endif
 
 /* @
 * @test  SDV_CRYPTO_HIFHE_BGV_SEC_ENCODE_ALLOC_FAILURE_TC001
@@ -1159,8 +1166,7 @@ static int SecSeededKeys(int32_t preset, const uint8_t *seed, SecSeeded *s)
     *pub = NULL;
     *prv = NULL;
     if (HIFHE_SetParaById(ctx, preset) != HIFHE_SUCCESS ||
-        HIFHE_Ctrl(ctx, HIFHE_CTRL_BGV_SET_SEED, NULL, (void *)(uintptr_t)seed, HIFHE_BGV_SEED_LEN) != HIFHE_SUCCESS ||
-        HIFHE_KeyGen(ctx) != HIFHE_SUCCESS) {
+        HIFHE_Ctrl(ctx, HIFHE_CTRL_BGV_SET_SEED, NULL, (void *)(uintptr_t)seed, HIFHE_BGV_SEED_LEN) != HIFHE_SUCCESS) {
         goto EXIT;
     }
     const CRYPT_BGV_Ctx *runtime = ctx->data;
@@ -1169,6 +1175,15 @@ static int SecSeededKeys(int32_t preset, const uint8_t *seed, SecSeeded *s)
         goto EXIT;
     }
     memcpy(s->bound, stored, sizeof(s->bound));
+    if (HIFHE_KeyGen(ctx) != HIFHE_SUCCESS) {
+        goto EXIT;
+    }
+    runtime = ctx->data;
+    const BgvContext *seedCtx = &runtime->bgv.context.rlweContext.seedCtx;
+    uint8_t zero[HIFHE_CTX_SEED_LEN] = {0};
+    if (BgvContext_GetSeed(seedCtx) != NULL || memcmp(seedCtx->seed, zero, sizeof(zero)) != 0) {
+        goto EXIT;
+    }
     memcpy(s->origin, ctx->keysetId, sizeof(s->origin));
     *pubLen = 0u;
     *prvLen = 0u;
@@ -1539,5 +1554,423 @@ EXIT:
     CRYPT_BGV_FreeCtx(ctx);
     CRYPT_BGV_FreeCtx(pinned);
 #endif
+}
+/* END_CASE */
+
+/* @
+* @test  SDV_CRYPTO_HIFHE_BGV_SEC_KEY_PARSE_TC001
+* @title  Reject trailing bytes and reduced zero public keys without replacing keys.
+* @auto  TRUE
+@ */
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_SEC_KEY_PARSE_TC001(void)
+{
+    HIFHE_Ctx *src = NULL, *dst = NULL;
+    uint8_t *pk = NULL, *sk = NULL, *after = NULL;
+    uint32_t pkLen = 0u, skLen = 0u, n = 0u;
+    TestMemInit();
+    TestRandInit();
+    src = HIFHE_New(HIFHE_BGV);
+    dst = HIFHE_New(HIFHE_BGV);
+    ASSERT_TRUE(src != NULL && dst != NULL);
+    ASSERT_EQ(HIFHE_SetParaById(src, HIFHE_BGV_2048_48_17BIT), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_SetParaById(dst, HIFHE_BGV_2048_48_17BIT), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_KeyGen(src), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_ExportPubKey(src, NULL, &pkLen), HIFHE_BUFFER_TOO_SMALL);
+    ASSERT_EQ(HIFHE_ExportPrvKey(src, NULL, &skLen), HIFHE_BUFFER_TOO_SMALL);
+    pk = malloc(pkLen + 1u);
+    sk = malloc(skLen + 1u);
+    after = malloc(pkLen);
+    ASSERT_TRUE(pk != NULL && sk != NULL && after != NULL);
+    ASSERT_EQ(HIFHE_ExportPubKey(src, pk, &pkLen), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_ExportPrvKey(src, sk, &skLen), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_ImportPrvKey(dst, sk, skLen), HIFHE_SUCCESS);
+    ASSERT_EQ(HIFHE_ImportPubKey(dst, pk, pkLen), HIFHE_SUCCESS);
+    pk[pkLen] = 0x5au;
+    sk[skLen] = 0x5au;
+    ASSERT_EQ(HIFHE_ImportPubKey(dst, pk, pkLen + 1u), HIFHE_SERDES_FAIL);
+    ASSERT_EQ(HIFHE_ImportPrvKey(dst, sk, skLen + 1u), HIFHE_SERDES_FAIL);
+    ASSERT_EQ(HIFHE_ImportPubKey(dst, pk, pkLen - 1u), HIFHE_SERDES_FAIL);
+    n = pkLen;
+    ASSERT_EQ(HIFHE_ExportPubKey(dst, after, &n), HIFHE_SUCCESS);
+    ASSERT_EQ(memcmp(pk, after, pkLen), 0);
+    n = skLen;
+    /* The rejected private key must also remain untouched. */
+    uint8_t *skAfter = malloc(skLen);
+    ASSERT_TRUE(skAfter != NULL);
+    int32_t ret = HIFHE_ExportPrvKey(dst, skAfter, &n);
+    int same = ret == HIFHE_SUCCESS && n == skLen && memcmp(sk, skAfter, skLen) == 0;
+    free(skAfter);
+    ASSERT_TRUE(same);
+
+    /* One 48-bit limb: accept neither literal zero nor q-valued words,
+     * in either coefficient or Montgomery NTT representation. */
+    uint64_t q;
+    memcpy(&q, pk + WIRE_HDR + WIRE_CT_FIXED, sizeof(q));
+    uint32_t dataOff = WIRE_HDR + WIRE_CT_FIXED + 8u;
+    for (uint32_t form = 0; form < 2u; ++form) {
+        for (uint32_t equivalent = 0; equivalent < 2u; ++equivalent) {
+            memcpy(pk + WIRE_HDR + 52u, &form, sizeof(form));
+            uint64_t v = equivalent ? q : 0u;
+            for (uint32_t off = dataOff; off < pkLen; off += 8u) {
+                memcpy(pk + off, &v, sizeof(v));
+            }
+            ASSERT_EQ(HIFHE_ImportPubKey(dst, pk, pkLen), HIFHE_SERDES_FAIL);
+            n = pkLen;
+            ASSERT_EQ(HIFHE_ExportPubKey(dst, pk, &n), HIFHE_SUCCESS);
+            ASSERT_EQ(memcmp(pk, after, pkLen), 0);
+        }
+    }
+EXIT:
+    free(pk);
+    free(sk);
+    free(after);
+    HIFHE_Free(src);
+    HIFHE_Free(dst);
+}
+/* END_CASE */
+
+/* @
+* @test  SDV_CRYPTO_HIFHE_BGV_SEC_CENTERED_SCALE_TC001
+* @title  A scale ratio of minus one negates coefficients without multiplying noise by t-1.
+* @auto  TRUE
+@ */
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_SEC_CENTERED_SCALE_TC001(void)
+{
+    CRYPT_BGV_Ctx *ctx = NULL;
+    Ciphertext a = {0}, b = {0}, out = {0};
+    Evaluator ev;
+    TestMemInit();
+    ctx = CRYPT_BGV_NewCtx(HIFHE_BGV);
+    ASSERT_TRUE(ctx != NULL);
+    ASSERT_EQ(Bgv_SetPreset(ctx, HIFHE_BGV_2048_48_17BIT), HIFHE_SUCCESS);
+    ASSERT_EQ(Bgv_BuildContext(ctx), HIFHE_SUCCESS);
+    BGVContext *bc = &ctx->bgv.context;
+    ASSERT_EQ(BGV_Ciphertext_CreateSize2Ntt(&a, 1u, &bc->rlweContext.cipherRnsBase, bc), HIFHE_SUCCESS);
+    ASSERT_EQ(BGV_Ciphertext_CreateSize2Ntt(&b, 65536u, &bc->rlweContext.cipherRnsBase, bc), HIFHE_SUCCESS);
+    ASSERT_EQ(BGV_Evaluator_Create(&ev, bc, NULL, NULL), HIFHE_SUCCESS);
+    for (uint32_t i = 0; i < a.dataSize; ++i) {
+        a.data[i] = 7u;
+        b.data[i] = 11u;
+    }
+    ASSERT_EQ(BGV_Evaluator_AddCtCt(&out, &a, &b, &ev), HIFHE_SUCCESS);
+    for (uint32_t i = 0; i < out.dataSize; ++i) {
+        ASSERT_EQ(out.data[i], bc->rlweContext.cipherRnsBase.data[0] - 4u);
+    }
+    ASSERT_EQ(out.config.correctionFactor, 1u);
+    /* Exercise both output aliases, including the temporary-output path. */
+    ASSERT_EQ(BGV_Evaluator_AddCtCt(&a, &a, &b, &ev), HIFHE_SUCCESS);
+    ASSERT_EQ(memcmp(a.data, out.data, out.dataSize * sizeof(uint64_t)), 0);
+    for (uint32_t i = 0; i < a.dataSize; ++i) {
+        a.data[i] = 7u;
+    }
+    ASSERT_EQ(BGV_Evaluator_AddCtCt(&b, &a, &b, &ev), HIFHE_SUCCESS);
+    ASSERT_EQ(memcmp(b.data, out.data, out.dataSize * sizeof(uint64_t)), 0);
+EXIT:
+    BGV_Ciphertext_Destroy(&a);
+    BGV_Ciphertext_Destroy(&b);
+    BGV_Ciphertext_Destroy(&out);
+    CRYPT_BGV_FreeCtx(ctx);
+}
+/* END_CASE */
+
+/* @
+* @test  SDV_CRYPTO_HIFHE_BGV_SEC_PINNED_BOUNDS_TC001
+* @title  Pinned parameter widths, duplicate moduli and NTT bounds are checked before building.
+* @auto  TRUE
+@ */
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_SEC_PINNED_BOUNDS_TC001(void)
+{
+#ifndef HIFHE_CUSTOM_PARAM
+    SKIP_TEST();
+#else
+    CRYPT_BGV_Ctx *ctx = NULL;
+    uint64_t table[HIFHE_NTT_TABLE_WORDS(2u)] = {0};
+    NttTables tbl;
+    BarrettConst barrett;
+    ShoupConst shoup;
+    TestMemInit();
+    ASSERT_EQ(Kernel_BarrettConst_Init(&barrett, UINT64_C(1) << 63), HIFHE_PARAM_INVALID);
+    ASSERT_EQ(Kernel_ShoupConst_Init(&shoup, 1u, UINT64_C(1) << 63), HIFHE_PARAM_INVALID);
+    ASSERT_EQ(Kernel_Ntt_AttachTables(&tbl, table, (UINT64_C(1) << 62) + 1u, 2u), HIFHE_PARAM_INVALID);
+    ASSERT_EQ(Kernel_Ntt_BuildTables(&tbl, table, (UINT64_C(1) << 62) + 1u, 2u), HIFHE_PARAM_INVALID);
+    ASSERT_EQ(Kernel_Ntt_AttachTables(&tbl, table, 19u, 2u), HIFHE_PARAM_INVALID);
+    ctx = CRYPT_BGV_NewCtx(HIFHE_BGV);
+    ASSERT_TRUE(ctx != NULL);
+    ASSERT_EQ(Bgv_SetPreset(ctx, HIFHE_BGV_2048_48_17BIT), HIFHE_SUCCESS);
+    ctx->para.vetted = 0u;
+    ctx->para.plainModBit = 18u;
+    ASSERT_EQ(Bgv_BuildContext(ctx), HIFHE_PARAM_INVALID);
+    ctx->para.plainModBit = 17u;
+    ctx->para.cipherModBit.data[0] = 47u;
+    ASSERT_EQ(Bgv_BuildContext(ctx), HIFHE_PARAM_INVALID);
+    ctx->para.cipherModBit.data[0] = 48u;
+    ASSERT_EQ(Bgv_BuildContext(ctx), HIFHE_SUCCESS);
+    CRYPT_BGV_FreeCtx(ctx);
+    ctx = CRYPT_BGV_NewCtx(HIFHE_BGV);
+    ASSERT_TRUE(ctx != NULL);
+    ASSERT_EQ(Bgv_SetPreset(ctx, HIFHE_BGV_4096_44x2_17BIT), HIFHE_SUCCESS);
+    ctx->para.vetted = 0u;
+    ctx->para.cipherMod.data[1] = ctx->para.cipherMod.data[0];
+    ASSERT_EQ(Bgv_BuildContext(ctx), HIFHE_PARAM_INVALID);
+EXIT:
+    CRYPT_BGV_FreeCtx(ctx);
+#endif
+}
+/* END_CASE */
+
+/* @
+* @test  SDV_CRYPTO_HIFHE_BGV_SEC_CLEAR_SEED_TC001
+* @title  Explicit seed retirement preserves keys and removes seed material from duplicates.
+* @auto  TRUE
+@ */
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_SEC_CLEAR_SEED_TC001(void)
+{
+#ifndef HITLS_PROVIDER
+    SKIP_TEST();
+#else
+    CRYPT_BGV_Ctx *ctx = NULL, *dup = NULL;
+    uint8_t zero[HIFHE_CTX_SEED_LEN] = {0};
+    TestMemInit();
+    TestRandInit();
+    ctx = SecNewCtx(HIFHE_BGV_2048_48_17BIT, SEC_SEED_A, 1);
+    ASSERT_TRUE(ctx != NULL);
+    ASSERT_TRUE(ctx->bgv.context.rlweContext.seedCtx.hasSeed);
+    ASSERT_EQ(CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_CLEAR_SEED, zero, 0u), HIFHE_PARAM_INVALID);
+    ASSERT_EQ(CRYPT_BGV_Ctrl(ctx, HIFHE_CTRL_BGV_CLEAR_SEED, NULL, 0u), HIFHE_SUCCESS);
+    ASSERT_EQ(memcmp(ctx->bgv.context.rlweContext.seedCtx.seed, zero, sizeof(zero)), 0);
+    ASSERT_TRUE(!ctx->bgv.context.rlweContext.seedCtx.hasSeed);
+    dup = CRYPT_BGV_DupCtx(ctx);
+    ASSERT_TRUE(dup != NULL);
+    ASSERT_TRUE(!dup->bgv.context.rlweContext.seedCtx.hasSeed);
+    ASSERT_EQ(memcmp(dup->bgv.pk.data, ctx->bgv.pk.data, ctx->bgv.pk.dataSize * sizeof(uint64_t)), 0);
+    ASSERT_EQ(memcmp(dup->bgv.keygen.sk->data, ctx->bgv.keygen.sk->data,
+        ctx->bgv.keygen.sk->dataSize * sizeof(uint64_t)), 0);
+#ifdef HIFHE_CUSTOM_PARAM
+    ASSERT_EQ(Bgv_GenRelinKey(dup), HIFHE_SUCCESS);
+#endif
+EXIT:
+    CRYPT_BGV_FreeCtx(ctx);
+    CRYPT_BGV_FreeCtx(dup);
+#endif
+}
+/* END_CASE */
+
+/* @
+* @test  SDV_CRYPTO_HIFHE_BGV_SEC_CT_SCRATCH_WIPED_TC001
+* @title  Ciphertext destruction erases owned data and leaves borrowed buffers untouched.
+* @auto  TRUE
+@ */
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_SEC_CT_SCRATCH_WIPED_TC001(void)
+{
+    CRYPT_BGV_Ctx *ctx = NULL;
+    Ciphertext ct = {0}, borrowed = {0};
+    int hooked = 0;
+    uint32_t block = SEC_ALLOC_SLOTS;
+    TestMemInit();
+    ctx = CRYPT_BGV_NewCtx(HIFHE_BGV);
+    ASSERT_TRUE(ctx != NULL);
+    ASSERT_EQ(Bgv_SetPreset(ctx, HIFHE_BGV_2048_48_17BIT), HIFHE_SUCCESS);
+    ASSERT_EQ(Bgv_BuildContext(ctx), HIFHE_SUCCESS);
+    ASSERT_EQ(SecAllocHookInstall(), 0);
+    hooked = 1;
+    g_secArmed = 1;
+    ASSERT_EQ(BGV_Ciphertext_CreateSize2Ntt(&ct, 1u, &ctx->bgv.context.rlweContext.cipherRnsBase,
+        &ctx->bgv.context), HIFHE_SUCCESS);
+    memset(ct.data, 0xa5, ct.dataSize * sizeof(uint64_t));
+    borrowed.data = ct.data;
+    borrowed.dataSize = ct.dataSize;
+    ASSERT_EQ(BGV_Ciphertext_Destroy(&borrowed), HIFHE_SUCCESS);
+    ASSERT_EQ(ct.data[0], UINT64_C(0xa5a5a5a5a5a5a5a5));
+    for (uint32_t i = 0; i < SEC_ALLOC_SLOTS; ++i) {
+        if (g_secBlocks[i].ptr == ct.data) {
+            block = i;
+            break;
+        }
+    }
+    ASSERT_TRUE(block < SEC_ALLOC_SLOTS);
+    ASSERT_EQ(BGV_Ciphertext_Destroy(&ct), HIFHE_SUCCESS);
+    ASSERT_TRUE(g_secBlocks[block].ptr == NULL && g_secBlocks[block].zeroed);
+    ASSERT_EQ(g_secLive, 0u);
+EXIT:
+    if (hooked) {
+        SecAllocHookRemove();
+    }
+    BGV_Ciphertext_Destroy(&ct);
+    CRYPT_BGV_FreeCtx(ctx);
+}
+/* END_CASE */
+/* @
+* @test  SDV_CRYPTO_HIFHE_BGV_SEC_TRAILING_ADAPTER_TC001
+* @title  Adapter loads reject trailing bytes without retaining allocations.
+* @auto  TRUE
+@ */
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_SEC_TRAILING_ADAPTER_TC001(int operation)
+{
+#ifndef HITLS_PROVIDER
+    (void)operation;
+    SKIP_TEST();
+#else
+#ifndef HIFHE_CUSTOM_PARAM
+    if (operation == 6) {
+        SKIP_TEST();
+    }
+#endif
+    CRYPT_BGV_Ctx *ctx = NULL;
+    uint64_t *msg = NULL;
+    uint8_t *pt = NULL, *ct = NULL, *key = NULL, *out = NULL;
+    uint32_t ptLen = 0u, ctLen = 0u, keyLen = 0u;
+    SecDims d;
+    int installed = 0;
+    TestMemInit();
+    TestRandInit();
+    ctx = SecNewCtx(HIFHE_BGV_2048_48_17BIT, SEC_SEED_A, 1);
+    ASSERT_TRUE(ctx != NULL);
+    ASSERT_EQ(SecDimsGet(ctx, &d), 0);
+    msg = calloc(1u, d.msgLen);
+    pt = malloc(d.ptLen + 1u);
+    ct = malloc(d.ctLen + 1u);
+    out = malloc(d.ctLen + d.msgLen);
+    ASSERT_TRUE(msg != NULL && pt != NULL && ct != NULL && out != NULL);
+    ASSERT_EQ(SecEncode(ctx, msg, d.msgLen, pt, d.ptLen, &ptLen), 0);
+    ctLen = d.ctLen;
+    ASSERT_EQ(CRYPT_BGV_Encrypt(ctx, pt, ptLen, ct, &ctLen), HIFHE_SUCCESS);
+    pt[ptLen] = ct[ctLen] = 0x5au;
+    if (operation >= 9) {
+        ASSERT_EQ(operation == 9 ? Bgv_DumpPub(ctx, NULL, &keyLen) : Bgv_DumpPrv(ctx, NULL, &keyLen),
+            HIFHE_BUFFER_TOO_SMALL);
+        key = malloc(keyLen + 1u);
+        ASSERT_TRUE(key != NULL);
+        ASSERT_EQ(operation == 9 ? Bgv_DumpPub(ctx, key, &keyLen) : Bgv_DumpPrv(ctx, key, &keyLen),
+            HIFHE_SUCCESS);
+        key[keyLen] = 0x5au;
+    }
+    BSL_Param operands[] = {
+        {HIFHE_PARAM_BGV_CIPHERTEXT1, BSL_PARAM_TYPE_OCTETS, ct, ctLen, 0},
+        {HIFHE_PARAM_BGV_CIPHERTEXT2, BSL_PARAM_TYPE_OCTETS, ct, ctLen, 0}, BSL_PARAM_END};
+    BSL_Param plain[] = {
+        {HIFHE_PARAM_BGV_PLAINTEXT, BSL_PARAM_TYPE_OCTETS, pt, ptLen + 1u, 0}, BSL_PARAM_END};
+    BSL_Param keys[] = {
+        {operation == 9 ? HIFHE_PARAM_BGV_PUBKEY : HIFHE_PARAM_BGV_PRVKEY,
+            BSL_PARAM_TYPE_OCTETS, key, keyLen + 1u, 0}, BSL_PARAM_END};
+    if (operation == 2 || operation == 5) {
+        operands[0].valueLen++;
+    } else if (operation == 3 || operation == 6) {
+        operands[1].valueLen++;
+    } else if (operation == 4 || operation == 7) {
+        operands[1] = plain[0];
+    }
+    ASSERT_EQ(SecAllocHookInstall(), 0);
+    installed = 1;
+    g_secArmed = 1;
+    uint32_t outLen = d.ctLen + d.msgLen;
+    int32_t ret;
+    switch (operation) {
+        case 0: ret = CRYPT_BGV_Encrypt(ctx, pt, ptLen + 1u, out, &outLen); break;
+        case 1: ret = CRYPT_BGV_Decrypt(ctx, ct, ctLen + 1u, out, &outLen); break;
+        case 2:
+        case 3:
+        case 4: ret = CRYPT_BGV_HEAdd(ctx, operands, out, &outLen); break;
+        case 5:
+        case 6:
+        case 7: ret = CRYPT_BGV_HEMul(ctx, operands, out, &outLen); break;
+        case 8: ret = CRYPT_BGV_HEMsgDecode(ctx, plain, out, &outLen); break;
+        case 9: ret = CRYPT_BGV_SetPubKeyEx(ctx, keys); break;
+        default: ret = CRYPT_BGV_SetPrvKeyEx(ctx, keys); break;
+    }
+    g_secArmed = 0;
+    ASSERT_EQ(ret, HIFHE_SERDES_FAIL);
+    ASSERT_EQ(g_secOverflow, 0);
+    ASSERT_EQ(g_secLive, 0u);
+EXIT:
+    if (installed) {
+        SecAllocHookRemove();
+    }
+    free(msg);
+    free(pt);
+    free(ct);
+    free(key);
+    free(out);
+    CRYPT_BGV_FreeCtx(ctx);
+#endif
+}
+/* END_CASE */
+
+/* @
+* @test  SDV_CRYPTO_HIFHE_BGV_SEC_TRAILING_BODY_TC001
+* @title  Body loads reject trailing bytes before allocating and destroy prior output state.
+* @auto  TRUE
+@ */
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_SEC_TRAILING_BODY_TC001(int kind)
+{
+#if !defined(HIFHE_CUSTOM_PARAM) && !defined(HITLS_PROVIDER)
+    if (kind == 2 || kind == 3) {
+        SKIP_TEST();
+    }
+#endif
+    int cipher = kind % 2;
+    CRYPT_BGV_Ctx *ctx = NULL;
+    Plaintext pt = {0};
+    Ciphertext ct = {0};
+    PlaintextConfig cfg = {0};
+    uint8_t *wire = NULL;
+    int installed = 0;
+    TestMemInit();
+    ctx = CRYPT_BGV_NewCtx(HIFHE_BGV);
+    ASSERT_TRUE(ctx != NULL);
+    ASSERT_EQ(Bgv_SetPreset(ctx, HIFHE_BGV_2048_48_17BIT), HIFHE_SUCCESS);
+    ASSERT_EQ(Bgv_BuildContext(ctx), HIFHE_SUCCESS);
+    BGVContext *bc = &ctx->bgv.context;
+    ASSERT_EQ(BGV_BGVContext_GetDefaultPlaintextConfig(&cfg, bc), HIFHE_SUCCESS);
+    ASSERT_EQ(BGV_Plaintext_Create(&pt, &cfg, bc), HIFHE_SUCCESS);
+    ASSERT_EQ(BGV_Ciphertext_CreateSize2Ntt(&ct, 1u, &bc->rlweContext.cipherRnsBase, bc), HIFHE_SUCCESS);
+    void *obj = cipher ? (void *)&ct : (void *)&pt;
+    uint32_t len = BgvSerDes_BodySize(cipher != 0, obj) + (kind >= 2 ? WIRE_HDR : 0u);
+    wire = malloc(len + 1u);
+    ASSERT_TRUE(wire != NULL);
+    int32_t ret;
+    switch (kind) {
+#if defined(HIFHE_CUSTOM_PARAM) || defined(HITLS_PROVIDER)
+        case 2: ret = BgvSerDes_DumpPlaintext(&pt, wire, &len, HIFHE_BGV); break;
+        case 3: ret = BgvSerDes_DumpCiphertext(&ct, wire, &len, HIFHE_BGV); break;
+#endif
+        case 4: ret = BgvSerDes_DumpPrvKey(&pt, wire, &len, HIFHE_BGV); break;
+        case 5: ret = BgvSerDes_DumpPubKey(&ct, wire, &len, HIFHE_BGV); break;
+        default: ret = BgvSerDes_WriteBody(cipher != 0, obj, wire, len); break;
+    }
+    ASSERT_EQ(ret, HIFHE_SUCCESS);
+    wire[len] = 0x5au;
+    ASSERT_EQ(SecAllocHookInstall(), 0);
+    installed = 1;
+    g_secArmed = 1;
+    switch (kind) {
+#if defined(HIFHE_CUSTOM_PARAM) || defined(HITLS_PROVIDER)
+        case 2: ret = BgvSerDes_LoadPlaintext(&pt, wire, len + 1u, bc); break;
+        case 3: ret = BgvSerDes_LoadCiphertext(&ct, wire, len + 1u, bc); break;
+#endif
+        case 4: ret = BgvSerDes_LoadPrvKey(&pt, wire, len + 1u, bc); break;
+        case 5: ret = BgvSerDes_LoadPubKey(&ct, wire, len + 1u, bc); break;
+        default: ret = BgvSerDes_ReadBody(cipher != 0, obj, wire, len + 1u, bc); break;
+    }
+    ASSERT_EQ(ret, HIFHE_SERDES_FAIL);
+    ASSERT_EQ(g_secSeen, 0u);
+    ASSERT_EQ(g_secLive, 0u);
+    ASSERT_TRUE(cipher ? ct.data == NULL && ct.config.crtConfig.rnsbase.data == NULL :
+        pt.data == NULL && pt.config.crtConfig.rnsbase.data == NULL);
+EXIT:
+    BGV_Plaintext_Destroy(&pt);
+    BGV_Ciphertext_Destroy(&ct);
+    BGV_PlaintextConfig_Destroy(&cfg);
+    if (installed) {
+        SecAllocHookRemove();
+    }
+    free(wire);
+    CRYPT_BGV_FreeCtx(ctx);
 }
 /* END_CASE */

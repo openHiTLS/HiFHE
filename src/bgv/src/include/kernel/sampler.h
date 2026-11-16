@@ -40,11 +40,11 @@ HIFHE_ERROR Kernel_Sampler_UniformModQ(uint64_t *out, uint32_t count, Modulus q,
 /* Ternary secret, `count` outputs into `out[0..count)` in signed int64. */
 HIFHE_ERROR Kernel_Sampler_Ternary(int64_t *out, uint32_t count, const BgvEntropy *src);
 
-/* Fixed-Hamming-weight ternary: weight/2 entries +1, weight/2 entries -1,
+/* Fixed-Hamming-weight ternary: ceil(weight/2) entries +1, floor(weight/2) entries -1,
  * rest 0, then shuffled. Construction order matters for seeded replay:
  * +1 block, -1 block, then Fisher-Yates walking i from `count` down to 1,
  * swapping i-1 with a uniform j in [0, i).
- * `weight` rounds down to even; weight > count is rejected. */
+ * Odd weights keep the extra +1; weight > count is rejected. */
 HIFHE_ERROR Kernel_Sampler_TernaryFixedWeight(int64_t *out, uint32_t count, uint32_t weight, const BgvEntropy *src);
 
 /* CBD(eta) noise into `out[0..count)`, signed int64. */

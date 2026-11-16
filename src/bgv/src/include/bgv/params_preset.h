@@ -27,7 +27,7 @@ extern "C" {
 
 typedef struct {
     uint32_t polyDegree;
-    uint32_t plainModBit; /* used only when plainMod == 0 */
+    uint32_t plainModBit; /* declared width; also used by the prime search */
     uint64_t plainMod; /* if non-zero, overrides Proth search */
     uint64_t correctionFactor;
     uint32_t relinDnum;

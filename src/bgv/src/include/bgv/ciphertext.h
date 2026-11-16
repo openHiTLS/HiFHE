@@ -65,6 +65,7 @@ HIFHE_ERROR BGV_Ciphertext_CreateUninit(Ciphertext *out, const CiphertextConfig 
 HIFHE_ERROR BGV_Ciphertext_CreateSize2Ntt(Ciphertext *out, uint64_t correctionFactor, const RnsBase *base,
                                           BGVContext *ctx);
 HIFHE_ERROR BGV_Ciphertext_Copy(Ciphertext *dst, const Ciphertext *src);
+/* Erase and release owned data; borrowed buffers remain with their owner. */
 HIFHE_ERROR BGV_Ciphertext_Destroy(Ciphertext *self);
 
 /* Access one component polynomial. `out` is a view (does NOT own data). */
