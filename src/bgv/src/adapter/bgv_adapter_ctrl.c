@@ -144,6 +144,14 @@ int32_t BgvCtrl_Dispatch(CRYPT_BGV_Ctx *ctx, int32_t cmd, void *val, uint32_t va
 
 #endif
 
+        case HIFHE_CTRL_BGV_CLEAR_SEED:
+            if (val != NULL || valLen != 0u) {
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
+                return HIFHE_PARAM_INVALID;
+            }
+            BgvContext_ClearSeed(&ctx->bgv.context.rlweContext.seedCtx);
+            return HIFHE_SUCCESS;
+
         case HIFHE_CTRL_BGV_SET_SEED: {
             if (val == NULL || valLen != HIFHE_CTX_SEED_LEN) {
                 HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);

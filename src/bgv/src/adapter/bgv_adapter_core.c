@@ -212,6 +212,15 @@ fail:
 /* ---------------- BuildContext ---------------- */
 
 #ifdef HIFHE_CUSTOM_PARAM
+static uint32_t Bgv_ModulusBits(uint64_t q)
+{
+    uint32_t bits = 0u;
+    for (; q != 0u; q >>= 1) {
+        ++bits;
+    }
+    return bits;
+}
+
 static uint64_t Bgv_GcdU64(uint64_t a, uint64_t b)
 {
     while (b != 0u) {
@@ -247,7 +256,8 @@ static HIFHE_ERROR Bgv_ResolveModuli(const BgvUserPara *p, ModulusVector *cipher
              * has to be prime: a composite can satisfy q = 1 mod 2N and carry
              * a root, but the table builder inverts by Fermat. */
             uint64_t root = 0u;
-            if (!Kernel_Prime_IsPrime(p->cipherMod.data[i]) ||
+            if (Bgv_ModulusBits(p->cipherMod.data[i]) != p->cipherModBit.data[i] ||
+                !Kernel_Prime_IsPrime(p->cipherMod.data[i]) ||
                 Kernel_Prime_PrimitiveRoot2N(&root, p->cipherMod.data[i], p->polyDegree) != HIFHE_SUCCESS) {
                 HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
                 return HIFHE_PARAM_INVALID;
@@ -286,12 +296,25 @@ static HIFHE_ERROR Bgv_ResolveModuli(const BgvUserPara *p, ModulusVector *cipher
             Uint64Vector_Destroy(&cipherMod);
             return r;
         }
-    } else if (!BGV_Params_IsPlainModNttFriendly(plainMod, p->polyDegree)) {
+    } else if (Bgv_ModulusBits(plainMod) != p->plainModBit ||
+               !Kernel_Prime_IsPrime(plainMod) ||
+               !BGV_Params_IsPlainModNttFriendly(plainMod, p->polyDegree)) {
         /* A pinned plainMod must still be Proth for this N,
          * else the LUT encoder has no transform. */
         Uint64Vector_Destroy(&cipherMod);
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
+    }
+
+    /* Repeated RNS moduli do not define a CRT base. */
+    for (uint32_t i = 0; i < cipherMod.size; ++i) {
+        for (uint32_t j = 0; j < i; ++j) {
+            if (cipherMod.data[i] == cipherMod.data[j]) {
+                Uint64Vector_Destroy(&cipherMod);
+                HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
+                return HIFHE_PARAM_INVALID;
+            }
+        }
     }
 
     /* Searched or pinned, the plaintext modulus has to lie below every chain
@@ -642,6 +665,16 @@ HIFHE_ERROR Bgv_LoadPub(CRYPT_BGV_Ctx *ctx, const uint8_t *in, uint32_t len)
             return r;
         }
         fresh.config.crtConfig.dtype = HIFHE_NTT;
+    }
+    /* Test reduced values, including noncanonical encodings of zero. */
+    uint64_t nonzero = 0u;
+    for (uint32_t i = 0; i < fresh.dataSize; ++i) {
+        nonzero |= fresh.data[i];
+    }
+    if (nonzero == 0u) {
+        BGV_Ciphertext_Destroy(&fresh);
+        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
+        return HIFHE_SERDES_FAIL;
     }
     if (ctx->bgv.havePk) {
         BGV_Ciphertext_Destroy(&ctx->bgv.pk);

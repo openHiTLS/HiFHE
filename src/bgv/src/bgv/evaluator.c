@@ -201,7 +201,13 @@ HIFHE_ERROR BGV_Evaluator_AddCtCt(Ciphertext *out, const Ciphertext *a, const Ci
 
     r = EnsureOutShape(dst, plain, a->config.ciphertextSize);
     if (r == HIFHE_SUCCESS) {
-        r = BGV_Ciphertext_MulScalar(dst, scaled, x);
+        /* Lift the multiplier from Z_t as a centred integer in Z_Q. Using
+         * t-1 for -1 preserves the message but needlessly amplifies noise. */
+        bool negative = x > (t >> 1);
+        r = BGV_Ciphertext_MulScalar(dst, scaled, negative ? t - x : x);
+        if (r == HIFHE_SUCCESS && negative) {
+            r = BGV_Ciphertext_Neg(dst, dst);
+        }
     }
     if (r == HIFHE_SUCCESS) {
         r = BGV_Ciphertext_Add(dst, dst, plain);

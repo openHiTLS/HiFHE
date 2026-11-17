@@ -278,9 +278,9 @@ static HIFHE_ERROR ReadTail(const uint8_t *buf, uint32_t bufLen, uint32_t *off, 
     /* ciphertextSize arrives on the wire and CalDataSize multiplies it out in
      * uint32, so a crafted shape wraps that product and allocates less than
      * the copy loop writes. Measuring the body in 64 bits rejects those, and
-     * ties the allocation to the input length. */
+     * ties the allocation to the exact input length before allocating. */
     uint64_t bodyBytes = (uint64_t)rns * 8u + (uint64_t)polys * (uint64_t)rns * (uint64_t)N * sizeof(uint64_t);
-    if (bodyBytes > (uint64_t)(bufLen - *off)) {
+    if (bodyBytes != (uint64_t)(bufLen - *off)) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
@@ -545,17 +545,30 @@ int32_t BgvSerDes_WriteBody(bool cipher, const void *obj, uint8_t *out, uint32_t
     return cipher ? WriteCtBody(out, len, &off, obj) : WritePtBody(out, len, &off, obj);
 }
 
+/* Loads consume the whole input and leave no owned state on failure. */
+static void DestroyLoaded(bool cipher, void *obj)
+{
+    if (obj == NULL) {
+        return;
+    }
+    if (cipher) {
+        BGV_Ciphertext_Destroy(obj);
+    } else {
+        BGV_Plaintext_Destroy(obj);
+    }
+}
+
 int32_t BgvSerDes_ReadBody(bool cipher, void *obj, const uint8_t *in, uint32_t len, BGVContext *ctx)
 {
+    DestroyLoaded(cipher, obj);
     if (obj == NULL || in == NULL || ctx == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
     uint32_t off = 0u;
     int32_t r = cipher ? ReadCtBody(in, len, &off, obj, ctx) : ReadPtBody(in, len, &off, obj, ctx);
-    if (r == HIFHE_SUCCESS && off != len) {
-        HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
-        return HIFHE_SERDES_FAIL;
+    if (r != HIFHE_SUCCESS) {
+        DestroyLoaded(cipher, obj);
     }
     return r;
 }
@@ -563,6 +576,7 @@ int32_t BgvSerDes_ReadBody(bool cipher, void *obj, const uint8_t *in, uint32_t l
 static int32_t LoadTyped(bool cipher, void *obj, const uint8_t *buf, uint32_t bufLen,
     BGVContext *ctx, uint16_t type)
 {
+    DestroyLoaded(cipher, obj);
     if (obj == NULL || buf == NULL || ctx == NULL) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
@@ -578,7 +592,11 @@ static int32_t LoadTyped(bool cipher, void *obj, const uint8_t *buf, uint32_t bu
         HIFHE_ERR_PUSH_ERROR(HIFHE_SERDES_FAIL);
         return HIFHE_SERDES_FAIL;
     }
-    return cipher ? ReadCtBody(buf, bufLen, &off, obj, ctx) : ReadPtBody(buf, bufLen, &off, obj, ctx);
+    r = cipher ? ReadCtBody(buf, bufLen, &off, obj, ctx) : ReadPtBody(buf, bufLen, &off, obj, ctx);
+    if (r != HIFHE_SUCCESS) {
+        DestroyLoaded(cipher, obj);
+    }
+    return r;
 }
 
 

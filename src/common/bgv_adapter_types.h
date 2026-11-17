@@ -99,6 +99,12 @@ typedef enum {
     /* val is uint32_t *. 1 applies the slot index map in encode and decode. */
     HIFHE_CTRL_BGV_SET_SLOT_MAP = HIFHE_CTRL_BGV_BASE + 21,
     HIFHE_CTRL_BGV_GET_SLOT_MAP = HIFHE_CTRL_BGV_BASE + 22,
+    /* Retire the key seed after all deterministic key generation is done.
+     * val = NULL, valLen = 0. Existing keys remain usable; subsequent key
+     * generation uses fresh DRBG entropy until a new seed is installed.
+     * HIFHE_KeyGen and the Provider retire the seed themselves; this is for
+     * CRYPT_BGV_* callers that derive further keys from the seed later. */
+    HIFHE_CTRL_BGV_CLEAR_SEED = HIFHE_CTRL_BGV_BASE + 23,
 } HIFHE_CTRL_BGV_TYPE;
 
 

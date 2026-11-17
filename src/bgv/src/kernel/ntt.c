@@ -91,7 +91,9 @@ HIFHE_ERROR Kernel_Ntt_AttachTables(NttTables *tbl, const uint64_t *buf, Modulus
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
-    if (polyDegree == 0u || (polyDegree & (polyDegree - 1u)) != 0u) {
+    if (q < 3u || q >= (UINT64_C(1) << 62) ||
+        polyDegree < 2u || (polyDegree & (polyDegree - 1u)) != 0u ||
+        (q - 1u) % (2u * (uint64_t)polyDegree) != 0u) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
@@ -104,7 +106,9 @@ HIFHE_ERROR Kernel_Ntt_BuildTables(NttTables *tbl, uint64_t *buf, Modulus q, uin
         HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
         return HIFHE_NULL_INPUT;
     }
-    if (polyDegree == 0u || (polyDegree & (polyDegree - 1u)) != 0u) {
+    if (q < 3u || q >= (UINT64_C(1) << 62) ||
+        polyDegree < 2u || (polyDegree & (polyDegree - 1u)) != 0u ||
+        (q - 1u) % (2u * (uint64_t)polyDegree) != 0u) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }

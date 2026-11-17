@@ -88,8 +88,9 @@ struct HifheAlgMethod {
     int32_t (*serializeNative)(const HIFHE_Ctx *ctx, const void *data, uint8_t *out, uint32_t *len);
     int32_t (*deserializeNative)(const HIFHE_Ctx *ctx, const uint8_t *in, uint32_t len, uint32_t *kind, void **out);
     /* Fill idLen bytes naming the key origin of the keys data holds. Derived
-     * where those keys can be regenerated, random where they cannot. */
-    int32_t (*keysetId)(const void *data, uint8_t *id, uint32_t idLen);
+     * where those keys can be regenerated, random where they cannot. May
+     * retire derivation material once the identifier has been derived. */
+    int32_t (*keysetId)(void *data, uint8_t *id, uint32_t idLen);
     /* One key in or out, named by a HIFHE_KEY_* bit, always in the
      * interchange format. A buffer holding the other key is rejected. */
     int32_t (*keyDump)(const HIFHE_Ctx *ctx, uint32_t which, uint8_t *out, uint32_t *len);

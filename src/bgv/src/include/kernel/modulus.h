@@ -30,7 +30,8 @@ extern "C" {
 typedef uint64_t Modulus;
 
 /* Barrett constant: ratio = floor(2^128 / q), kept as two words.
- * Populated at BGVContext build time. */
+ * Populated at BGVContext build time. Requires 2 <= q < 2^63 so that
+ * the correction remainder below 2q fits in one word. */
 typedef struct {
     Modulus q;
     uint64_t ratioLo; /* low  64 bits of floor(2^128 / q) */
@@ -38,7 +39,7 @@ typedef struct {
     uint32_t qBits; /* ceil(log2(q)); useful for lazy-reduction bounds */
 } BarrettConst;
 
-/* Shoup constant: quotient = floor((m << 64) / q). Turns mul-mod into one
+/* Shoup constant (2 <= q < 2^63): quotient = floor((m << 64) / q). Turns mul-mod into one
  * 128-bit mul plus a conditional subtraction. Populated lazily per (m, q). */
 typedef struct {
     Modulus q;

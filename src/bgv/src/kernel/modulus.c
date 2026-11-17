@@ -189,7 +189,7 @@ uint32_t Kernel_Log2Ceil(uint64_t x)
 
 HIFHE_ERROR Kernel_BarrettConst_Init(BarrettConst *out, Modulus q)
 {
-    if (out == NULL || q < 2u) {
+    if (out == NULL || q < 2u || q >= (UINT64_C(1) << 63)) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
@@ -253,7 +253,7 @@ uint64_t Kernel_ModInv(uint64_t a, Modulus q)
 
 HIFHE_ERROR Kernel_ShoupConst_Init(ShoupConst *out, uint64_t operand, Modulus q)
 {
-    if (out == NULL || q < 2u) {
+    if (out == NULL || q < 2u || q >= (UINT64_C(1) << 63)) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
     }
