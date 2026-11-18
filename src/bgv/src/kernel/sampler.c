@@ -24,6 +24,7 @@
 #include "hifhe_mem.h"
 #include "hifhe_err_internal.h"
 #include "kernel/sampler.h"
+#include "kernel/modulus.h"
 #include "basic/rand.h"
 #include "basic/vector.h"
 
@@ -195,7 +196,7 @@ static uint32_t SamplerModU32(uint64_t w, uint32_t d)
         r = (r << 1) | ((w >> b) & 1u);
         /* r < 2d < 2^33, so r - d borrows into the top bit iff r < d. */
         uint64_t diff = r - d;
-        uint64_t keep = 0u - (diff >> 63);
+        uint64_t keep = Kernel_MaskFromBit(diff >> 63);
         r = (r & keep) | (diff & ~keep);
     }
     return (uint32_t)r;
@@ -273,7 +274,7 @@ HIFHE_ERROR Kernel_Sampler_TernaryFixedWeight(int64_t *out, uint32_t count, uint
         uint64_t keep = (packed[iWord] >> iShift) & SAMPLER_CODE_MASK;
         uint64_t take = 0u;
         for (uint32_t k = 0; k <= iWord; ++k) {
-            uint64_t m = 0u - (uint64_t)(k == jWord);
+            uint64_t m = Kernel_MaskFromBit((uint64_t)(k == jWord));
             uint64_t v = packed[k];
             take |= (v >> jShift) & SAMPLER_CODE_MASK & m;
             packed[k] = (v & ~((SAMPLER_CODE_MASK << jShift) & m)) | ((keep << jShift) & m);

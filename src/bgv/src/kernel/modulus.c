@@ -214,7 +214,7 @@ uint64_t Kernel_PowMod(uint64_t a, uint64_t e, Modulus q)
         return 0u;
     }
     uint64_t base = a % q;
-    uint64_t acc = 1u % q;
+    uint64_t acc = 1u;
     while (e > 0u) {
         if ((e & 1u) != 0u) {
             acc = Kernel_MulMod(acc, base, q);
@@ -233,13 +233,13 @@ uint64_t Kernel_ModInv(uint64_t a, Modulus q)
     uint64_t r0 = q, r1 = a % q;
     /* Bezout coefficient of r_i, carried as its residue mod q rather than as
      * a signed value, which keeps every step inside a word. */
-    uint64_t s0 = 0u, s1 = 1u % q;
+    uint64_t s0 = 0u, s1 = 1u;
     while (r1 != 0u) {
         uint64_t quo = r0 / r1;
         uint64_t r2 = r0 - quo * r1;
         uint64_t sub = Kernel_MulMod(quo % q, s1, q);
         uint64_t s2 = s0 - sub;
-        s2 += q & (0u - (uint64_t)(s0 < sub));
+        s2 += q & Kernel_MaskFromBit((uint64_t)(s0 < sub));
         r0 = r1;
         r1 = r2;
         s0 = s1;

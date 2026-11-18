@@ -33,21 +33,23 @@ void HIFHE_ErrPushError(int32_t error, const char *file, uint32_t line)
     if (error == HIFHE_SUCCESS) {
         return;
     }
-    if (t_depth == HIFHE_ERR_STACK_DEPTH) {
+    if (t_depth >= HIFHE_ERR_STACK_DEPTH) {
         /* Drop the oldest, so a stack nobody cleared cannot hide what is
          * failing now. */
         for (uint32_t i = 1; i < HIFHE_ERR_STACK_DEPTH; ++i) {
             t_stack[i - 1] = t_stack[i];
         }
-        t_depth--;
+        t_depth = HIFHE_ERR_STACK_DEPTH - 1u;
         if (t_mark > 0u) {
             t_mark--;
         }
     }
-    t_stack[t_depth].error = error;
-    t_stack[t_depth].file = file;
-    t_stack[t_depth].line = line;
-    t_depth++;
+    if (t_depth < HIFHE_ERR_STACK_DEPTH) {
+        t_stack[t_depth].error = error;
+        t_stack[t_depth].file = file;
+        t_stack[t_depth].line = line;
+        t_depth++;
+    }
 }
 
 int32_t HIFHE_ErrPeekError(const char **file, uint32_t *line)
@@ -66,7 +68,7 @@ int32_t HIFHE_ErrPeekError(const char **file, uint32_t *line)
 
 int32_t HIFHE_ErrPeekLastError(const char **file, uint32_t *line)
 {
-    if (t_depth == 0u) {
+    if (t_depth == 0u || t_depth > HIFHE_ERR_STACK_DEPTH) {
         return HIFHE_SUCCESS;
     }
     const ErrEntry *e = &t_stack[t_depth - 1u];

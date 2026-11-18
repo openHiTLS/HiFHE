@@ -69,7 +69,7 @@ void BGV_Encoder_LiftCentred(uint64_t *out, const uint64_t *coeff, const RnsBase
             uint64_t c = coeff[j];
             /* All ones when c > t/2. Both operands are below 2^63, so the
              * borrow lands in the top bit. */
-            uint64_t neg = 0u - ((half - c) >> 63);
+            uint64_t neg = Kernel_MaskFromBit((half - c) >> 63);
             dst[j] = c + (lift & neg);
         }
     }
@@ -182,9 +182,15 @@ HIFHE_ERROR BGV_Encoder_CrtCenteredModT(uint64_t *out, const uint64_t *data, con
         return HIFHE_NULL_INPUT;
     }
     uint32_t L = base->size;
-    if (L == 0u || L > HIFHE_BGV_MAX_CHAIN_LEN) {
+    if (L == 0u || L > HIFHE_BGV_MAX_CHAIN_LEN || t < 2u) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
+    }
+    for (uint32_t i = 0; i < L; ++i) {
+        if (base->data[i] < 2u) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
+            return HIFHE_PARAM_INVALID;
+        }
     }
 
     uint64_t qhatModT[HIFHE_BGV_MAX_CHAIN_LEN];
@@ -192,7 +198,7 @@ HIFHE_ERROR BGV_Encoder_CrtCenteredModT(uint64_t *out, const uint64_t *data, con
     ShoupConst qhatInvSc[HIFHE_BGV_MAX_CHAIN_LEN];
     ShoupConst qhatModTSc[HIFHE_BGV_MAX_CHAIN_LEN];
     BarrettConst tBarrett;
-    uint64_t qModT = 1u % t;
+    uint64_t qModT = 1u;
     ShoupConst qModTSc;
 
     int32_t br = Kernel_BarrettConst_Init(&tBarrett, t);
@@ -202,8 +208,8 @@ HIFHE_ERROR BGV_Encoder_CrtCenteredModT(uint64_t *out, const uint64_t *data, con
 
     for (uint32_t i = 0; i < L; ++i) {
         Modulus qi = base->data[i];
-        uint64_t prodModQi = 1u % qi;
-        uint64_t prodModT = 1u % t;
+        uint64_t prodModQi = 1u;
+        uint64_t prodModT = 1u;
         for (uint32_t m = 0; m < L; ++m) {
             if (m == i) {
                 continue;
@@ -266,7 +272,7 @@ HIFHE_ERROR BGV_Encoder_CrtCenteredModT(uint64_t *out, const uint64_t *data, con
          * The fraction is the sign of the private phase, so it is masked in
          * rather than branched on. */
         Uint128 low96 = Kernel_U128Make(frac.hi & 0xffffffffu, frac.lo);
-        uint64_t neg = 0u - Kernel_U128Gt(low96, Kernel_U128Shl(Kernel_U128From64(1u), 95u));
+        uint64_t neg = Kernel_MaskFromBit(Kernel_U128Gt(low96, Kernel_U128Shl(Kernel_U128From64(1u), 95u)));
         z += (t - qModT) & neg;
         out[j] = Kernel_CondSubInl(z, t);
     }

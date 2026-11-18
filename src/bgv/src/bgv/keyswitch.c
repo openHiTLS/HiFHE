@@ -62,7 +62,10 @@ static void FoldLimb(Uint128 *acc, uint32_t N, const BarrettConst *bc)
 /* prod_{m != skip} base[m] mod q. */
 static uint64_t QHatMod(const RnsBase *base, uint32_t skip, Modulus q)
 {
-    uint64_t acc = 1u % q;
+    if (q <= 1u) {
+        return 0u;
+    }
+    uint64_t acc = 1u;
     for (uint32_t m = 0; m < base->size; ++m) {
         if (m == skip) {
             continue;
@@ -141,6 +144,17 @@ HIFHE_ERROR BGV_KeySwitch_GadgetFactor(uint64_t *out, const RnsBase *base, uint3
     if (logT == 0u || logT >= 64u) {
         HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
         return HIFHE_PARAM_INVALID;
+    }
+    /* Every factor below is reduced by every modulus of the base. */
+    if (base->data == NULL) {
+        HIFHE_ERR_PUSH_ERROR(HIFHE_NULL_INPUT);
+        return HIFHE_NULL_INPUT;
+    }
+    for (uint32_t l = 0; l < base->size; ++l) {
+        if (base->data[l] < 2u) {
+            HIFHE_ERR_PUSH_ERROR(HIFHE_PARAM_INVALID);
+            return HIFHE_PARAM_INVALID;
+        }
     }
     for (uint32_t l = 0; l < base->size; ++l) {
         Modulus ql = base->data[l];

@@ -416,7 +416,7 @@ static HIFHE_ERROR ApplyGaloisToCoeffPoly(CrtPoly *out, const CrtPoly *in, uint6
             uint64_t v = src[j];
             if (idx >= N) {
                 idx -= N;
-                v = (q - v) & (0u - (uint64_t)(v != 0u)); /* sign flip */
+                v = (q - v) & Kernel_MaskFromBit((uint64_t)(v != 0u)); /* sign flip */
             }
             dst[idx] = v;
         }
