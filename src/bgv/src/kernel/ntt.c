@@ -137,8 +137,8 @@ HIFHE_ERROR Kernel_Ntt_BuildTables(NttTables *tbl, uint64_t *buf, Modulus q, uin
      * multiplication instead of a 128-bit remainder. */
     uint64_t psiQuot = ShoupQuot(psi, q);
     uint64_t psiInvQuot = ShoupQuot(psiInv, q);
-    pow[0] = 1u % q;
-    powInv[0] = 1u % q;
+    pow[0] = 1u;
+    powInv[0] = 1u;
     for (uint32_t j = 1; j < polyDegree; ++j) {
         uint64_t v = ShoupMulLazy(pow[j - 1u], psi, psiQuot, q);
         pow[j] = Kernel_CondSubInl(v, q);

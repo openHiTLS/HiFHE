@@ -238,7 +238,7 @@ HIFHE_ERROR RLWE_RnsPoly_SetSigned(RnsPoly *self, const int64_t *v)
      * the sign picks no branch. */
     for (uint32_t i = 0; i < self->dataSize; ++i) {
         int64_t s = v[i];
-        self->data[i] = (uint64_t)s + (q & (0u - ((uint64_t)s >> 63)));
+        self->data[i] = (uint64_t)s + (q & Kernel_MaskFromBit((uint64_t)s >> 63));
     }
     self->config.dtype = HIFHE_POLY;
     return HIFHE_SUCCESS;

@@ -36,6 +36,7 @@
 #include "bgv/bgv.h"
 #include "bgv/evaluator.h"
 #include "bgv/ciphertext.h"
+#include "bgv/keyswitch.h"
 #include "kernel/modulus.h"
 #include "crypto_test_util.h"
 #include "test.h"
@@ -1972,5 +1973,34 @@ EXIT:
     }
     free(wire);
     CRYPT_BGV_FreeCtx(ctx);
+}
+/* END_CASE */
+
+/* @
+* @test  SDV_CRYPTO_HIFHE_BGV_SEC_GADGET_ZERO_MODULUS_TC001
+* @title  The gadget factor rejects a base holding a modulus below 2 for every digit.
+* @auto  TRUE
+@ */
+/* BEGIN_CASE */
+void SDV_CRYPTO_HIFHE_BGV_SEC_GADGET_ZERO_MODULUS_TC001(void)
+{
+#ifndef HIFHE_CUSTOM_PARAM
+    SKIP_TEST();
+#else
+    RnsBase base = {0};
+    uint64_t out[2] = {0u, 0u};
+    const uint64_t valid[2] = {UINT64_C(17592186028033), UINT64_C(17592185659393)};
+    TestMemInit();
+    ASSERT_EQ(Uint64Vector_Create(&base, valid, 2u), HIFHE_SUCCESS);
+    ASSERT_EQ(BGV_KeySwitch_GadgetFactor(out, &base, 0u, 1u, 30u), HIFHE_SUCCESS);
+    for (uint64_t bad = 0u; bad < 2u; ++bad) {
+        base.data[1] = bad;
+        for (uint32_t digit = 0u; digit < 2u; ++digit) {
+            ASSERT_EQ(BGV_KeySwitch_GadgetFactor(out, &base, 0u, digit, 30u), HIFHE_PARAM_INVALID);
+        }
+    }
+EXIT:
+    Uint64Vector_Destroy(&base);
+#endif
 }
 /* END_CASE */

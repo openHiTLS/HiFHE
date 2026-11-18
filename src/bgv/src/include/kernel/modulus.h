@@ -66,11 +66,18 @@ uint32_t Kernel_Log2Ceil(uint64_t x);
 
 /* Inline reductions for hot loops; a cross-file call per coefficient costs
  * more than the arithmetic without LTO. */
+/* All ones for bit == 1, zero for bit == 0, without a branch. Negating the
+ * value as a signed integer keeps the unsigned arithmetic in range. */
+static inline uint64_t Kernel_MaskFromBit(uint64_t bit)
+{
+    return (uint64_t)(-(int64_t)(bit & 1u));
+}
+
 /* r - q when r >= q, r otherwise, selected by mask and not by branch. Every
  * reduction below ends in these, and their inputs are secret-derived. */
 static inline uint64_t Kernel_CondSubInl(uint64_t r, uint64_t q)
 {
-    return r - (q & (0u - (uint64_t)(r >= q)));
+    return r - (q & Kernel_MaskFromBit((uint64_t)(r >= q)));
 }
 
 /* x mod q, for any x. ratio >= 2^128/q - 1 and the one truncated term below
